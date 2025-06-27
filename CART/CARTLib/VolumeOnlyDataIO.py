@@ -66,7 +66,8 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
 
     def _parse_path(self, path_str: str):
         # TODO: Make this reference a user-specified value instead
-        ref_path = Path("/mnt/3b07d715-76ab-43f9-861c-9afcf9fc62e6/PyCharm/CART/sample_data/sample_data/")
+        # Kalum : /mnt/3b07d715-76ab-43f9-861c-9afcf9fc62e6/PyCharm/CART/sample_data/sample_data/
+        ref_path = Path("K:/SlicerRepos/test_data")
         return ref_path / path_str
 
     def _initialize_resources(self):
