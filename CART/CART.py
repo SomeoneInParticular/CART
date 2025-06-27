@@ -206,7 +206,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
       mainLayout = qt.QVBoxLayout(self.groupBox)
 
       # Hide this by default, only showing it when we're ready to iterate
-      self.groupBox.setEnabled(False)
+      self.groupBox.setVisible(False)
 
       # Next + previous buttons in a horizontal layout
       buttonLayout = qt.QHBoxLayout()
@@ -228,6 +228,62 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
       self.currentCaseNameLabel.readOnly = True
       self.currentCaseNameLabel.placeholderText = _("Current case name will appear here")
       mainLayout.addWidget(self.currentCaseNameLabel)
+      
+      # Table for displaying cohort resources
+      self.cohortTable = qt.QTableWidget()
+      self.cohortTable.setRowCount(10)
+      self.cohortTable.setColumnCount(2)
+      self.cohortTable.setHorizontalHeaderLabels([_("Resource"), _("Resource Type")])
+      self.cohortTable.horizontalHeader().setStretchLastSection(True)
+      self.cohortTable.horizontalHeader().setSectionResizeMode(0, qt.QHeaderView.Stretch)
+      self.cohortTable.horizontalHeader().setSectionResizeMode(1, qt.QHeaderView.ResizeToContents)
+      self.cohortTable.setWordWrap(False)
+      self.cohortTable.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
+
+      # Set a subtle contrasting style for dark backgrounds
+      self.cohortTable.setStyleSheet("""
+          QTableWidget {
+        background-color: #2b2b2b;
+        alternate-background-color: #353535;
+        color: #e0e0e0;
+        border: 1px solid #444;
+        gridline-color: #444;
+          }
+          QHeaderView::section {
+        background-color: #393939;
+        color: #e0e0e0;
+        border: 1px solid #444;
+          }
+          QTableWidget::item {
+        selection-background-color: #44475a;
+        selection-color: #ffffff;
+          }
+      """)
+
+      for row in range(10):
+          filePathItem = qt.QTableWidgetItem("")
+          filePathItem.setTextAlignment(qt.Qt.AlignLeft | qt.Qt.AlignVCenter)
+          filePathItem.setToolTip(_("Loaded Resource"))
+          # Make item not editable, selectable, or enabled
+          filePathItem.setFlags(qt.Qt.NoItemFlags)
+          self.cohortTable.setItem(row, 0, filePathItem)
+
+          resourceTypeItem = qt.QTableWidgetItem("")
+          resourceTypeItem.setTextAlignment(qt.Qt.AlignCenter)
+          resourceTypeItem.setToolTip(_("Resource type"))
+          # Make item not editable, selectable, or enabled
+          resourceTypeItem.setFlags(qt.Qt.NoItemFlags)
+          self.cohortTable.setItem(row, 1, resourceTypeItem)
+
+      # Make the table itself unselectable and uneditable
+      self.cohortTable.setEditTriggers(qt.QAbstractItemView.NoEditTriggers)
+      self.cohortTable.setSelectionBehavior(qt.QAbstractItemView.SelectRows)
+      self.cohortTable.setSelectionMode(qt.QAbstractItemView.NoSelection)
+      self.cohortTable.setAlternatingRowColors(True)
+      self.cohortTable.setShowGrid(True)
+      self.cohortTable.verticalHeader().setVisible(False)
+
+      mainLayout.addWidget(self.cohortTable)
       
       # Make the buttons easy-to-access
       self.nextButton = nextButton
@@ -281,19 +337,28 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.checkIteratorReady()
         self.DataManagerInstance.set_data_cohort_csv(self.cohort_csv_path)
         self.DataManagerInstance.load_data(self.cohort_csv_path)
-        self.groupBox.setEnabled(True)
+        self.groupBox.setVisible(True)
         # Show the first case immediately
         if self.DataManagerInstance.raw_data:
-            self.current_case = self.DataManagerInstance.current_item().resources
-            print(self.current_case)
-            self.currentCaseNameLabel.text = str(self.current_case)
-
+            self.current_case = self.DataManagerInstance.current_item()
+            self.currentCaseNameLabel.text = str(self.current_case.uid)
+            self.fillResourcesTable()
+                
+        local_raw_data = self.DataManagerInstance.raw_data
+                                      
     def checkIteratorReady(self):
         # If there is a specified user
         if self.priorUsersCollapsibleButton.currentIndex != -1:
             # If there is a valid cohort
             if self.cohortFileSelectionButton.currentPath != "":
                 self.caseIteratorUI.setEnabled(True)
+                
+    def fillResourcesTable(self):
+        for row_index, (key, value) in enumerate(self.current_case.data.items()):
+            if key == "uid":
+                continue
+            self.cohortTable.setItem(row_index, 0, qt.QTableWidgetItem(str(value)))
+            self.cohortTable.setItem(row_index, 1, qt.QTableWidgetItem(str(key) + " : Placholder Type"))
 
     def nextCase(self):
         print("NEXT CASE!")
@@ -302,7 +367,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.current_case = next_case
         print(self.current_case.uid)
 
-        self.currentCaseNameLabel.text = str(self.current_case.resources)
+        self.currentCaseNameLabel.text = str(self.current_case.uid)
+        self.fillResourcesTable()
 
     def previousCase(self):
         print("PREVIOUS CASE!")
@@ -312,7 +378,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         print(self.current_case.uid)
 
                 
-        self.currentCaseNameLabel.text = str(self.current_case.resources)
+        self.currentCaseNameLabel.text = str(self.current_case.uid)
+        self.fillResourcesTable()
 
     ## Management ##
 
