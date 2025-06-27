@@ -1,24 +1,16 @@
-import logging
-import os
-from typing import Annotated, Optional
-from CARTLib.VolumeOnlyDataIO import VolumeOnlyDataUnit
-
+from pathlib import Path
 
 import vtk
+
 import ctk
 import qt
-from pathlib import Path
 import slicer
+from CARTLib.DataManager import DataManager
+from slicer import vtkMRMLScalarVolumeNode
+from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
 from slicer.i18n import translate
-from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
-from slicer.parameterNodeWrapper import (
-    parameterNodeWrapper,
-    WithinRange,
-)
-
-from slicer import vtkMRMLScalarVolumeNode
 
 
 #
@@ -78,6 +70,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         ScriptedLoadableModuleWidget.__init__(self, parent)
         VTKObservationMixin.__init__(self)  # needed for parameter node observation
         self.logic = None
+        self.dataManager = None
 
     def setup(self) -> None:
         """Called when the user opens the module the first time and the widget is initialized."""
@@ -105,28 +98,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
-
-        # TODO: Remove this hard-coded data once we're ready to test properly
-        self.base_path = Path("/Users/iejohnson/NAMIC/CART/sample_data")
-        # Set the base path for data storage
-        hardcoded_dict = {
-            "uid": "TEST_UID",
-            "T2W": self.base_path / "11188/11188_1001211_t2w.nrrd",
-            "HBV": self.base_path /  "11188/11188_1001211_hbv.nrrd",
-            "ADC": self.base_path / "11188/11188_1001211_adc.nrrd",
-        }
-
-        try:
-            du = VolumeOnlyDataUnit(
-                hardcoded_dict
-            )
-            print("YAY! DataUnit created successfully")
-            print(du)
-
-        except Exception as e:
-            logging.error("*" *100)
-            logging.error(e)
-            logging.error("*" *100)
 
     ## GUI builders ##
 
@@ -249,10 +220,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         Currently only run when the Cohort button finishes selecting
          a directory
         """
-        # TMP: Print the selected directory to console
-        print(self.cohortFileSelectionButton.currentPath)
+        # Attempt to create a DataManager from the file
+        dataManager = DataManager()
+        cohortPath = Path(self.cohortFileSelectionButton.currentPath)
+        dataManager.load_data(cohortPath)
 
-        # Show the hidden parts of the GUI if we're ready to proceed
+        # Prepare the iterator for use
         self.checkIteratorReady()
 
     def checkIteratorReady(self):

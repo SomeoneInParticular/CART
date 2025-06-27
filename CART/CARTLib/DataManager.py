@@ -4,15 +4,8 @@ import csv
 from collections import deque
 from typing import Optional, List, Dict
 
-# TODO: Replace Dummy Implementation with actual imports
-class DataIO:
-    """
-    Represents a single data record with a unique identifier and associated resources.
-    """
-
-    def __init__(self, uid: str, resources: Dict[str, str]) -> None:
-        self.uid = uid
-        self.resources = resources
+from .VolumeOnlyDataIO import VolumeOnlyDataUnit
+from .DataUnitBase import DataUnitBase
 
 class TaskConfig:
     """
@@ -50,7 +43,7 @@ class DataManager:
         self._data_cohort_csv: Path | None = None
         self.raw_data: List[Dict[str, str]] = []
         self.queue_length = queue_length
-        self.queue: deque[DataIO] = deque(maxlen=self.queue_length)
+        self.queue: deque[DataUnitBase] = deque(maxlen=self.queue_length)
         self.current_queue_index: int = 0
 
     def set_data_cohort_csv(self, csv_path: Path) -> None:
@@ -102,15 +95,15 @@ class DataManager:
         self.queue.clear()
         initial = self.raw_data[: self.queue_length]
         for row in initial:
+            # TODO: make the type of DataUnit selectable/configurable somehow
             self.queue.append(
-                DataIO(
-                    uid=row['uid'],
-                    resources={k: v for k, v in row.items() if k != 'uid'}
+                VolumeOnlyDataUnit(
+                    data=row
                 )
             )
         self.current_queue_index = 0
 
-    def get_queue(self) -> List[DataIO]:
+    def get_queue(self) -> List[DataUnitBase]:
         """
         Return the current window of DataIO objects.
 
@@ -119,7 +112,7 @@ class DataManager:
         """
         return list(self.queue)
 
-    def current_item(self) -> DataIO:
+    def current_item(self) -> DataUnitBase:
         """
         Return the current DataIO in the queue without changing the index.
 
@@ -130,7 +123,7 @@ class DataManager:
             raise IndexError("Traversal queue is empty")
         return self.queue[self.current_queue_index]
 
-    def next_item(self) -> DataIO:
+    def next_item(self) -> DataUnitBase:
         """
         Advance the traversal pointer forward by one within the queue.
 
@@ -146,7 +139,7 @@ class DataManager:
         self.current_queue_index = (self.current_queue_index + 1) % length
         return self.queue[self.current_queue_index]
 
-    def previous_item(self) -> DataIO:
+    def previous_item(self) -> DataUnitBase:
         """
         Move the traversal pointer backward by one within the queue.
 
