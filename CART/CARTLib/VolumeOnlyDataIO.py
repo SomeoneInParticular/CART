@@ -127,7 +127,8 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
         progressDialog.close()
         
         if is_cancelled:
-            pass
+            # TODO Memory cleanup
+            return None
         
     def to_dict(self) -> dict:
         """
