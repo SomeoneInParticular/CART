@@ -88,7 +88,7 @@ class OrganLabellingDemoTask(TaskBaseClass):
         self.data_unit = data_unit
 
         # Load all resources from the data unit
-        for key, value in data_unit.data.items():
+        for key, value in data_unit.case_data.items():
             if key == "uid":
                 continue
             print(f"Data Unit Key: {key}, Value: {value}")
