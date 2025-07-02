@@ -12,7 +12,7 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
 
     def __init__(
             self,
-            data: dict,
+            case_data: dict,
             data_path: Path,
             # TMP: Until 5.9 (w/ Python 3.10+ support) is released, Optional is needed
             scene: Optional[slicer.vtkMRMLScene] = None
@@ -21,7 +21,7 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
         Initialize the VolumeOnlyDataIO with optional initial data.
 
         Args:
-            data (dict, optional): Initial data to populate the instance.
+            case_data (dict, optional): Initial data to populate the instance.
         """
 
         if scene is None:
@@ -30,7 +30,7 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
         self.base_path = data_path
         print(data_path)
         super().__init__(
-            data=data,
+            case_data=case_data,
             data_path=data_path
         )
         self._initialize_resources()
@@ -48,7 +48,7 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
 
         key: str
         value: str | Path
-        for key, value in self.data.items():
+        for key, value in self.case_data.items():
             if key == "uid":
                 continue
             else:
@@ -87,12 +87,12 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
             raise ValueError(_("Data must be validated before initializing resources."))
 
         # Example of how to initialize resources, assuming the data is a file path
-        for key, value in self.data.items():
+        for key, value in self.case_data.items():
             if key != "uid":
                 file_path = self._parse_path(value)
                 node = slicer.util.loadVolume(file_path)
                 if node:
-                    print(f"Loaded volume from {file_path} into node {node.GetName()} with {node=}")
+                    print(f"Loaded volume from {file_path} into node {node.GetName()} with {node}")
                     node.SetName(key)
                     self.resources[key] = node
                 else:
@@ -107,4 +107,4 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
             dict: A dictionary representation of the data.
         """
         # THIS IS NOT A COMMMON USE CASE, BUT BC THERE IS NO DATA IN THE MRML SCENE ONLY FILES WE ARE GOOD
-        return self.data
+        return self.case_data

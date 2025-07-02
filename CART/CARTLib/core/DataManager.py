@@ -106,7 +106,7 @@ class DataManager:
         current_case_data = self.case_data[idx]
         # TODO: replace this with a user-selectable data unit type
         return VolumeOnlyDataUnit(
-            data=current_case_data,
+            case_data=current_case_data,
             data_path=self.data_source
         )
 
