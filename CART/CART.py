@@ -115,6 +115,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # A "dummy" widget, which holds the TaskGUI. Allows us to swap tasks on the fly.
         self.dummyTaskWidget: qt.QWidget = None
 
+        # Tracks whether we are in "Task Mode" (actively working on a task) or not
+        self.isTaskMode = False
+
         # TODO: Dynamically load this dictionary instead
         self.task_map = {
             "Organ Labels": OrganLabellingDemoTask,
@@ -466,11 +469,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # If we succeeded, update the GUI to match
         if success:
-            # Mark that we are no longer in Task mode
+            # Exit task mode; any active task is no longer relevant.
             self.isTaskMode = False
-            # Disable the task GUI until the user confirms they want to resume
-            self.disableTaskGUI()
-            # Update the state of our "preview" and "confirm" buttons
+
+            # Update the state of our GUI elements to match the new state
+            self.updateTaskGUI()
             self.updateButtons()
 
     def onCohortChanged(self):
@@ -482,17 +485,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # If we succeeded, update our state to match
         if success:
-            # Disable the Task GUI until the user confirms the changes
-            self.disableTaskGUI()
-
-            # Update the task and preview states
+            # Exit task mode; the new cohort likely makes it obsolete
             self.isTaskMode = False
+
+            # Disable cohort preview until the user wants it again
             self.isPreviewMode = False
 
             # Un-toggle the cohort preview button
             self.previewButton.setStyleSheet("")
 
-            # Update other relevant GUI elements
+            # Update relevant GUI elements
+            self.updateTaskGUI()
             self.updateCohortTable()
             self.updateButtons()
 
@@ -525,18 +528,18 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         new_task = self.task_map.get(task_name, None)
         self.logic.set_task_type(new_task)
 
-        # Purge the current task widget, and replace it with a new one
+        # Purge the current task widget
         if self.dummyTaskWidget:
             # Disconnect the widget, and all of its children, from the GUI
             self.dummyTaskWidget.setParent(None)
             # Delete our reference to it as well
             self.dummyTaskWidget = None
 
-        # Re-hide the task GUI, as its no longer relevant until the new task GUI is loaded
-        self.taskGUI.collapsed = True
-        self.taskGUI.setEnabled(False)
+        # Exit task mode until the user confirms the change
+        self.isTaskMode = False
 
-        # Update our button panel to match the new state
+        # Update our GUI to match the new state
+        self.updateTaskGUI()
         self.updateButtons()
 
     def buildCohortTable(self):
@@ -673,13 +676,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.enableGUIAfterLoad()
 
     ### Task Related ###
-    def disableTaskGUI(self):
+    def updateTaskGUI(self):
         """
-        Disable the Task GUI until the user confirm's we're ready to proceed
-         with the (presumably updated) setup.
+        Updates the Task GUI to align with our current task mode
         """
-        self.taskGUI.collapsed = True
-        self.taskGUI.setEnabled(False)
+        self.taskGUI.setEnabled(self.isTaskMode)
+        self.taskGUI.collapsed = not self.isTaskMode
 
     def updateButtons(self):
         # If we have a cohort file, it can be previewed
@@ -729,6 +731,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.mainGUI.collapsed = True
 
         except Exception as e:
+            # Exit task mode; we failed to initialize the task, can't proceed
             self.pythonExceptionPrompt(e)
         finally:
             # Re-enable the GUI
@@ -739,11 +742,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         errorPrompt = qt.QErrorMessage()
         errorPrompt.showMessage(e)
         errorPrompt.exec_()
-        # Disable the continue button, as the current setup didn't work
+        # Disable the confirm button, as the current setup didn't work
         self.confirmButton.setEnabled(False)
-        # Disable and collapse the Task GUI
-        self.taskGUI.collapsed = True
-        self.taskGUI.setEnabled(False)
+        # Exit task mode, as something broke which needs to be resolved first
+        self.isTaskMode = False
+        self.updateTaskGUI()
 
     ## Management ##
     def disableGUIWhileLoading(self):
@@ -770,8 +773,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
 
         self.mainGUI.setEnabled(True)
-        if self.logic.current_task_instance:
-            self.taskGUI.setEnabled(True)
+        self.taskGUI.setEnabled(self.isTaskMode)
 
         # Terminate the "Loading..." dialog, if it exists
         # TODO: Replace this with a proper prompt
