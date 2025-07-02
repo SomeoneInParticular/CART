@@ -726,6 +726,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Display an error message notifying the user
         errorPrompt = qt.QErrorMessage()
+
+        # Add some details on what's happening for the user
+        errorPrompt.setWindowTitle("PYTHON ERROR!")
+
+        # Show the message
         errorPrompt.showMessage(exc)
         errorPrompt.exec_()
 
