@@ -7,6 +7,8 @@ from slicer.i18n import tr as _
 
 from .core.DataUnitBase import DataUnitBase
 
+import time
+
 
 class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
 
@@ -86,19 +88,41 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
         if not self.validated:
             raise ValueError(_("Data must be validated before initializing resources."))
 
+        progressDialog = slicer.util.createProgressDialog(
+            title=_("Initializing Resources"),
+            message=_("Loading volumes..."),
+            maximum=len(self.data) - 1, 
+            parent=slicer.util.mainWindow()
+        )
+        
+        progressDialog.labelText = f"Retrieving data units..."
+        slicer.app.processEvents()
+        
         # Example of how to initialize resources, assuming the data is a file path
-        for key, value in self.data.items():
+        for index, (key, value) in enumerate(self.data.items()):
             if key != "uid":
                 file_path = self._parse_path(value)
                 node = slicer.util.loadVolume(file_path)
                 if node:
+                    progressDialog.labelText = f"Retrieving data unit {index} of {len(self.data)}..."
+                    slicer.app.processEvents()
+                    progressDialog.setValue(int(100 * (index) / len(self.data)))
+                    slicer.app.processEvents()
+                    
+                    cancelled = progressDialog.wasCanceled
+                    if cancelled:
+                        break
+                  
                     print(f"Loaded volume from {file_path} into node {node.GetName()} with {node=}")
                     node.SetName(key)
                     self.resources[key] = node
+                    
+                    time.sleep(3)
                 else:
                     raise ValueError(f"Failed to load volume from {value}")
 
-
+        progressDialog.close()
+        
     def to_dict(self) -> dict:
         """
         Convert the data from the associated MRML nodes to a dictionary representation.
