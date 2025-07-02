@@ -91,12 +91,14 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
         progressDialog = slicer.util.createProgressDialog(
             title=_("Initializing Resources"),
             message=_("Loading volumes..."),
-            maximum=len(self.data) - 1, 
+            maximum=100, 
             parent=slicer.util.mainWindow()
         )
         
-        progressDialog.labelText = f"Retrieving data units..."
+        progressDialog.labelText = f"Retrieving volumes..."
         slicer.app.processEvents()
+        
+        is_cancelled = False
         
         # Example of how to initialize resources, assuming the data is a file path
         for index, (key, value) in enumerate(self.data.items()):
@@ -104,13 +106,14 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
                 file_path = self._parse_path(value)
                 node = slicer.util.loadVolume(file_path)
                 if node:
-                    progressDialog.labelText = f"Retrieving data unit {index} of {len(self.data)}..."
+                    progressDialog.labelText = f"Retrieving volume {index} of {len(self.data)}..."
                     slicer.app.processEvents()
                     progressDialog.setValue(int(100 * (index) / len(self.data)))
                     slicer.app.processEvents()
                     
                     cancelled = progressDialog.wasCanceled
                     if cancelled:
+                        is_cancelled = True
                         break
                   
                     print(f"Loaded volume from {file_path} into node {node.GetName()} with {node=}")
@@ -122,6 +125,9 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
                     raise ValueError(f"Failed to load volume from {value}")
 
         progressDialog.close()
+        
+        if is_cancelled:
+            pass
         
     def to_dict(self) -> dict:
         """

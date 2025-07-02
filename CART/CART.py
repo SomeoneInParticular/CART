@@ -75,6 +75,23 @@ class CART(ScriptedLoadableModule):
         # Load our configuration
         Config.load()
 
+#
+# Temporarily placed "async" popup window, uninterrupting the main thread
+#
+
+class TimerBasedLoadingPopup:
+    def __init__(self, 
+                 parent=None,
+                 message: str = "Loading"):
+        
+        # Define a variable to contain the message for reusability
+        self.message: str = message
+        
+        # Initialize the timer
+        self.timer = qt.QTimer()
+        
+    
+    
 
 #
 # CARTParameterNode
