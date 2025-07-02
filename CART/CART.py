@@ -454,15 +454,24 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Strip it of leading/trailing whitespace
         current_path = current_path.strip()
 
-        # If a path still exists, update everything to use it
-        if current_path:
-            self.logic.set_data_path(Path(current_path))
-        else:
+        # If the data path is now empty, reset to the previous path and end early
+        if not current_path:
             print("Error: Base path was empty, retaining previous base path.")
             self.dataPathSelectionWidget.currentPath = str(self.logic.data_path)
+            self.updateButtons()
+            return
 
-        # Update the state of our buttons to match
-        self.updateButtons()
+        # Otherwise, try to update the data path in the logic
+        success = self.logic.set_data_path(Path(current_path))
+
+        # If we succeeded, update the GUI to match
+        if success:
+            # Mark that we are no longer in Task mode
+            self.isTaskMode = False
+            # Disable the task GUI until the user confirms they want to resume
+            self.disableTaskGUI()
+            # Update the state of our "preview" and "confirm" buttons
+            self.updateButtons()
 
     def onCohortChanged(self):
         # Get the currently selected cohort file from the widget
@@ -473,9 +482,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # If we succeeded, update our state to match
         if success:
+            # Disable the Task GUI until the user confirms the changes
+            self.disableTaskGUI()
+
+            # Update the task and preview states
             self.isTaskMode = False
             self.isPreviewMode = False
+
+            # Un-toggle the cohort preview button
             self.previewButton.setStyleSheet("")
+
+            # Update other relevant GUI elements
             self.updateCohortTable()
             self.updateButtons()
 
@@ -656,6 +673,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.enableGUIAfterLoad()
 
     ### Task Related ###
+    def disableTaskGUI(self):
+        """
+        Disable the Task GUI until the user confirm's we're ready to proceed
+         with the (presumably updated) setup.
+        """
+        self.taskGUI.collapsed = True
+        self.taskGUI.setEnabled(False)
+
     def updateButtons(self):
         # If we have a cohort file, it can be previewed
         if self.logic.cohort_path:
