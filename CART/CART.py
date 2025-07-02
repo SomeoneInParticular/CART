@@ -761,7 +761,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # TODO: Replace this with a proper prompt
         print("Loading...")
 
-
     def enableGUIAfterLoad(self):
         """
         Enable our entire GUI.
