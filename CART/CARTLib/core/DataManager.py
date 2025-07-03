@@ -99,7 +99,7 @@ class DataManager:
     def _get_data_unit(self, idx: int):
         """
         Gets the current DataUnit at our index. This method implicitly caches
-         and does NOT update the state of teh DataManager!
+         and does NOT update the state of the DataManager!
 
         Unless you know what you're doing, you should use `select_unit_at`
          instead!
