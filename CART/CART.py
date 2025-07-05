@@ -466,7 +466,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             return
 
         # Otherwise, try to update the data path in the logic
-        success = self.logic.set_data_path(Path(current_path))
+        success, reason = self.logic.set_data_path(Path(current_path))
 
         # If we succeeded, update the GUI to match
         if success:
@@ -476,6 +476,18 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Update the state of our GUI elements to match the new state
             self.updateTaskGUI()
             self.updateButtons()
+
+        # If we failed, prompt the user as to why
+        else:
+            # Display an error message notifying the user
+            failurePrompt = qt.QErrorMessage()
+
+            # Add some details on what's happening for the user
+            failurePrompt.setWindowTitle("PATH ERROR!")
+
+            # Show the message
+            failurePrompt.showMessage(reason)
+            failurePrompt.exec_()
 
     def onCohortChanged(self):
         # Get the currently selected cohort file from the widget
@@ -935,16 +947,16 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         )
         return True
 
-    def set_data_path(self, new_path: Path) -> bool:
+    def set_data_path(self, new_path: Path) -> (bool, Optional[str]):
         # Confirm the directory exists
         if not new_path.exists():
-            print(f"Error: Data path does not exist: {new_path}")
-            return False
+            err = f"Error: Data path does not exist: {new_path}"
+            return False, err
 
         # Confirm that it is a directory
         if not new_path.is_dir():
-            print(f"Error: Data path was not a directory: {new_path}")
-            return False
+            err = f"Error: Data path was not a directory: {new_path}"
+            return False, err
 
         # If that all ran, update our data path to the new data path
         self.data_path = new_path
@@ -957,7 +969,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             data_source=self.data_path,
         )
 
-        return True
+        return True, None
 
     def load_cohort(self):
         """
