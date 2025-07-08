@@ -15,7 +15,7 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
             case_data: dict,
             data_path: Path,
             # TMP: Until 5.9 (w/ Python 3.10+ support) is released, Optional is needed
-            scene: Optional[slicer.vtkMRMLScene] = None
+            scene: Optional[slicer.vtkMRMLScene] = slicer.mrmlScene
     ):
         """
         Initialize the VolumeOnlyDataIO with optional initial data.
@@ -23,10 +23,6 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
         Args:
             case_data (dict, optional): Initial data to populate the instance.
         """
-
-        if scene is None:
-            # Use the default MRML scene if none is provided
-            scene = slicer.mrmlScene
         self.base_path = data_path
         print(data_path)
         super().__init__(
@@ -90,10 +86,12 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
         for key, value in self.case_data.items():
             if key != "uid":
                 file_path = self._parse_path(value)
-                node = slicer.util.loadVolume(file_path)
+                node = slicer.util.loadVolume(file_path, {"show": False})
                 if node:
+                    # Track the volume for later
                     print(f"Loaded volume from {file_path} into node {node.GetName()} with {hash(node)}")
-                    node.SetName(key)
+                    node_name = f"{hash(self)}_{key}"
+                    node.SetName(node_name)
                     self.resources[key] = node
                 else:
                     raise ValueError(f"Failed to load volume from {value}")
@@ -109,12 +107,32 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
         return self.case_data
 
     def focus_gained(self):
-        # TODO
+        # Reveal any currently invisible nodes
+        self._show_all_nodes()
         print(f"{hash(self)} gained focus!")
 
     def focus_lost(self):
-        # TODO
+        # Reveal any currently invisible nodes
+        self._hide_all_nodes()
         print(f"{hash(self)} lost focus!")
+
+    def _show_all_nodes(self):
+        """
+        Make all nodes in this dataset visible when it gains focus
+
+        TODO: Look into a way to reveal the nodes to the Data hierarchy as well
+        """
+        for n in self.resources.values():
+            n.SetDisplayVisibility(True)
+
+    def _hide_all_nodes(self):
+        """
+        Make all nodes in this dataset hidden when it loses focus
+
+        TODO: Look into a way to hide the nodes from the Data hierarchy as well
+        """
+        for n in self.resources.values():
+            n.SetDisplayVisibility(False)
 
     def clean(self):
         """
@@ -124,5 +142,8 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
          the node should exist, and it will be safely cleaned by the garbage
          collector on its next pass!
         """
+        # Un-focus the contents first, avoiding some potential UI bugs
+        super().clean()
+        # Remove each node from the scene, allowing it to fall out of memory
         for n in self.resources.values():
             self.scene.RemoveNode(n)
