@@ -33,6 +33,7 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
             case_data=case_data,
             data_path=data_path
         )
+        self.scene = scene
         self._initialize_resources()
 
 
@@ -116,4 +117,12 @@ class VolumeOnlyDataUnit(DataUnitBase, ScriptedLoadableModuleLogic):
         print(f"{hash(self)} lost focus!")
 
     def clean(self):
-        print(f"{hash(self)} ran cleaning!")
+        """
+        Remove the nodes from the scene before deletion.
+
+        As this object is also about to be deleted, no remaining references to
+         the node should exist, and it will be safely cleaned by the garbage
+         collector on its next pass!
+        """
+        for n in self.resources.values():
+            self.scene.RemoveNode(n)
