@@ -1022,7 +1022,13 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             return None
 
         # Otherwise, select the current data unit
-        return self.data_manager.select_current_unit()
+        current_unit = self.data_manager.select_current_unit()
+
+        # Pass it to the current task, so it can update anything it needs to
+        self._update_task_with_new_case(current_unit)
+
+        # Return it for further user
+        return current_unit
 
     def next_case(self) -> Optional[DataUnitBase]:
         """
@@ -1032,10 +1038,13 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         :return: The next valid case. 'None' if no valid case could be found.
         """
         # Get the next valid case
-        next_case = self.data_manager.next()
+        next_unit = self.data_manager.next()
+
+        # Pass it to the current task, so it can update anything it needs to
+        self._update_task_with_new_case(next_unit)
 
         # Return it; the data manager is self-managing, no need to do any further checks
-        return next_case
+        return next_unit
 
     def previous_case(self):
         """
@@ -1047,5 +1056,13 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Get the previous valid case
         previous_case = self.data_manager.previous()
 
+        # Pass it to the current task, so it can update anything it needs to
+        self._update_task_with_new_case(previous_case)
+
         # Return it; the data manager is self-managing, no need to do any further checks
         return previous_case
+
+    def _update_task_with_new_case(self, new_case: DataUnitBase):
+        # Only update the task if exists
+        if self.current_task_instance:
+            self.current_task_instance.recieve(new_case)
