@@ -9,6 +9,7 @@ import slicer
 from slicer.i18n import tr as _
 from .SegmentationEvaluationDataUnit import SegmentationEvaluationDataUnit
 from ..core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from ..utils.widgets import buildSegmentationEditorWidget
 
 
 VERSION = 0.01
@@ -56,10 +57,7 @@ class SegmentationEvaluationGUI:
 
     def addSegmentationEditor(self, formLayout):
         # Build the editor widget
-        # TODO: Fix this "stealing" from the original Segment Editor widget
-        self.segmentEditorWidget = \
-            slicer.modules.segmenteditor.widgetRepresentation().self().editor
-
+        self.segmentEditorWidget = buildSegmentationEditorWidget()
         formLayout.addRow(self.segmentEditorWidget)
 
     def addSaveButton(self, formLayout):
