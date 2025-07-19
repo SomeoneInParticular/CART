@@ -9,7 +9,7 @@ import slicer
 from slicer.i18n import tr as _
 from .SegmentationEvaluationDataUnit import SegmentationEvaluationDataUnit
 from ..core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-from ..utils.widgets import buildSegmentationEditorWidget
+from ..utils.widgets import CARTSegmentationEditorWidget
 
 
 VERSION = 0.01
@@ -57,7 +57,7 @@ class SegmentationEvaluationGUI:
 
     def addSegmentationEditor(self, formLayout):
         # Build the editor widget
-        self.segmentEditorWidget = buildSegmentationEditorWidget()
+        self.segmentEditorWidget = CARTSegmentationEditorWidget()
         formLayout.addRow(self.segmentEditorWidget)
 
     def addSaveButton(self, formLayout):
