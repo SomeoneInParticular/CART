@@ -15,16 +15,17 @@ class CARTSegmentationEditorWidget(qSlicerSegmentationsModuleWidgetsPythonQt.qMR
     done instead, including:
         * Hooking itself into an MRML scene
         * Creating a `vtkMRMLSegmentEditorNode` editor node into said scene
+        * Managing shortcuts for its various functions
 
     Code heavily based on SegmentEditorWidget in
-    https://github.com/Slicer/Slicer/blob/main/Modules/Scripted/SegmentEditor/SegmentEditor.py:
+    https://github.com/Slicer/Slicer/blob/main/Modules/Scripted/SegmentEditor/SegmentEditor.py
     """
 
     SEGMENT_EDITOR_NODE_KEY = "vtkMRMLSegmentEditorNode"
 
     def __init__(
             self,
-            tag: str = "SegmentEditor",
+            tag: str = "CARTSegmentEditor",
             scene = slicer.mrmlScene
     ):
         """
@@ -73,8 +74,19 @@ class CARTSegmentationEditorWidget(qSlicerSegmentationsModuleWidgetsPythonQt.qMR
 
         # Update ourselves to use this editor node
         self.setMRMLSegmentEditorNode(editor_node)
-        self.updateWidgetFromMRML()
 
         # Track the editor node for future reference
         self.editor_node = editor_node
+
+    def enter(self):
+        # Synchronize ourselves with the MRML state
+        self.updateWidgetFromMRML()
+        # Install our built-in shortcuts into Slicer's hotkeys
+        self.installKeyboardShortcuts()
+
+    def exit(self):
+        # Disable the active effect, as it *will* desync otherwise
+        self.setActiveEffect(None)
+        # Uninstall keyboard shortcuts
+        self.uninstallKeyboardShortcuts()
 

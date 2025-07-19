@@ -859,6 +859,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """Called when the application closes and the module widget is destroyed."""
         pass
 
+    def enter(self):
+        # Delegate to our logic to have tasks properly update
+        self.logic.enter()
+
+    def exit(self):
+        # Delegate to our logic to have tasks properly update
+        self.logic.exit()
+
     def onSceneStartClose(self, caller, event) -> None:
         """Called just before the scene is closed."""
         pass
@@ -1023,14 +1031,22 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.data_manager.load_cases()
 
     ## Task Management ##
+    def clear_task(self):
+        """
+        Clears the current task instance, ensuring its cleaned itself up before
+        its removed from memory
+        """
+        if self.current_task_instance:
+            self.current_task_instance.exit()
+            self.current_task_instance.cleanup()
+            self.current_task_instance = None
+
     def set_task_type(self, task_type: type(TaskBaseClass)):
         # Set the task type
         self.current_task_type = task_type
 
         # If we have a task built already, delete it
-        if self.current_task_instance:
-            self.current_task_instance.cleanup()
-            self.current_task_instance = None
+        self.clear_task()
 
         # Get this task's preferred DataUnitFactory method
         data_factory_method_map = self.current_task_type.getDataUnitFactories()
@@ -1091,13 +1107,40 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Load the cohort file into memory using the new DataManager
         self.load_cohort()
 
+        # Ensure the current task has cleaned itself up.
+        self.clear_task()
+
         # Create the new task instance
         self.current_task_instance = \
             self.current_task_type(self.get_current_user())
 
+        # Act as though CART has just been reloaded so the task can initialize
+        #  properly
+        self.current_task_instance.enter()
+
         # Pass our first data unit to the task
         new_unit = self.select_current_case()
         self.current_task_instance.receive(new_unit)
+
+    def enter(self):
+        """
+        Called when the CART module is loaded (through our CARTWidget).
+
+        Just signals to the current task that CART is now in view again, and it
+        should synchronize its state to the MRML scene.
+        """
+        if self.current_task_instance:
+            self.current_task_instance.enter()
+
+    def exit(self):
+        """
+        Called when the CART module is un-loaded (through our CARTWidget).
+
+        Just signals to the current task that CART is no longer in view, and it
+        should pause any active processes in the GUI.
+        """
+        if self.current_task_instance:
+            self.current_task_instance.exit()
 
     ## DataUnit Management ##
     def current_uid(self):

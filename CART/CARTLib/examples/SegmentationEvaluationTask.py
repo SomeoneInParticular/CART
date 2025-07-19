@@ -21,7 +21,7 @@ class SegmentationEvaluationGUI:
         self.bound_task = bound_task
 
         # Segmentation editor widget
-        self.segmentEditorWidget = None
+        self.segmentEditorWidget: Optional[CARTSegmentationEditorWidget] = None
 
         # The manual "save" button; whether it is enabled/disabled depends on
         #  the current state of our bound task
@@ -154,6 +154,14 @@ class SegmentationEvaluationGUI:
         failurePrompt.exec()
 
     ## GUI SYNCHRONIZATION ##
+    def enter(self):
+        # Ensure the segmentation editor widget it set up correctly
+        self.segmentEditorWidget.enter()
+
+    def exit(self):
+        # Ensure the segmentation editor widget handles itself before hiding
+        self.segmentEditorWidget.exit()
+
     def _updatedSaveButtonState(self):
         # Ensure the button is active on when we're ready to save
         can_save = self.bound_task.can_save()
@@ -271,8 +279,11 @@ class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
         gui_layout = self.gui.setup()
         container.setLayout(gui_layout)
 
-        # If we have GUI, update the GUI with our current data unit
+        # Update this new GUI with our current data unit
         self.gui.update(self.data_unit)
+
+        # "Enter" the gui to ensure it is loaded correctly
+        self.gui.enter()
 
     def receive(self, data_unit: SegmentationEvaluationDataUnit):
         # Track the data unit for later
@@ -309,6 +320,16 @@ class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
         :return: True if we are ready to save, false otherwise
         """
         return self.output_dir and self.output_dir.exists() and self.output_dir.is_dir()
+
+    def enter(self):
+        # If we have a GUI, enter it
+        if self.gui:
+            self.gui.enter()
+
+    def exit(self):
+        # If we have a GUI, exit it
+        if self.gui:
+            self.gui.exit()
 
     @classmethod
     def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:

@@ -131,6 +131,40 @@ class TaskBaseClass(ABC, Generic[D]):
         """
         pass
 
+    def enter(self):
+        """
+        Called when the CART module is loaded; you should ensure any
+        GUI elements attached to this task are synchronized and ready to be
+        used again here. For example:
+
+        * Synchronize any widgets which rely on the MRML state
+        * Re-initialize keyboard shortcuts
+        * Restart a timer
+
+        This is also called once when a task is first initialized to simulate
+        CART being loaded! Be carefuly to avoid redundant calls!
+        """
+        pass
+
+    def exit(self):
+        """
+        Called when the CART module is unloaded, and any associated GUI hidden;
+        You should ensure that nothing is running in the background while the
+        other module is being used to avoid user confusion.
+
+        Some things that you might to do to prevent this include:
+
+        * Pause a running timer
+        * Unlink anything dependent on the MRML state that you don't want to
+         implicitly synchronize
+        * Disable keyboard shortcuts
+
+        You probably don't want to delete anything at this point, as the user
+        might bring it back into focus later! Instead, place anything that needs
+        to be handled when CART and/or the task is terminated into `cleanup`;
+        `exit` is called right before most `cleanup` calls anyway.
+        """
+
     def getRequiredFields(self) -> Optional[list[str]]:
         """
         Provide a list of fields which need to be within each DataUnit for
