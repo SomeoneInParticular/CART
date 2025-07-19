@@ -69,7 +69,7 @@ class TaskBaseClass(ABC, Generic[D]):
 
         You should NOT pull data from a DataUnit at this time; just build the
           "default" version of the GUI here to avoid redundant calls. You should
-          populate the GUI within the `setup` function below instead.
+          populate the GUI within the `recive` function below instead.
         """
 
         raise NotImplementedError("buildGUI must be implemented in subclasses")
