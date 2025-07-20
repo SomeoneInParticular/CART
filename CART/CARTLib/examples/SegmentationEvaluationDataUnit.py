@@ -3,6 +3,7 @@ from typing import Optional
 
 import slicer
 from ..core.DataUnitBase import DataUnitBase
+from ..utils.data import load_segmentation, load_volume
 from slicer.i18n import tr as _
 
 
@@ -33,8 +34,8 @@ class SegmentationEvaluationDataUnit(DataUnitBase):
         # Track whether this node has been processed already or not
         self.is_complete = case_data.get(self.COMPLETED_KEY, False)
 
-        # Path to the original segmentation file; used for re-loading and
-        #  sidecar fetching
+        # Path to the original files; used for re-loading and sidecar fetching
+        self.volume_path = self.data_path / self.case_data[self.VOLUME_KEY]
         self.segmentation_path = self.data_path / self.case_data[self.SEGMENTATION_KEY]
 
         # Initialize our resources
@@ -129,8 +130,7 @@ class SegmentationEvaluationDataUnit(DataUnitBase):
 
     def _init_volume_node(self):
         # Load the volume node first
-        volume_path = self.data_path / self.case_data[self.VOLUME_KEY]
-        self.volume_node = slicer.util.loadVolume(volume_path, {"show": False})
+        self.volume_node = load_volume(self.volume_path)
 
         # Update it and add it to our resources for easy access elsewhere
         self.volume_node.SetName(f"{self.uid}_{self.VOLUME_KEY}")
@@ -139,22 +139,12 @@ class SegmentationEvaluationDataUnit(DataUnitBase):
         return self.volume_node
 
     def _init_segmentation_node(self):
-        # Load the segmentation as a labelled volume first
-        segmentation_path = self.segmentation_path
-        label_node = slicer.util.loadLabelVolume(segmentation_path)
+        # Load the segmentation node
+        self.segmentation_node = load_segmentation(self.segmentation_path)
 
-        # Then create our segmentation node
-        self.segmentation_node = self.scene.AddNewNodeByClass("vtkMRMLSegmentationNode")
+        # Update it and add it to our resources for easy access elsewhere
         self.segmentation_node.SetName(f"{self.uid}_{self.SEGMENTATION_KEY}")
-
-        # Pack the label node into the segmentation node; this auto-handles
-        #  color coding for us
-        slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(
-            label_node, self.segmentation_node
-        )
-
-        # Remove the (now redundant) label node from the scene
-        self.scene.RemoveNode(label_node)
+        self.resources[self.VOLUME_KEY] = self.volume_node
 
         return self.segmentation_node
 
