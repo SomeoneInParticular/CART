@@ -86,3 +86,20 @@ def save_segmentation_to_nifti(segment_node, volume_node, path: Path):
 
     # Clean up the label node after so it doesn't pollute the scene
     slicer.mrmlScene.RemoveNode(label_node)
+
+
+## ORGANIZATION ##
+def create_subject(label: str, *child_nodes):
+    # Get Slicer's hierarchy node
+    shNode = slicer.mrmlScene.GetSubjectHierarchyNode()
+
+    # Create a new subject with the desired label
+    subject_id = shNode.CreateSubjectItem(shNode.GetSceneItemID(), label)
+
+    # Have the new subject "adopt" all provided child nodes
+    for n in child_nodes:
+        n_id = shNode.GetItemByDataNode(n)
+        shNode.SetItemParent(n_id, subject_id)
+
+    # Return the ID for the newly created subject
+    return subject_id
