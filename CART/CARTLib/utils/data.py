@@ -2,7 +2,7 @@ from pathlib import Path
 
 import slicer
 
-
+## LOADING ##
 def load_volume(path: Path):
     """
     Load a file into Slicer as a Volume.
@@ -57,3 +57,32 @@ def load_segmentation(path: Path):
 
     # Return the result
     return segment_node
+
+## SAVING ##
+def save_volume_to_nifti(volume_node, path: Path):
+    """
+    Save a volume node to the specified path.
+    """
+    slicer.util.saveNode(volume_node, str(path))
+
+def save_segmentation_to_nifti(segment_node, volume_node, path: Path):
+    """
+    Save a segmentation node's contents to a `.nii` file.
+
+    Much like loading, we can't save segmentations directly. Instead, we need to
+    convert it back to a label-type node w/ reference to a volume node first,
+    then save that.
+    """
+    # Convert the Segmentation back to a Label (for Nifti export)
+    label_node = slicer.mrmlScene.AddNewNodeByClass(
+        "vtkMRMLLabelMapVolumeNode"
+    )
+    slicer.modules.segmentations.logic().ExportVisibleSegmentsToLabelmapNode(
+        segment_node, label_node, volume_node
+    )
+
+    # Save the active segmentation node to the desired directory
+    slicer.util.saveNode(label_node, str(path))
+
+    # Clean up the label node after so it doesn't pollute the scene
+    slicer.mrmlScene.RemoveNode(label_node)

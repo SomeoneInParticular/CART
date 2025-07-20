@@ -10,6 +10,7 @@ from slicer.i18n import tr as _
 from .SegmentationEvaluationDataUnit import SegmentationEvaluationDataUnit
 from ..core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from ..utils.widgets import CARTSegmentationEditorWidget
+from ..utils.data import save_segmentation_to_nifti, save_volume_to_nifti
 
 
 VERSION = 0.01
@@ -386,14 +387,10 @@ class _OutputManager:
         # Attempt to save our results
         try:
             # Save the node
-            self._save_segmentation_node(
-                data_unit.segmentation_node, data_unit.volume_node, segmentation_out
-            )
+            self._save_segmentation(data_unit, segmentation_out)
 
             # Save/update the side-car file, if it exists
-            self._save_sidecar(
-                data_unit, sidecar_out
-            )
+            self._save_sidecar(data_unit, sidecar_out)
 
             # Return nothing, indicating a successful save
             return None
@@ -424,30 +421,29 @@ class _OutputManager:
 
         return segmentation_out, sidecar_out
 
-    def _save_segmentation_node(self, seg_node, volume_node, target_file):
+    @staticmethod
+    def _save_segmentation(
+            data_unit: SegmentationEvaluationDataUnit,
+            target_file: Path
+    ):
         """
-        Save a segmentation node's contents to file; this gets its own utility
-         function because you can't do so directly. Instead, you need to convert
-         it back to a label-type node w/ reference to a volume node first, then
-         save it.
+        Save the data unit's currently tracked segmentation to the designated
+        output
         """
-        # Convert the Segmentation back to a Label (for Nifti export)
-        label_node = slicer.mrmlScene.AddNewNodeByClass(
-            "vtkMRMLLabelMapVolumeNode"
-        )
-        slicer.modules.segmentations.logic().ExportVisibleSegmentsToLabelmapNode(
-            seg_node, label_node, volume_node
-        )
+        # Extract the relevant node data from the data unit
+        seg_node = data_unit.segmentation_node
+        vol_node = data_unit.volume_node
 
-        # Save the active segmentation node to this directory
-        slicer.util.saveNode(label_node, str(target_file))
+        # Try to save the segmenattion using them
+        save_segmentation_to_nifti(seg_node, vol_node, target_file)
 
-        # Clean up the node after so it doesn't pollute the scene
-        slicer.mrmlScene.RemoveNode(label_node)
-
-    def _save_sidecar(self, data_node, target_file: Path):
+    def _save_sidecar(
+            self,
+            data_unit: SegmentationEvaluationDataUnit,
+            target_file: Path
+    ):
         # Check for an existing sidecar, and use it as our basis if it exists
-        fname = str(data_node.segmentation_path).split('.')[0]
+        fname = str(data_unit.segmentation_path).split('.')[0]
 
         # Read in the existing side-car file first, if possible
         sidecar_file = Path(f"{fname}.json")
