@@ -155,7 +155,7 @@ class TaskBaseClass(ABC, Generic[D]):
         * Restart a timer
 
         This is also called once when a task is first initialized to simulate
-        CART being loaded! Be carefuly to avoid redundant calls!
+        CART being loaded! Be careful to avoid redundant calls!
         """
         pass
 
@@ -177,6 +177,7 @@ class TaskBaseClass(ABC, Generic[D]):
         to be handled when CART and/or the task is terminated into `cleanup`;
         `exit` is called right before most `cleanup` calls anyway.
         """
+        pass
 
     def getRequiredFields(self) -> Optional[list[str]]:
         """
