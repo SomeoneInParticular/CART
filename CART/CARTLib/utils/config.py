@@ -82,9 +82,20 @@ class Config:
 
     ## Last Used Settings ##
     @property
-    def last_used_data_path(self):
+    def last_used_cohort_file(self) -> Path:
+        key = "last_used_cohort_file"
+        val = Path(self._backing_dict.get(key, ""))
+        return val
+
+    @last_used_cohort_file.setter
+    def last_used_cohort_file(self, new_path: Path):
+        self._backing_dict["last_used_cohort_file"] = str(new_path)
+        self._has_changed = True
+
+    @property
+    def last_used_data_path(self) -> Path:
         key = "last_used_data_path"
-        val = self._backing_dict.get(key, "")
+        val = Path(self._backing_dict.get(key, ""))
         return val
 
     @last_used_data_path.setter

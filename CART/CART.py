@@ -263,6 +263,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Directory selection button
         cohortFileSelectionButton = ctk.ctkPathLineEdit()
 
+        # Set its value to that stored in the config, if any
+        cohortFileSelectionButton.currentPath = self.logic.cohort_path
+
         # Set file filters to only show readable file types
         cohortFileSelectionButton.filters = ctk.ctkPathLineEdit.Files
         cohortFileSelectionButton.nameFilters = [
@@ -277,10 +280,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Add it to our layout
         mainLayout.addRow(_("Cohort File:"), cohortFileSelectionButton)
-
-        # Set default value but don't auto-load
-        default_value = sample_data_cohort_csv.as_posix() if sample_data_cohort_csv.exists() else ""
-        cohortFileSelectionButton.currentPath = default_value
 
         # Make the button easy-to-access
         self.cohortFileSelectionButton = cohortFileSelectionButton
@@ -909,7 +908,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         ScriptedLoadableModuleLogic.__init__(self)
 
         # Path to the cohort file currently in use
-        self.cohort_path: Path = None
+        self.cohort_path: Path = config.last_used_cohort_file
 
         # Path to where the user specified their data is located
         self.data_path: Path = config.last_used_data_path
@@ -990,6 +989,8 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # If all checks pass, update our state
         self.cohort_path = new_path
+        config.last_used_cohort_file = new_path
+        config.save()
         return True
 
     def set_data_path(self, new_path: Path) -> (bool, Optional[str]):
