@@ -11,7 +11,7 @@ from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
 
-from CARTLib.Config import Config
+from CARTLib.utils.config import Config
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
@@ -214,8 +214,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         userSelectButton.toolTip = _("Select a previous user.")
 
         # Load it up with the list of users in the configuration file
-        users = Config.get_users()
-        userSelectButton.addItems(Config.get_users())
+        users = self.logic.get_users()
+        userSelectButton.addItems(users)
 
         # If there are users, use the first (most recent) as the default
         if users:
@@ -921,7 +921,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         """
         Gets the currently selected user, if there is one
         """
-        users = Config.get_users()
+        users = self.get_users()
         if users:
             return users[0]
         else:
@@ -931,7 +931,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         """
         Change the most recent user to the one specified
         """
-        users = Config.get_users()
+        users = self.get_users()
 
         # If the index is out of bounds, exit early with a failure
         if len(users) <= idx or idx < 0:
@@ -961,7 +961,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             return False
 
         # Check if the user already exists
-        current_users = Config.get_users()
+        current_users = self.get_users()
         if user_name in current_users:
             print("User name already exists!")
             return False
