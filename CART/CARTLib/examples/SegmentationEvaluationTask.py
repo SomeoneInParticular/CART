@@ -308,8 +308,10 @@ class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
         self.gui = None
 
     def save(self) -> Optional[str]:
-        # Have the output manager save the result
-        return self.output_manager.save_segmentation(self.data_unit)
+        if self.can_save():
+            # Have the output manager save the result
+            return self.output_manager.save_segmentation(self.data_unit)
+        return None
 
     def can_save(self) -> bool:
         """

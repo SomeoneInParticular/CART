@@ -52,6 +52,7 @@ class Config:
         # Mark that there are no longer any changes between the config and file
         self._has_changed = False
 
+    ## User Management ##
     @property
     def users(self) -> list[str]:
         return self._get_or_default("users", [])
@@ -79,6 +80,18 @@ class Config:
         self.save()
         return True
 
+    @property
+    def autosave(self) -> bool:
+        return self._get_or_default("autosave", True)
+
+    @autosave.setter
+    def autosave(self, new_val: bool):
+        # Validate that the value is a boolean, to avoid weird jank later
+        assert type(new_val) is bool
+        self._backing_dict["autosave"] = new_val
+        self._has_changed = True
+
+    ## Utils ##
     def _get_or_default(self, key, default):
         # Try to get the specified value
         val = self._backing_dict.get(key, None)
