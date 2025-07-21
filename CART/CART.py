@@ -11,7 +11,7 @@ from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
 
-from CARTLib.utils.config import Config
+from CARTLib.utils.config import config
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
@@ -74,7 +74,7 @@ class CART(ScriptedLoadableModule):
             """)
 
         # Load our configuration
-        Config.load()
+        config.load()
 
 
 #
@@ -915,7 +915,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
     ## User Management ##
     def get_users(self) -> list[str]:
         # Simple wrapper for our config
-        return Config.get_users()
+        return config.get_users()
 
     def get_current_user(self) -> str:
         """
@@ -943,7 +943,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         users.insert(0, selected_user)
 
         # Immediately save the Config and return
-        Config.save()
+        config.save()
         return True
 
     def add_new_user(self, user_name: str) -> bool:
@@ -970,7 +970,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         current_users.insert(0, user_name)
 
         # Save the configuration
-        Config.save()
+        config.save()
 
         # Return that this has been done successfully
         return True
