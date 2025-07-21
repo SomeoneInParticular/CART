@@ -61,6 +61,17 @@ class SegmentationEvaluationGUI:
         # Add a check-box for hiding segmentations on-load
         hideSegmentsOnLoadBox = qt.QCheckBox(_("Hide segmentations on load"))
 
+        # Synchronize it to our logic
+        hideSegmentsOnLoadBox.setChecked(self.bound_task.show_segment_on_load)
+
+        # When the checkbox changes state, update our logic to match
+        def update_hide_segments():
+            print("="*100)
+            self.bound_task.show_segment_on_load = hideSegmentsOnLoadBox.isChecked()
+            print(self.bound_task.show_segment_on_load)
+
+        hideSegmentsOnLoadBox.stateChanged.connect(update_hide_segments)
+
         # Add it to the form layout
         formLayout.addRow(hideSegmentsOnLoadBox)
 
@@ -257,6 +268,9 @@ class SegmentationEvaluationGUI:
             errBox.showMessage(err_msg)
             errBox.exec()
 
+    def _update_hide_segments(self):
+        self.bound_task.show_segment_on_load
+
 
 class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
     def __init__(self, user: str):
@@ -272,6 +286,9 @@ class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
 
         # Placeholder to track the currently-in-use Data Unit
         self.data_unit: Optional[SegmentationEvaluationDataUnit] = None
+
+        # Whether to show segmentations on load; by default, we do.
+        self.show_segment_on_load = True
 
     def setup(self, container: qt.QWidget):
         print(f"Running {self.__class__.__name__} setup!")
@@ -297,6 +314,13 @@ class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
             foreground=self.data_unit.segmentation_node,
             label=self.data_unit.uid,
             fit=True
+        )
+
+        # Only show segmentations on-load if we're set to do so.
+        self.set_segment_visibility(
+            self.data_unit.segmentation_node,
+            self.show_segment_on_load,
+            0  # We only have 1 segment, making always in position 0
         )
 
         # If we have GUI, update it as well
@@ -355,6 +379,27 @@ class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
         self.output_manager = _OutputManager(self.output_dir, self.user)
 
         return None
+
+    @staticmethod
+    def set_segment_visibility(segmentation_node, state: bool, idx: int = 0):
+        """
+        As a "segment" within a SegmentationNode isn't a node, using
+        `SetSegmentVisibility` on it directly will not work. Instead, we need
+        to get the SegmentationNode's DisplayNode, and tell it to change the
+        visibility of the segment. Rather roundabout, but this properly
+        synchronizes everything with the GUI (and, more importantly, ensures
+        our Segment Editor GUI can toggle the segment's visibility as well).
+
+        :param segmentation_node: The segmentation node to user
+        :param state: The new visibility state to put the segment into
+        :param idx: The segment's "index"; by default, we assume there is always
+            at least one segment in the node, the first (0-index).
+
+        TODO: Make this a shared utility
+        """
+        segment_data = segmentation_node.GetSegmentation()
+        segment_id = segment_data.GetNthSegmentID(idx)
+        segmentation_node.GetDisplayNode().SetSegmentVisibility(segment_id, state)
 
 
 class _OutputManager:
