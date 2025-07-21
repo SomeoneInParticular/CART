@@ -237,6 +237,10 @@ class SegmentationEvaluationGUI:
         err_msg = self.bound_task.save()
 
         # If successful, prompt the user to acknowledge
+        self.saveCompletePrompt(err_msg)
+
+    def saveCompletePrompt(self, err_msg):
+        # If theirs no error message, present a "success!" prompt
         if err_msg is None:
             msgBox = qt.QMessageBox()
             msgBox.setWindowTitle("Success!")
@@ -248,6 +252,8 @@ class SegmentationEvaluationGUI:
                            f"Saved to: {str(seg_out.resolve())}!")
             msgBox.addButton(_("Confirm"), qt.QMessageBox.AcceptRole)
             msgBox.exec()
+
+        # Otherwise, display an error prompt.
         else:
             errBox = qt.QErrorMessage()
             errBox.setWindowTitle("ERROR!")
@@ -323,6 +329,11 @@ class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
         :return: True if we are ready to save, false otherwise
         """
         return self.output_dir and self.output_dir.exists() and self.output_dir.is_dir()
+
+    def autosave(self) -> Optional[str]:
+        result = super().autosave()
+        if self.gui:
+            self.gui.saveCompletePrompt(result)
 
     def enter(self):
         # If we have a GUI, enter it

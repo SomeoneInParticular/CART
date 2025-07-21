@@ -99,11 +99,24 @@ class TaskBaseClass(ABC, Generic[D]):
 
         By default, this is also AUTOMATICALLY RUN when a new case is loaded.
 
-        Returns None on a successful save; otherwise, return an errror message
-        describing the error
+        Returns None on a successful save; otherwise, return an error message
+        describing what went wrong.
         """
 
         raise NotImplementedError("save must be implemented in subclasses")
+
+    def autosave(self) -> Optional[str]:
+        """
+        Called when the task is asked to auto-save, either due to the case being
+        changed or through periodic auto-saving. By default, just saves as normal;
+        overwrite if you want some custom functionality to be run in this context.
+
+        Returns None on a successful save; otherwise, return an error message
+        describing what went wrong.
+        """
+        print("Autosaving...")
+        self.save()
+        print("Auto-save was successful!")
 
     def isTaskComplete(self, data_unit: D) -> bool:
         """
