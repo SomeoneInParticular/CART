@@ -37,6 +37,9 @@ class SegmentationEvaluationGUI:
         # Add the output selection button
         self.addOutputSelectionButton(formLayout)
 
+        # Add a panel w/ some configuration options
+        self.addOptionsPanel(formLayout)
+
         # Add the segmentation editor widget
         self.addSegmentationEditor(formLayout)
 
@@ -53,6 +56,13 @@ class SegmentationEvaluationGUI:
         outputChangeButton = qt.QPushButton("Change Output Directory")
         formLayout.addRow(outputChangeButton)
         outputChangeButton.clicked.connect(self.promptSelectOutput)
+
+    def addOptionsPanel(self, formLayout):
+        # Add a check-box for hiding segmentations on-load
+        hideSegmentsOnLoadBox = qt.QCheckBox(_("Hide segmentations on load"))
+
+        # Add it to the form layout
+        formLayout.addRow(hideSegmentsOnLoadBox)
 
     def addSegmentationEditor(self, formLayout):
         # Build the editor widget
