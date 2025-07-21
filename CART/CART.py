@@ -273,7 +273,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         ]
 
         # When the cohort is changed, update accordingly
-        cohortFileSelectionButton.connect.parameterNames
         cohortFileSelectionButton.currentPathChanged.connect(self.onCohortChanged)
 
         # TODO: Optionally set a default filter
