@@ -193,11 +193,28 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
 
-        # Update our button states, as the values from config may have made us ready to start
-        self.updateButtons()
+        # Synchronize our state with the logic
+        self.sync_with_logic()
+
+    def sync_with_logic(self):
+        # Update the user selection widget with the contents of the logic instance
+        users = self.logic.get_users()
+        self.userSelectButton.addItems(users)
+
+        # If there were users, use the first (most recent) as the default
+        if users:
+            self.userSelectButton.currentIndex = 0
+
+        # Pull the currently selected cohort file next
+        self.cohortFileSelectionButton.currentPath = self.logic.cohort_path
+
+        # Pull the currently selected data path next
+        self.dataPathSelectionWidget.currentPath = self.logic.data_path
+
+        # Finally, attempt to update our task from the config
+        self.taskOptions.currentText = config.last_used_task
 
     ## GUI builders ##
-
     def buildUserUI(self, mainLayout: qt.QFormLayout):
         """
         Builds the GUI for the user management section of the Widget
@@ -215,14 +232,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Set the name of the button to the "UserSelectionButton"
         userSelectButton.toolTip = _("Select a previous user.")
-
-        # Load it up with the list of users in the configuration file
-        users = self.logic.get_users()
-        userSelectButton.addItems(users)
-
-        # If there are users, use the first (most recent) as the default
-        if users:
-            userSelectButton.currentIndex = 0
 
         # When the user selects an existing entry, update the program to match
         userSelectButton.activated.connect(self.userSelected)
@@ -263,9 +272,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Directory selection button
         cohortFileSelectionButton = ctk.ctkPathLineEdit()
 
-        # Set its value to that stored in the config, if any
-        cohortFileSelectionButton.currentPath = self.logic.cohort_path
-
         # Set file filters to only show readable file types
         cohortFileSelectionButton.filters = ctk.ctkPathLineEdit.Files
         cohortFileSelectionButton.nameFilters = [
@@ -295,9 +301,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Add it to our layout
         mainLayout.addRow(_("Data Path:"), dataPathSelectionWidget)
 
-        # Set its default value to match our logic
-        dataPathSelectionWidget.currentPath = self.logic.data_path
-
         # Connect the signal to handle base path changes
         dataPathSelectionWidget.currentPathChanged.connect(self.onDataPathChanged)
 
@@ -318,9 +321,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # When the task is changed, update everything to match
         taskOptions.currentIndexChanged.connect(self.onTaskChanged)
-
-        # Attempt to update our task from the config
-        taskOptions.currentText = config.last_used_task
 
     def buildButtonPanel(self, mainLayout: qt.QFormLayout):
         # Add a state to track whether cohort is in preview mode
@@ -394,11 +394,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.nextButton.clicked.connect(self.nextCase)
         self.previousButton.clicked.connect(self.previousCase)
 
-
     ## Connected Functions ##
 
     ### Setup Widgets ###
-
     def promptNewUser(self):
         """
         Creates a pop-up, prompting the user to enter their name into a
