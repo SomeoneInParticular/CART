@@ -261,7 +261,7 @@ class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
         self.output_manager: _OutputManager = None
 
         # Placeholder to track the currently-in-use Data Unit
-        self.data_unit = None
+        self.data_unit: Optional[SegmentationEvaluationDataUnit] = None
 
     def setup(self, container: qt.QWidget):
         print(f"Running {self.__class__.__name__} setup!")
