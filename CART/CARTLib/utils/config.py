@@ -74,6 +74,6 @@ class Config:
         return user_entry
 
 # The location of the config file for this installation of CART.
-MAIN_CONFIG = Path(__file__).parent.parent / "configuration.json"
+MAIN_CONFIG = Path(__file__).parent.parent.parent / "configuration.json"
 
 config = Config(MAIN_CONFIG)
