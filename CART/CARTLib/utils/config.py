@@ -10,12 +10,6 @@ class Config:
     """
     Configuration manager for CART.
     """
-    # Contains the actual configuration values, loaded from and saved to JSON
-    _config_dict: dict = {}
-
-    # Whether a change has been made to the config that the user might want to save
-    _has_changed: bool = False
-
     def __init__(self, config_path: Path):
         # Attributes
         self.config_path = config_path
@@ -43,7 +37,7 @@ class Config:
         # Otherwise, load the configuration as-is
         else:
             with open(self.config_path, "r") as cf:
-                self._config_dict = json.load(cf)
+                self._backing_dict = json.load(cf)
 
         # Mark that there are no longer any changes between the config and file
         self._has_changed = False
@@ -53,25 +47,49 @@ class Config:
         Save the in-memory contents of the configuration back to our JSON file
         """
         with open(MAIN_CONFIG, "w") as cf:
-            json.dump(self._config_dict, cf, indent=2)
+            json.dump(self._backing_dict, cf, indent=2)
 
         # Mark that there are no longer any changes between the config and file
         self._has_changed = False
 
-    def get_users(self) -> list[str]:
+    @property
+    def users(self) -> list[str]:
         key = "users"
         # Attempt to get the users entry
-        user_entry = self._config_dict.get(key, None)
+        user_entry = self._backing_dict.get(key, None)
 
         # If it didn't exist, add an empty list instead
         if user_entry is None:
-            user_entry = []
             print(f"No '{key}' entry existed, setting it to {user_entry}.")
-            self._config_dict[key] = user_entry
+            user_entry = []
+            self._backing_dict[key] = user_entry
             self._has_changed = True
 
-        # Otherwise, return it as-is
         return user_entry
+
+    def add_user(self, new_user: str):
+        # Strip leading and trailing whitespace in the username
+        new_user = new_user.strip()
+
+        # TODO: Make these checks raise an error which can be capture
+
+        # Confirm they actually provided a (non-whitespace only) string
+        if not new_user:
+            print("Something must be entered as a name!")
+            return False
+
+        # Check if the user already exists
+        if new_user in self.users:
+            print("User name already exists!")
+            return False
+
+        # Add the username to our list, in the first position (most recent)
+        self.users.insert(0, new_user)
+
+        # Save the configuration automatically, as it's a "core" attribute
+        self.save()
+        return True
+
 
 # The location of the config file for this installation of CART.
 MAIN_CONFIG = Path(__file__).parent.parent.parent / "configuration.json"

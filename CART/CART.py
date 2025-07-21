@@ -922,7 +922,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
     ## User Management ##
     def get_users(self) -> list[str]:
         # Simple wrapper for our config
-        return config.get_users()
+        return config.users
 
     def get_current_user(self) -> str:
         """
@@ -959,28 +959,8 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         Returns True if this was successful, False otherwise
         """
-        # Strip leading and trailing whitespace in the username
-        user_name = user_name.strip()
-
-        # Confirm they actually provided a (non-whitespace only) string
-        if not user_name:
-            print("Something must be entered as a name!")
-            return False
-
-        # Check if the user already exists
-        current_users = self.get_users()
-        if user_name in current_users:
-            print("User name already exists!")
-            return False
-
-        # Add the username to the list at the top
-        current_users.insert(0, user_name)
-
-        # Save the configuration
-        config.save()
-
-        # Return that this has been done successfully
-        return True
+        # Tell the config to add the new username
+        return config.add_user(user_name)
 
     ## Cohort Path/Data Path Management ##
     def set_current_cohort(self, new_path: Path) -> bool:
