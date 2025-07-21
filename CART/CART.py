@@ -319,6 +319,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # When the task is changed, update everything to match
         taskOptions.currentIndexChanged.connect(self.onTaskChanged)
 
+        # Attempt to update our task from the config
+        taskOptions.currentText = config.last_used_task
+
     def buildButtonPanel(self, mainLayout: qt.QFormLayout):
         # Add a state to track whether cohort is in preview mode
         self.isPreviewMode = False
@@ -526,6 +529,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Update the currently selected task
         task_name = self.taskOptions.currentText
         new_task = self.task_map.get(task_name, None)
+
+        # If the task is valid, update the config to match
+        if new_task:
+            config.last_used_task = task_name
+            config.save()
+
         self.logic.set_task_type(new_task)
 
         # Purge the current task widget

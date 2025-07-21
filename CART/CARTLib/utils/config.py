@@ -103,6 +103,16 @@ class Config:
         self._backing_dict["last_used_data_path"] = str(new_path)
         self._has_changed = True
 
+    @property
+    def last_used_task(self) -> str:
+        key = "last_used_task"
+        val = self._backing_dict.get(key, "")
+        return val
+
+    @last_used_task.setter
+    def last_used_task(self, new_task: str):
+        self._backing_dict["last_used_task"] = new_task
+
     ## Autosaving Management ##
     @property
     def autosave(self) -> bool:
