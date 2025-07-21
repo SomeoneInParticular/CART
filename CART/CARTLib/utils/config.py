@@ -80,6 +80,19 @@ class Config:
         self.save()
         return True
 
+    ## Last Used Settings ##
+    @property
+    def last_used_data_path(self):
+        key = "last_used_data_path"
+        val = self._backing_dict.get(key, "")
+        return val
+
+    @last_used_data_path.setter
+    def last_used_data_path(self, new_path: Path):
+        self._backing_dict["last_used_data_path"] = str(new_path)
+        self._has_changed = True
+
+    ## Autosaving Management ##
     @property
     def autosave(self) -> bool:
         return self._get_or_default("autosave", True)

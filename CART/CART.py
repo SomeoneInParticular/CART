@@ -193,6 +193,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
         self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
 
+        # Update our button states, as the values from config may have made us ready to start
+        self.updateButtons()
+
     ## GUI builders ##
 
     def buildUserUI(self, mainLayout: qt.QFormLayout):
@@ -291,7 +294,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         dataPathSelectionWidget.filters = ctk.ctkPathLineEdit.Dirs
         dataPathSelectionWidget.toolTip = _("Select the base directory path. Leave empty to use None as base path.")
 
+        # Add it to our layout
         mainLayout.addRow(_("Data Path:"), dataPathSelectionWidget)
+
+        # Set its default value to match our logic
+        dataPathSelectionWidget.currentPath = self.logic.data_path
 
         # Connect the signal to handle base path changes
         dataPathSelectionWidget.currentPathChanged.connect(self.onDataPathChanged)
@@ -905,7 +912,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.cohort_path: Path = None
 
         # Path to where the user specified their data is located
-        self.data_path: Path = None
+        self.data_path: Path = config.last_used_data_path
 
         # The data manager currently managing case iteration
         self.data_manager: Optional[DataManager] = None
@@ -996,8 +1003,10 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             err = f"Error: Data path was not a directory: {new_path}"
             return False, err
 
-        # If that all ran, update our data path to the new data path
+        # If that all ran, update everything to match
         self.data_path = new_path
+        config.last_used_data_path = new_path
+        config.save()
         print(f"Data path set to: {self.data_path}")
 
         return True, None
