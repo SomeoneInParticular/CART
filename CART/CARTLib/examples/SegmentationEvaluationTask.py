@@ -59,7 +59,7 @@ class SegmentationEvaluationGUI:
 
     def addOptionsPanel(self, formLayout):
         # Add a check-box for hiding segmentations on-load
-        hideSegmentsOnLoadBox = qt.QCheckBox(_("Hide segmentations on load"))
+        hideSegmentsOnLoadBox = qt.QCheckBox(_("Show Segmentations on Load"))
 
         # Synchronize it to our logic
         hideSegmentsOnLoadBox.setChecked(self.bound_task.show_segment_on_load)
