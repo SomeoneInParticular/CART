@@ -54,18 +54,7 @@ class Config:
 
     @property
     def users(self) -> list[str]:
-        key = "users"
-        # Attempt to get the users entry
-        user_entry = self._backing_dict.get(key, None)
-
-        # If it didn't exist, add an empty list instead
-        if user_entry is None:
-            print(f"No '{key}' entry existed, setting it to {user_entry}.")
-            user_entry = []
-            self._backing_dict[key] = user_entry
-            self._has_changed = True
-
-        return user_entry
+        return self._get_or_default("users", [])
 
     def add_user(self, new_user: str):
         # Strip leading and trailing whitespace in the username
@@ -89,6 +78,19 @@ class Config:
         # Save the configuration automatically, as it's a "core" attribute
         self.save()
         return True
+
+    def _get_or_default(self, key, default):
+        # Try to get the specified value
+        val = self._backing_dict.get(key, None)
+
+        # If it didn't exist, set it to our default and make a logged note
+        if val is None:
+            print(f"No '{key}' entry existed, setting it to {default}.")
+            val = default
+            self._backing_dict[key] = val
+            self._has_changed = True
+
+        return val
 
 
 # The location of the config file for this installation of CART.
