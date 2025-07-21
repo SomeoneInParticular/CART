@@ -66,9 +66,7 @@ class SegmentationEvaluationGUI:
 
         # When the checkbox changes state, update our logic to match
         def update_hide_segments():
-            print("="*100)
             self.bound_task.show_segment_on_load = hideSegmentsOnLoadBox.isChecked()
-            print(self.bound_task.show_segment_on_load)
 
         hideSegmentsOnLoadBox.stateChanged.connect(update_hide_segments)
 
