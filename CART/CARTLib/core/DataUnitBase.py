@@ -11,7 +11,8 @@ class DataUnitBase(ABC):
             self,
             case_data: dict[str, str],
             data_path: Path,
-            scene: Optional[slicer.vtkMRMLScene] = None
+            scene: Optional[slicer.vtkMRMLScene] = None,
+            do_validation: bool = True,
     ):
         """
         Initialize a new data unit; you may want to add additional processing in 
@@ -33,8 +34,11 @@ class DataUnitBase(ABC):
         # Resource tracking
         self.resources = {}
         self.uid = case_data.get("uid", None)
-        self.validated = False
-        self._validate()
+        # HACK: Just work around so that we dont call the validate method before setup all required resources
+        # in the subclasses
+        if do_validation:
+            self.validated = False
+            self._validate()
 
     @abstractmethod
     def to_dict(self) -> dict:
