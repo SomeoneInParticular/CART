@@ -19,12 +19,13 @@ from slicer.i18n import tr as _
 from .MultiContrastSegmentationEvaluationDataUnit import MultiContrastSegmentationEvaluationDataUnit
 from ..core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from ..utils.widgets import CARTSegmentationEditorWidget
-from ..utils.data import save_segmentation_to_nifti, save_volume_to_nifti
+from ..utils.data import save_segmentation_to_nifti
 from ..LayoutLogic import CaseIteratorLayoutLogic
 
 
 VERSION = 0.01
 
+# TODO Allow for the user to select "All" which will create a row instead of a single view
 class MultiContrastSegmentationEvaluationGUI:
     def __init__(self, bound_task: 'MultiContrastSegmentationEvaluationTask'):
         self.bound_task = bound_task
@@ -37,11 +38,10 @@ class MultiContrastSegmentationEvaluationGUI:
         # Widgets we’ll need to reference later:
         self.segmentEditorWidget: Optional[CARTSegmentationEditorWidget] = None
         self.saveButton: Optional[qt.QPushButton] = None
-        # self.volumeCombo: Optional[qt.QComboBox] = None
 
     def setup(self) -> qt.QFormLayout:
         """
-        Build the GUI's contents, returning the resulting layout for use
+        Build the GUI's contents, returning the resulting layout for use.
         """
         # Initialize the layout we'll insert everything into
         formLayout = qt.QFormLayout()
@@ -55,9 +55,11 @@ class MultiContrastSegmentationEvaluationGUI:
         formLayout.addRow(self.segmentEditorWidget)
 
         # 4) Save controls
-        # self._addOutputSelectionButton(formLayout)
-        # self._addSaveButton(formLayout)
-        # self.promptSelectOutput()
+        self._addOutputSelectionButton(formLayout)
+        self._addSaveButton(formLayout)
+
+        # TODO Make this more general and allow for a "None" selection where it saves to original input location
+        self.promptSelectOutput()
 
         return formLayout
 
@@ -72,6 +74,20 @@ class MultiContrastSegmentationEvaluationGUI:
             hbox.addWidget(btn)
         layout.addRow(qt.QLabel("View Orientation:"), hbox)
 
+    def _addOutputSelectionButton(self, layout: qt.QFormLayout) -> None:
+        btn = qt.QPushButton("Change Output Directory")
+        btn.clicked.connect(self.promptSelectOutput)
+        layout.addRow(btn)
+
+    def _addSaveButton(self, layout: qt.QFormLayout) -> None:
+        btn = qt.QPushButton("Save")
+        btn.clicked.connect(self._save)
+        layout.addRow(btn)
+        self.saveButton = btn
+
+    #
+    # Handlers
+    #
 
     def onOrientationChanged(self, orientation: str) -> None:
         self.currentOrientation = orientation
@@ -84,33 +100,154 @@ class MultiContrastSegmentationEvaluationGUI:
             orientation=self.currentOrientation
         )
 
-    # def _addOutputSelectionButton(self, layout: qt.QFormLayout) -> None:
-    #     btn = qt.QPushButton("Change Output Directory")
-    #     btn.clicked.connect(self.promptSelectOutput)
-    #     layout.addRow(btn)
 
-    # def _addSaveButton(self, layout: qt.QFormLayout) -> None:
-    #     btn = qt.QPushButton("Save")
-    #     btn.clicked.connect(self._save)
-    #     layout.addRow(btn)
-    #     self.saveButton = btn
+    ## USER PROMPTS ##
+    def promptSelectOutput(self):
+        """
+        Prompt the user to select an output directory.
+
+        The prompt will validate that the chosen output directory is valid,
+         and lock the save button if the user cancel's out of it without
+         selecting such a directory.
+        """
+        # Initialize the prompt
+        prompt = self._buildOutputDirPrompt()
+
+        # Show the prompt with "exec", blocking the main window until resolved
+        result = prompt.exec()
+
+        # If the user cancelled out of the prompt, notify them that they will
+        #  need to specify an output directory later!
+        if result == 0:
+            notif = qt.QErrorMessage()
+            if self.bound_task.can_save():
+                notif.setWindowTitle(_("REVERTING!"))
+                notif.showMessage(_("Cancelled out of window; falling back to previous "
+                                    "output directory "
+                                    f"({str(self.bound_task.output_dir)})"))
+                notif.exec()
+            else:
+                notif.setWindowTitle(_("NO OUTPUT!"))
+                notif.showMessage(_("No output directory selected! You will need to "
+                                    "specify this before segmentations can be saved."))
+                notif.exec()
+
+        # Update the save button to match the current saving capability
+        self._updatedSaveButtonState()
+
+    def _buildOutputDirPrompt(self):
+        prompt = qt.QDialog()
+        prompt.setWindowTitle("Select Output Directory")
+        # Add a basic layout to hold widgets in this prompt
+        layout = qt.QVBoxLayout()
+        prompt.setLayout(layout)
+
+        # Add a label describing what's being asked
+        label = qt.QLabel("Please select an output directory:")
+        layout.addWidget(label)
+
+        # Add an output file selection widget
+        outputFileEdit = ctk.ctkPathLineEdit()
+        outputFileEdit.setToolTip(_(
+            "The directory the modified segmentations (and corresponding "
+            "metadata) will be placed."
+        ))
+        # Set the widget to only accept directories
+        outputFileEdit.filters = ctk.ctkPathLineEdit.Dirs
+        # Add it to our layout
+        layout.addWidget(outputFileEdit)
+
+        # Add a button box to confirm/cancel out
+        buttonBox = qt.QDialogButtonBox()
+        buttonBox.addButton(_("Confirm"), qt.QDialogButtonBox.AcceptRole)
+        layout.addWidget(buttonBox)
+
+        # When the user confirms, ensure we have a valid path first
+        buttonBox.accepted.connect(
+            lambda: self._attemptOutputPathUpdate(prompt, outputFileEdit)
+        )
+
+        # Resize the prompt to be wider, as by default its very tiny
+        prompt.resize(500, prompt.minimumHeight)
+
+        return prompt
+
+    def _linkedPathErrorPrompt(self, err_msg, prompt):
+        """
+        Prompt the user with an error message
+        """
+        # Prompt the user with the error, locking the original prompt until
+        #  acknowledged by the user
+        failurePrompt = qt.QErrorMessage(prompt)
+
+        # Add some details on what's happening for the user
+        failurePrompt.setWindowTitle("PATH ERROR!")
+
+        # Show the message
+        failurePrompt.showMessage(err_msg)
+        failurePrompt.exec()
+
+
+    def _attemptOutputPathUpdate(
+            self,
+            prompt: qt.QDialog,
+            widget: ctk.ctkPathLineEdit
+    ):
+        """
+        Validates the output path provided by a user, only closing the
+        associated prompt if it was valid.
+        """
+        # Strip whitespace to avoid a "space" path
+        output_path_str = widget.currentPath.strip()
+
+        if not output_path_str:
+            # Prompt the user with the error
+            err_msg = "Output path was empty"
+            self._linkedPathErrorPrompt(err_msg, prompt)
+
+            # Reset it to our prior managed directory for convenience sakes
+            widget.currentPath = str(self.bound_task.output_dir)
+
+            # Return early, which keeps the prompt active
+            return
+
+        # Convert it to a Path for ease of use
+        output_path = Path(output_path_str)
+
+        # Otherwise, try to update the task's path; we rely on its validation
+        #  to ensure parity with any other checks
+        err_msg = self.bound_task.set_output_dir(output_path)
+
+        # If we got an error message, prompt the user about why and return
+        if err_msg:
+            self._linkedPathErrorPrompt(err_msg, prompt)
+
+            # Return, keeping the prompt alive
+            return
+        # Otherwise, close the prompt with an "accepted" signal
+        else:
+            prompt.accept()
 
     def update(self, data_unit: MultiContrastSegmentationEvaluationDataUnit) -> None:
+        """
+        Called whenever a new data-unit is in focus.
+        Populate the volume combo, select primary, and fire off initial layers.
+        """
         self.data_unit = data_unit
-        # update combo
-        # self.volumeCombo.clear()
-        # for key in data_unit.volume_keys:
-        #     self.volumeCombo.addItem(key)
-        # initial orientation layout for all volumes
+        # sync segmentation editor
+        self.segmentEditorWidget.setSegmentationNode(self.data_unit.segmentation_node)
+        print(f"Orientation: {self.currentOrientation}")
+        print(f"list(data_unit.volume_nodes.values()) = {list(self.data_unit.volume_nodes.values())}")
         self.layoutLogic.create_linked_slice_views(
-            volume_nodes=list(data_unit.volume_nodes.values()),
-            label=data_unit.segmentation_node,
+            volume_nodes=list(self.data_unit.volume_nodes.values()),
+            label=self.data_unit.segmentation_node,
             orientation=self.currentOrientation
         )
-        # sync segmentation editor
-        self.segmentEditorWidget.setSegmentationNode(data_unit.segmentation_node)
-        # self._updatedSaveButtonState()
+        self._updatedSaveButtonState()
 
+    def _save(self) -> None:
+        err = self.bound_task.save()
+        self.saveCompletePrompt(err)
 
     def saveCompletePrompt(self, err_msg: Optional[str]) -> None:
         if err_msg is None:
