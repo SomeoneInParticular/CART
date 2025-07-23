@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import csv
 from functools import lru_cache
 from pathlib import Path
@@ -25,8 +23,8 @@ class DataManager:
 
     def __init__(
         self,
-        cohort_file: Path | None = None,
-        data_source: Path | None = None,
+        cohort_file: Optional[Path] = None,
+        data_source: Optional[Path] = None,
         data_unit_factory: DataUnitFactory = None,
         cache_size: int = 2,
     ):
@@ -282,7 +280,7 @@ class DataManager:
 
         return errors
 
-    def validate_cohort_and_data_path_match(self) -> str | None:
+    def validate_cohort_and_data_path_match(self) -> Optional[str]:
         """
         Ensure the cohort CSV aligns with resources in the data path.
 
