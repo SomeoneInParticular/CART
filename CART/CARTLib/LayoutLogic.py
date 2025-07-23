@@ -383,7 +383,7 @@ class CaseIteratorLayoutLogic(ScriptedLoadableModuleLogic):
     if n == 0:
       return {}
 
-    # Handle label: if segmentation node, export to labelmap volume
+    # Orient vertically if the number of nodes exceeds our maximum allowed horizontal views.
     layout_type = 'horizontal' if n <= max_horizontal else 'vertical'
 
     # Build the XML layout description
