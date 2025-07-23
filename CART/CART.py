@@ -340,9 +340,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         previewButton = qt.QPushButton(_("Preview"))
         previewButton.setToolTip(
             _(
-                """
-        Reads the contents of the cohort.csv for review, without starting the task
-        """
+            """
+            Reads the contents of the cohort.csv for review, without starting the task
+            """
             )
         )
 
