@@ -35,7 +35,7 @@ class MultiContrastSegmentationEvaluationGUI:
         self.layoutLogic = CaseIteratorLayoutLogic()
         self.currentOrientation: str = 'Axial'
 
-        # Widgets we’ll need to reference later:
+        # Widgets we'll need to reference later:
         self.segmentEditorWidget: Optional[CARTSegmentationEditorWidget] = None
         self.saveButton: Optional[qt.QPushButton] = None
 
