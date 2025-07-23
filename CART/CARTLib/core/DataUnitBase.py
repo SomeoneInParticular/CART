@@ -36,8 +36,8 @@ class DataUnitBase(ABC):
         self.uid = case_data.get("uid", None)
         # HACK: Just work around so that we dont call the validate method before setup all required resources
         # in the subclasses
+        self.validated = False
         if do_validation:
-            self.validated = False
             self._validate()
 
     @abstractmethod
