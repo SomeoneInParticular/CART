@@ -122,8 +122,9 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         # Align segmentation to primary volume geometry
         seg_node.SetReferenceImageGeometryParameterFromVolumeNode(primary_node)
 
+
         # Group in subject hierarchy
-        self.subject_id = create_subject(self.uid, primary_node, seg_node)
+        self.subject_id = create_subject(self.uid, self.segmentation_node, *self.volume_nodes.values())
 
     def _init_volume_nodes(self) -> slicer.vtkMRMLScalarVolumeNode:
         """
