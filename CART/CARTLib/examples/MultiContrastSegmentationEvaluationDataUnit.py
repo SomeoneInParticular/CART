@@ -22,7 +22,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
             data_path: Path,
             scene: Optional[slicer.vtkMRMLScene] = slicer.mrmlScene
     ):
-        super().__init__(case_data, data_path, scene, do_validation=False)
+        super().__init__(case_data, data_path, scene)
 
         # --- Discover all volume keys dynamically ---
         self.volume_keys = [k for k in self.case_data if "volume" in k.lower()]
@@ -52,8 +52,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
 
         # Track completion state
         self.is_complete = case_data.get(self.COMPLETED_KEY, False)
-        # Validate inputs then load resources
-        self._validate()
+        # Load our resources
         self._initialize_resources()
 
     def to_dict(self) -> dict[str, str]:
@@ -92,7 +91,6 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         for key in self.volume_keys:
             self.validate_key_is_file(key)
         self.validate_key_is_file(self.SEGMENTATION_KEY)
-        self.validated = True
 
     def validate_key_is_file(self, key: str) -> None:
         """
