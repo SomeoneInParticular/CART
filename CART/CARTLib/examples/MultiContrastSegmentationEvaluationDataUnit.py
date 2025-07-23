@@ -25,10 +25,9 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         super().__init__(case_data, data_path, scene, do_validation=False)
 
         # --- Discover all volume keys dynamically ---
-        self.volume_keys = sorted([k for k in self.case_data if "volume" in k.lower()]) # Sort alphabetically
+        self.volume_keys = [k for k in self.case_data if "volume" in k.lower()]
         if not self.volume_keys:
             raise ValueError(f"No volume keys found in case_data for case {self.uid}")
-        self.volume_keys.sort()
 
         # Pick primary: one containing "primary", else first alphabetically
         self.primary_volume_key = next(
