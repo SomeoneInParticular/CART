@@ -16,6 +16,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
 
     SEGMENTATION_KEY = "segmentation"
     COMPLETED_KEY = "completed"
+    COMPLETED_BY_KEY = "completed_by"
 
     DEFAULT_ORIENTATION = Orientation.AXIAL
 
@@ -24,40 +25,63 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         case_data: dict[str, str],
         data_path: Path,
         scene: Optional[slicer.vtkMRMLScene] = slicer.mrmlScene,
-    ):
+    ) -> None:
         super().__init__(case_data, data_path, scene)
 
-        # --- Discover all volume keys dynamically ---
-        self.volume_keys = [k for k in self.case_data if "volume" in k.lower()]
+        # --- Discover volume and segmentation keys ---
+        self.volume_keys = [k for k in case_data if "volume" in k.lower()]
         if not self.volume_keys:
             raise ValueError(f"No volume keys found in case_data for case {self.uid}")
 
-        # Pick primary: one containing "primary", else first alphabetically
+        self.segmentation_keys = [k for k in case_data if "seg" in k.lower()]
+        # Fallback to a single default key if none found
+        if not self.segmentation_keys:
+            self.segmentation_keys = [self.SEGMENTATION_KEY]
+            self._created_empty_by_default = True
+        else:
+            self._created_empty_by_default = False
+
+        # --- Determine primaries ---
         self.primary_volume_key = next(
             (k for k in self.volume_keys if "primary" in k.lower()),
             self.volume_keys[0],
         )
-
-        # Build paths for volumes and segmentation
-        self.volume_paths: dict[str, Path] = {
-            key: self.data_path / self.case_data[key] for key in self.volume_keys
-        }
-        self.segmentation_path: Path = (
-            self.data_path / self.case_data[self.SEGMENTATION_KEY]
+        self.NO_PRIMARY_SEGMENTATION_KEY: bool = False
+        # DONT LOVE THIS LOGIC,
+        # Want to handle ANY NUMBER of segmentations
+        # If no segmentation keys are found, we will use the default SEGMENTATION_KEY and create an empty segmentation node.
+        # If any segmentation keys are found, we will use them.
+        # -- If no primary segmentation key is found, we will use the first segmentation key as the primary.
+        if not self.segmentation_keys:
+            # If no segmentation keys, use the primary volume key as a fallback
+            self.segmentation_keys = [self.self.SEGMENTATION_KEY]
+            self.NO_PRIMARY_SEGMENTATION_KEY = True
+        self.primary_segmentation_key = next(
+            (k for k in self.segmentation_keys if "primary" in k.lower()),
+            self.segmentation_keys[0],
         )
 
-        # Prepare storage for loaded nodes
-        self.volume_nodes: dict[str, slicer.vtkMRMLScalarVolumeNode] = {}
-        self.primary_volume_node: Optional[slicer.vtkMRMLScalarVolumeNode] = None
-        self.segmentation_node: Optional[slicer.vtkMRMLSegmentationNode] = None
+        # --- Build file paths ---
+        self.volume_paths: dict[str, Path] = {
+            k: data_path / case_data[k] for k in self.volume_keys
+        }
+        self.segmentation_paths: dict[str, Path] = {
+            k: data_path / case_data.get(k, "") for k in self.segmentation_keys
+        }
 
-        # Slicer hierarchy for grouping nodes
-        self.hierarchy_node = slicer.mrmlScene.GetSubjectHierarchyNode()
+        # --- Node storage ---
+        self.volume_nodes: dict[str, slicer.vtkMRMLScalarVolumeNode] = {}
+        self.segmentation_nodes: dict[str, slicer.vtkMRMLSegmentationNode] = {}
+        self.primary_volume_node: Optional[slicer.vtkMRMLScalarVolumeNode] = None
+        self.primary_segmentation_node: Optional[slicer.vtkMRMLSegmentationNode] = None
+
+        # subject hierarchy
+        self.hierarchy_node = scene.GetSubjectHierarchyNode()
         self.subject_id: Optional[int] = None
 
-        # Track completion state
         self.is_complete = case_data.get(self.COMPLETED_KEY, False)
-        # Load our resources
+
+        # --- Load everything ---
         self._initialize_resources()
 
         # Layout manager for this data uni; as it has MRML nodes, it needs to be cleaned
@@ -74,7 +98,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
     def to_dict(self) -> dict[str, str]:
         """Serialize back to case_data format."""
         output = {key: self.case_data[key] for key in self.volume_keys}
-        output[self.SEGMENTATION_KEY] = self.case_data[self.SEGMENTATION_KEY]
+        output.update({key: self.case_data[key] for key in self.segmentation_keys})
         output[self.COMPLETED_KEY] = self.is_complete
         return output
 
@@ -83,14 +107,19 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         # Reveal all the data nodes again
         for node in self.volume_nodes.values():
             node.SetDisplayVisibility(True)
-        self.segmentation_node.SetDisplayVisibility(True)
+        for node in self.segmentation_nodes.values():
+            node.SetDisplayVisibility(True)
+            if not node == self.primary_segmentation_node:
+                # TODO This should be configurable and a button to toggle visibility of non primary segmentations
+                node.SetSegementOpacity(0.3)  # Dim non-primary segmentations
         self._set_subject_shown(True)
 
     def focus_lost(self) -> None:
         """Hide all volumes and segmentation when focus is lost."""
         for node in self.volume_nodes.values():
             node.SetDisplayVisibility(False)
-        self.segmentation_node.SetDisplayVisibility(False)
+        for node in self.segmentation_nodes.values():
+            node.SetDisplayVisibility(False)
         self._set_subject_shown(False)
 
     def clean(self) -> None:
@@ -111,7 +140,9 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         """
         for key in self.volume_keys:
             self.validate_key_is_file(key)
-        self.validate_key_is_file(self.SEGMENTATION_KEY)
+        for key in self.segmentation_keys:
+            if key is not None:
+                self.validate_key_is_file(key)
 
     def validate_key_is_file(self, key: str) -> None:
         """
@@ -129,18 +160,18 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
 
     def _initialize_resources(self) -> None:
         """
-        Load all volumes and the segmentation into MRML nodes,
-        sync geometry, and create a subject hierarchy.
+        Load volume nodes and segmentation nodes, align geometry,
+        and register under a single subject in the hierarchy.
         """
-        primary_node = self._init_volume_nodes()
-        seg_node = self._init_segmentation_node()
+        primary_vol = self._init_volume_nodes()
+        primary_seg = self._init_segmentation_nodes()
 
-        # Align segmentation to primary volume geometry
-        seg_node.SetReferenceImageGeometryParameterFromVolumeNode(primary_node)
+        # Align segmentation to volume
+        primary_seg.SetReferenceImageGeometryParameterFromVolumeNode(primary_vol)
 
-        # Group in subject hierarchy
+        # Group under one hierarchy item
         self.subject_id = create_subject(
-            self.uid, self.segmentation_node, *self.volume_nodes.values()
+            self.uid, primary_seg, *self.volume_nodes.values()
         )
 
     def _init_volume_nodes(self) -> slicer.vtkMRMLScalarVolumeNode:
@@ -158,15 +189,27 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
                 self.primary_volume_node = node
         return self.primary_volume_node  # primary
 
-    def _init_segmentation_node(self) -> slicer.vtkMRMLSegmentationNode:
+    def _init_segmentation_nodes(self) -> slicer.vtkMRMLSegmentationNode:
         """
-        Load the segmentation file into a segmentation node,
-        name it, and store in resources.
+        For each segmentation key, load if file exists; otherwise create empty node.
+        Then pick the primary segmentation.
         """
-        self.segmentation_node = load_segmentation(self.segmentation_path)
-        self.segmentation_node.SetName(f"{self.uid}_{self.SEGMENTATION_KEY}")
-        self.resources[self.SEGMENTATION_KEY] = self.segmentation_node
-        return self.segmentation_node
+        for key in self.segmentation_keys:
+            seg_path = self.segmentation_paths.get(key)
+            if seg_path and seg_path.exists():
+                node = load_segmentation(seg_path)
+            else:
+                # create an empty segmentation node
+                node = slicer.vtkMRMLSegmentationNode()
+                node.SetName(f"{self.uid}_{key}")
+                self.scene.AddNode(node)
+            self.segmentation_nodes[key] = node
+            self.resources[key] = node
+
+        self.primary_segmentation_node = self.segmentation_nodes[
+            self.primary_segmentation_key
+        ]
+        return self.primary_segmentation_node  # type: ignore
 
     def _set_subject_shown(self, new_state: bool) -> None:
         """

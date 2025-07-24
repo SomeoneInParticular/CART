@@ -235,7 +235,9 @@ class MultiContrastSegmentationEvaluationGUI:
         """
         self.data_unit = data_unit
         # sync segmentation editor
-        self.segmentEditorWidget.setSegmentationNode(self.data_unit.segmentation_node)
+        self.segmentEditorWidget.setSegmentationNode(
+            self.data_unit.primary_segmentation_node
+        )
         print(f"Orientation: {self.currentOrientation}")
         print(
             f"list(data_unit.volume_nodes.values()) = {list(self.data_unit.volume_nodes.values())}"
@@ -317,7 +319,7 @@ class MultiContrastSegmentationEvaluationTask(
         # Display primary volume + segmentation overlay
         slicer.util.setSliceViewerLayers(
             background=data_unit.primary_volume_node,
-            foreground=data_unit.segmentation_node,
+            foreground=data_unit.primary_segmentation_node,
             fit=True,
         )
         # If we have GUI, update it as well
@@ -450,7 +452,7 @@ class _MultiContrastOutputManager:
         output
         """
         # Extract the relevant node data from the data unit
-        seg_node = data_unit.segmentation_node
+        seg_node = data_unit.primary_segmentation_node
         vol_node = (
             data_unit.primary_volume_node
         )  # THIS IS THE MAIN DIFFERENCE BETWEEN THIS MULTICONTRAST OUTPUT MANAGER
