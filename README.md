@@ -1,5 +1,31 @@
 # Generic Iterator Project Plan 
 
+## Prerequisites
+
+- Slicer v5.8 (other versions might work, without guaranty)
+
+## Getting started
+
+clone this repository
+~~~
+git clone git@github.com:SomeoneInParticular/CART.git
+~~~
+
+Go to Slicer
+**Edit > Application Settings > Modules **
+
+Drag & Drop the CART/CART folder into the "Additional module paths" window, then click OK and restart Slicer.
+
+Access CART via: **Modules > Utilities > CART**
+
+### Create a user
+
+Click on the "+" under the "User" section. 
+
+### Cohort File
+
+This file depends on the task. 
+
 ## IDE Set Up
 
 ### Source Directories
