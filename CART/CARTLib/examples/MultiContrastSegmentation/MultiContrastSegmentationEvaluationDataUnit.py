@@ -3,7 +3,12 @@ from typing import Optional
 
 import slicer
 from CARTLib.core.DataUnitBase import DataUnitBase
-from CARTLib.utils.data import load_segmentation, load_volume, create_subject
+from CARTLib.utils.data import (
+    load_segmentation,
+    load_volume,
+    create_subject,
+    load_markups,
+)
 from CARTLib.utils.layout import LayoutHandler, Orientation
 
 
@@ -40,6 +45,10 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
             raise ValueError(f"No volume keys found in case_data for case {self.uid}")
 
         self.segmentation_keys = [k for k in case_data if "seg" in k.lower()]
+
+        self.markup_keys = [
+            k for k in case_data if "markups" in k.lower() or "mrk" in k.lower()
+        ]
         # Fallback to a single default key if none found
         if not self.segmentation_keys:
             self.segmentation_keys = [self.SEGMENTATION_KEY]
@@ -80,6 +89,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         # --- Node storage ---
         self.volume_nodes: dict[str, slicer.vtkMRMLScalarVolumeNode] = {}
         self.segmentation_nodes: dict[str, slicer.vtkMRMLSegmentationNode] = {}
+        self.markup_nodes: dict[str, slicer.vtkMRMLMarkupsFiducialNode] = {}
         self.primary_volume_node: Optional[slicer.vtkMRMLScalarVolumeNode] = None
         self.primary_segmentation_node: Optional[slicer.vtkMRMLSegmentationNode] = None
 
@@ -116,6 +126,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         """Serialize back to case_data format."""
         output = {key: self.case_data[key] for key in self.volume_keys}
         output.update({key: self.case_data[key] for key in self.segmentation_keys})
+        output.update({key: self.case_data[key] for key in self.markup_keys})
         output[self.COMPLETED_KEY] = self.is_complete
         return output
 
@@ -126,6 +137,8 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
             node.SetDisplayVisibility(True)
         for node in self.segmentation_nodes.values():
             node.SetDisplayVisibility(True)
+        for node in self.markup_nodes.values():
+            node.SetDisplayVisibility(True)
         self._set_subject_shown(True)
 
     def focus_lost(self) -> None:
@@ -133,6 +146,8 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         for node in self.volume_nodes.values():
             node.SetDisplayVisibility(False)
         for node in self.segmentation_nodes.values():
+            node.SetDisplayVisibility(False)
+        for node in self.markup_nodes.values():
             node.SetDisplayVisibility(False)
         self._set_subject_shown(False)
 
@@ -180,9 +195,14 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         primary_vol = self._init_volume_nodes()
         self._init_segmentation_nodes(primary_vol)
 
+        self._init_markups_nodes()
+
         # Group under one hierarchy item
         self.subject_id = create_subject(
-            self.uid, *self.segmentation_nodes.values(), *self.volume_nodes.values()
+            self.uid,
+            *self.segmentation_nodes.values(),
+            *self.volume_nodes.values(),
+            *self.markup_nodes.values(),
         )
 
     def _init_volume_nodes(self) -> slicer.vtkMRMLScalarVolumeNode:
@@ -274,6 +294,26 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         self.primary_segmentation_node = self.segmentation_nodes[
             self.primary_segmentation_key
         ]
+
+    def _init_markups_nodes(self) -> None:
+        """
+        Load each markup path into a markups node, name it,
+        store in resources, and identify the primary.
+        """
+        for key in self.markup_keys:
+            path = self.data_path / self.case_data[key]
+            if not path.exists():
+                raise ValueError(f"Markup file does not exist: {path}")
+            nodes = load_markups(path)
+            for i, node in enumerate(nodes):
+                if not isinstance(node, slicer.vtkMRMLMarkupsFiducialNode):
+                    raise TypeError(
+                        f"Expected a MarkupsFiducialNode, got {type(node)} for key {key}"
+                    )
+                c_name = node.GetName()
+                node.SetName(f"{self.uid}_{c_name}_{key}_{i}")
+                self.markup_nodes[f"{key}_{i}"] = node
+                self.resources[f"{key}_{i}"] = node
 
     def _set_subject_shown(self, new_state: bool) -> None:
         """
