@@ -20,11 +20,35 @@ Access CART via: **Modules > Utilities > CART**
 
 ### Create a user
 
-Click on the "+" under the "User" section. 
+Under the "User" section, click on the "+" and add your name.
 
 ### Cohort File
 
-This file depends on the task. 
+A cohort file is a CSV file that lists the data to be annotated.
+
+Example of such a file:
+
+```
+uid,volume,segmentation
+sub-amu05_T2w,sub-amu05/anat/sub-amu05_T2w.nii.gz,derivatives/labels/sub-amu05/anat/sub-amu05_T2w_seg.nii.gz
+sub-amu04_T2w,sub-amu04/anat/sub-amu04_T2w.nii.gz,derivatives/labels/sub-amu04/anat/sub-amu04_T2w_seg.nii.gz
+...
+```
+
+> [!NOTE]  
+> The paths are relative for clarity. The root path is indicated under [Data Path](#data-path).
+
+
+### Data Path
+
+Root path where the dataset is located.
+
+### Task
+
+A task can be segmentation review (ie: already existing segmentation), new segmentation, categorization, etc.. 
+
+A task is associated with a 'cohort file', which configures CART environment for annotation. You can find examples of 
+tasks at: [./CART/CARTLib/examples](./CART/CARTLib/examples).
 
 ## IDE Set Up
 
