@@ -23,6 +23,8 @@ from CARTLib.examples.MultiContrastSegmentation.MultiContrastSegmentationEvaluat
     MultiContrastSegmentationEvaluationTask,
 )
 
+from CohortGenerator import CohortGeneratorWindow
+
 CURRENT_DIR = Path(__file__).parent
 CONFIGURATION_FILE_NAME = CURRENT_DIR / "configuration.json"
 sample_data_path = CURRENT_DIR.parent / "sample_data"
@@ -151,11 +153,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # User selection/registration
         self.buildUserUI(mainLayout)
 
-        # Cohort Selection
-        self.buildCohortUI(mainLayout)
-
         # Base Path input UI
         self.buildBasePathUI(mainLayout)
+
+        # Cohort Selection
+        self.buildCohortUI(mainLayout)
 
         # Task UI
         self.buildTaskUI(mainLayout)
@@ -281,6 +283,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.userSelectButton = userSelectButton
 
     def buildCohortUI(self, mainLayout: qt.QFormLayout):
+
+        # Auto-generator window button
+        cohortGeneratorButton = qt.QPushButton(_("Auto-generate Cohort"))
+        cohortGeneratorButton.setStyleSheet("background-color: green;")
+
         # Directory selection button
         cohortFileSelectionButton = ctk.ctkPathLineEdit()
 
@@ -293,9 +300,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # When the cohort is changed, update accordingly
         cohortFileSelectionButton.currentPathChanged.connect(self.onCohortChanged)
 
+        # When clicked, open the auto-generator window
+        cohortGeneratorButton.clicked.connect(self.onCohortGeneratorButtonClicked)
+
         # TODO: Optionally set a default filter
 
         # Add it to our layout
+        mainLayout.addRow(_("Try generating: "), cohortGeneratorButton)
         mainLayout.addRow(_("Cohort File:"), cohortFileSelectionButton)
 
         # Make the button easy-to-access
@@ -564,6 +575,16 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Exit task mode until the user confirms the change
         self._disableTaskMode()
+
+    def onCohortGeneratorButtonClicked(self):
+        sample_data = [
+            [f"T1_Sub{i:02}" for i in range(1, 6)],
+            [f"T2_Sub{i:02}" for i in range(1, 6)],
+            [f"FLAIR_Sub{i:02}" for i in range(1, 6)],
+        ]
+
+        cohortGeneratorWindow = CohortGeneratorWindow(sample_data)
+        cohortGeneratorWindow.show()
 
     def buildCohortTable(self):
 
