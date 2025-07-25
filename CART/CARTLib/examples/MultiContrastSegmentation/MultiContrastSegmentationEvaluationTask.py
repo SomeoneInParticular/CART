@@ -465,7 +465,7 @@ class _MultiContrastOutputManager:
         self, data_unit: MultiContrastSegmentationEvaluationDataUnit, target_file: Path
     ):
         # Check for an existing sidecar, and use it as our basis if it exists
-        fname = str(data_unit.segmentation_path).split(".")[0]
+        fname = str(data_unit.get_primary_segmentation_path()).split(".")[0]
 
         # Read in the existing side-car file first, if possible
         sidecar_file = Path(f"{fname}.json")

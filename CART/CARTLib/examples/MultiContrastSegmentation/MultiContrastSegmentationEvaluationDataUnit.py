@@ -99,6 +99,15 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
             self.DEFAULT_ORIENTATION,
         )
 
+    def get_primary_segmentation_path(self) -> Optional[Path]:
+        """
+        Get the file name for the primary segmentation output.
+        If no primary segmentation key is set, return None.
+        """
+        if self.primary_segmentation_key is None:
+            return None
+        return self.segmentation_paths.get(self.primary_segmentation_key)
+
     def set_orientation(self, ori: Orientation):
         # Update our layout to match
         self.layout_handler.set_orientation(ori)
