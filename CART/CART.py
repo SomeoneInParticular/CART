@@ -869,8 +869,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def saveTask(self):
         try:
-            self.logic.current_task_instance.save()
-            print("Saved!")
+            result = self.logic.current_task_instance.save()
+            if not result:
+                print("Saved!")
+            else:
+                print(result)
         except Exception as e:
             self.pythonExceptionPrompt(e)
 
