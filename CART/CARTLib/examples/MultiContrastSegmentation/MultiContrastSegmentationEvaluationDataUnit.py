@@ -7,6 +7,12 @@ from CARTLib.utils.data import load_segmentation, load_volume, create_subject
 from CARTLib.utils.layout import LayoutHandler, Orientation
 
 
+HARDCODED_EXAMMPLE_COLOR_DICT = {
+    "primary": (1.0, 0.0, 0.0),  # Red
+    "other": (0.0, 0.0, 0.5),
+}
+
+
 class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
     """
     DataUnit for segmentation evaluation supporting any number of volumes.
@@ -46,6 +52,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
             (k for k in self.volume_keys if "primary" in k.lower()),
             self.volume_keys[0],
         )
+        print(f"Primary volume key: {self.primary_volume_key}")
         self.NO_PRIMARY_SEGMENTATION_KEY: bool = False
         # DONT LOVE THIS LOGIC,
         # Want to handle ANY NUMBER of segmentations
@@ -54,12 +61,13 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         # -- If no primary segmentation key is found, we will use the first segmentation key as the primary.
         if not self.segmentation_keys:
             # If no segmentation keys, use the primary volume key as a fallback
-            self.segmentation_keys = [self.self.SEGMENTATION_KEY]
+            self.segmentation_keys = [self.SEGMENTATION_KEY]
             self.NO_PRIMARY_SEGMENTATION_KEY = True
         self.primary_segmentation_key = next(
             (k for k in self.segmentation_keys if "primary" in k.lower()),
             self.segmentation_keys[0],
         )
+        print(f"Primary segmentation key: {self.primary_segmentation_key}")
 
         # --- Build file paths ---
         self.volume_paths: dict[str, Path] = {
@@ -109,9 +117,6 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
             node.SetDisplayVisibility(True)
         for node in self.segmentation_nodes.values():
             node.SetDisplayVisibility(True)
-            if not node == self.primary_segmentation_node:
-                # TODO This should be configurable and a button to toggle visibility of non primary segmentations
-                node.SetSegementOpacity(0.3)  # Dim non-primary segmentations
         self._set_subject_shown(True)
 
     def focus_lost(self) -> None:
@@ -164,14 +169,11 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         and register under a single subject in the hierarchy.
         """
         primary_vol = self._init_volume_nodes()
-        primary_seg = self._init_segmentation_nodes()
-
-        # Align segmentation to volume
-        primary_seg.SetReferenceImageGeometryParameterFromVolumeNode(primary_vol)
+        self._init_segmentation_nodes(primary_vol)
 
         # Group under one hierarchy item
         self.subject_id = create_subject(
-            self.uid, primary_seg, *self.volume_nodes.values()
+            self.uid, *self.segmentation_nodes.values(), *self.volume_nodes.values()
         )
 
     def _init_volume_nodes(self) -> slicer.vtkMRMLScalarVolumeNode:
@@ -189,11 +191,14 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
                 self.primary_volume_node = node
         return self.primary_volume_node  # primary
 
-    def _init_segmentation_nodes(self) -> slicer.vtkMRMLSegmentationNode:
+    def _init_segmentation_nodes(
+        self, primary_vol: slicer.vtkMRMLScalarVolumeNode
+    ) -> None:
         """
         For each segmentation key, load if file exists; otherwise create empty node.
         Then pick the primary segmentation.
         """
+
         for key in self.segmentation_keys:
             seg_path = self.segmentation_paths.get(key)
             if seg_path and seg_path.exists():
@@ -201,15 +206,65 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
             else:
                 # create an empty segmentation node
                 node = slicer.vtkMRMLSegmentationNode()
-                node.SetName(f"{self.uid}_{key}")
                 self.scene.AddNode(node)
+
+                # Create and set up the display node for empty segmentations
+                display_node = slicer.vtkMRMLSegmentationDisplayNode()
+                self.scene.AddNode(display_node)
+                node.SetAndObserveDisplayNodeID(display_node.GetID())
+                if key == self.primary_segmentation_key:
+                    print("HERE!!!!" * 100)
+                    # TODO Figure out why this is not poping up?
+                    # Bring up a pop-up to notify the user that no segmentation was found
+                    slicer.util.errorDisplay(
+                        f"No segmentation found for {self.uid}. An empty segmentation node has been created."
+                    )
+
+            node.SetName(f"{self.uid}_{key}")
+            node.SetReferenceImageGeometryParameterFromVolumeNode(primary_vol)
+            # Setup the color table for the segmentation
+
+            if key == self.primary_segmentation_key:
+                # Set color to RED for primary segmentation
+                # TODO MAKE THIS COLOR SETTING A UTIL FUNCTION AND MORE CONFIGURABLE
+                # This works cause we are only using 1 segmentation per NODE
+                number_of_segments = node.GetSegmentation().GetNumberOfSegments()
+                if number_of_segments == 0:
+                    slicer.util.errorDisplay(
+                        f"No segments found in primary segmentation {key}. An empty segmentation node has been created."
+                    )
+                else:
+                    for segment_idx in range(number_of_segments):
+                        segment = node.GetSegmentation().GetNthSegment(segment_idx)
+                        segment.SetColor(*HARDCODED_EXAMMPLE_COLOR_DICT["primary"])
+                    node.GetDisplayNode().SetOpacity(1.0)
+            else:
+                # TODO This should be configurable and a button to toggle visibility of non primary segmentations
+                display_node = node.GetDisplayNode()
+                segmentIds = node.GetSegmentation().GetSegmentIDs()
+                print(
+                    f"Setting color for non-primary segmentation {key} with segments: {segmentIds}"
+                )
+                # TODO MAKE THIS COLOR SETTING A UTIL FUNCTION AND MORE CONFIGURABLE
+                # display_node.SetOpacity(0.1)
+                for segment_id in segmentIds:
+                    segment = node.GetSegmentation().GetSegment(segment_id)
+                    print(f"Setting color for segment {segment_id} in {key} ")
+                    display_node.SetSegmentVisibility2DFill(segment_id, False)
+                    display_node.SetSegmentVisibility2DOutline(segment_id, True)
+                    segment.SetColor(
+                        *HARDCODED_EXAMMPLE_COLOR_DICT["other"]
+                    )  # Set override color to blue
+                else:
+                    print(
+                        f"Warning: Display node for {key} is None. Skipping color setup."
+                    )
             self.segmentation_nodes[key] = node
             self.resources[key] = node
 
         self.primary_segmentation_node = self.segmentation_nodes[
             self.primary_segmentation_key
         ]
-        return self.primary_segmentation_node  # type: ignore
 
     def _set_subject_shown(self, new_state: bool) -> None:
         """
