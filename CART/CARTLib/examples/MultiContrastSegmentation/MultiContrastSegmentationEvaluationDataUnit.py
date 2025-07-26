@@ -133,22 +133,28 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
     def focus_gained(self) -> None:
         """Show all volumes and segmentation when this unit gains focus."""
         # Reveal all the data nodes again
-        for node in self.volume_nodes.values():
+        for node in [
+            *self.volume_nodes.values(),
+            *self.segmentation_nodes.values(),
+            *self.markup_nodes.values()
+        ]:
             node.SetDisplayVisibility(True)
-        for node in self.segmentation_nodes.values():
-            node.SetDisplayVisibility(True)
-        for node in self.markup_nodes.values():
-            node.SetDisplayVisibility(True)
+            node.SetSelectable(True)
+            node.SetHideFromEditors(False)
+
         self._set_subject_shown(True)
 
     def focus_lost(self) -> None:
         """Hide all volumes and segmentation when focus is lost."""
-        for node in self.volume_nodes.values():
+        for node in [
+            *self.volume_nodes.values(),
+            *self.segmentation_nodes.values(),
+            *self.markup_nodes.values()
+        ]:
             node.SetDisplayVisibility(False)
-        for node in self.segmentation_nodes.values():
-            node.SetDisplayVisibility(False)
-        for node in self.markup_nodes.values():
-            node.SetDisplayVisibility(False)
+            node.SetSelectable(False)
+            node.SetHideFromEditors(True)
+
         self._set_subject_shown(False)
 
     def clean(self) -> None:

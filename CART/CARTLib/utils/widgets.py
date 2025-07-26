@@ -57,6 +57,24 @@ class CARTSegmentationEditorWidget(
         self.editor_node = None
         self._set_up_editor_node()
 
+        # By default, hide the "add/remove" segmentations button;
+        # we assume a CART task will do that for us.
+        self.setAddRemoveSegmentButtonsVisible(False)
+
+        # Likewise, we expect the task to select the most relevant "source" volume
+        self.setSourceVolumeNodeSelectorVisible(False)
+
+        # Hide "swap to Segmentations Button" as well
+        self.setSwitchToSegmentationsButtonVisible(False)
+
+        # Track our segmentation node combo box for direct reference
+        self.segmentNodeComboBox = self._findSegmentNodeComboBox()
+
+        # Hide the ability to add or remove segments here as well
+        self.segmentNodeComboBox.addEnabled = False
+        self.segmentNodeComboBox.removeEnabled = False
+
+    ## Setup Helpers ##
     def _set_up_editor_node(self):
         # Get a pre-existing node from the MRML scene if it exists
         editor_node = self.scene.GetSingletonNode(
@@ -77,6 +95,17 @@ class CARTSegmentationEditorWidget(
         # Track the editor node for future reference
         self.editor_node = editor_node
 
+    def _findSegmentNodeComboBox(self) -> slicer.qMRMLNodeComboBox:
+        # Unfortunately we have to exploit QT here to search for it; Slicer hides it
+        #  from public access through its interface
+        for c in self.children():
+            if c.name == "SegmentationNodeComboBox":
+                return c
+
+        # If we could not find it, return empty-handed
+        return None
+
+    ## UI Management ##
     def enter(self):
         # Synchronize ourselves with the MRML state
         self.updateWidgetFromMRML()
