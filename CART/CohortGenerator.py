@@ -1,3 +1,4 @@
+import csv
 import traceback
 from pathlib import Path
 from typing import Optional
@@ -24,10 +25,10 @@ sample_data_cohort_csv = sample_data_path / "example_cohort.csv"
 
 class CohortGeneratorWindow(qt.QDialog):
     """GUI to display a 2D array and toggle rows/columns."""
-    def __init__(self, data, parent=None):
+    def __init__(self, data_path, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Iteration Configuration")
-        self.logic = CohortGeneratorLogic(data)
+        self.logic = CohortGeneratorLogic(data_path)
         self.setMinimumSize(600, 400)
 
         # --- Colors for visual state ---
@@ -56,7 +57,7 @@ class CohortGeneratorWindow(qt.QDialog):
 
     def _populate_table(self):
         """Fills the table with data and control checkboxes."""
-        data = self.logic.data
+        data = self.logic.csv_data
         num_data_rows = len(data)
         num_data_cols = len(data[0]) if num_data_rows > 0 else 0
 
@@ -121,11 +122,24 @@ class CohortGeneratorWindow(qt.QDialog):
 
 class CohortGeneratorLogic:
     """Handles the data and state for contrast selection."""
-    def __init__(self, data):
-        self.data = data
+    def __init__(self, data_path):
+        self.data_path: Path = data_path
+
+        self.csv_data = self.load_csv_data(self.data_path)
+
         self.disabled_rows = []
         self.disabled_columns = []
         self.is_accepted = False
+
+    def load_csv_data(self, file_path):
+        """
+        """
+        csv_data = []
+        with open(file_path, 'r', newline='', encoding='utf-8') as csvfile:
+            csv_reader = csv.reader(csvfile)
+            for row in csv_reader:
+                csv_data.append(row)
+        return csv_data
 
     def toggle_row(self, row_index, is_disabled):
         """Adds or removes a row index from the disabled list."""
