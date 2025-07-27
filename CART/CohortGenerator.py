@@ -168,7 +168,7 @@ class CohortGeneratorLogic:
                             # Split by common delimiters like '_', '.', or '-' to find the key.
                             resource_key = re.split(r'[_.-]+', file_path.stem)[-1]
                             # Store just the filename, which is relative to its parent.
-                            resource_map[resource_key] = Path(("/").join(file_path.parts[-2:]))
+                            resource_map[resource_key] = ("/").join(file_path.parts[-2:])
                             all_resource_keys.add(resource_key)
                         except IndexError:
                             print(f"Warning: Could not parse resource key from filename: {file_path.name}")
