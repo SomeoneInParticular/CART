@@ -283,9 +283,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.userSelectButton = userSelectButton
 
     def buildCohortUI(self, mainLayout: qt.QFormLayout):
-
         # Auto-generator window button
-        cohortGeneratorButton = qt.QPushButton(_("Auto-generate Cohort"))
+        cohortGeneratorButton = qt.QPushButton(_("Auto-generate cohort file"))
         cohortGeneratorButton.setStyleSheet("background-color: green;")
 
         # Directory selection button
@@ -303,14 +302,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # When clicked, open the auto-generator window
         cohortGeneratorButton.clicked.connect(self.onCohortGeneratorButtonClicked)
 
-        # TODO: Optionally set a default filter
+        # Create a horizontal layout to hold the file selection and the button
+        hLayout = qt.QHBoxLayout()
+        hLayout.addWidget(cohortFileSelectionButton)
+        hLayout.addWidget(cohortGeneratorButton)
 
-        # Add it to our layout
-        mainLayout.addRow(_("Try generating: "), cohortGeneratorButton)
-        mainLayout.addRow(_("Cohort File:"), cohortFileSelectionButton)
-
-        # Make the button easy-to-access
-        self.cohortFileSelectionButton = cohortFileSelectionButton
+        # Add the horizontal layout to our main form layout as a single row
+        mainLayout.addRow(_("Cohort File:"), hLayout)
 
     def buildBasePathUI(self, mainLayout: qt.QFormLayout):
         """
@@ -577,13 +575,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._disableTaskMode()
 
     def onCohortGeneratorButtonClicked(self):
-        sample_data = [
-            [f"T1_Sub{i:02}" for i in range(1, 6)],
-            [f"T2_Sub{i:02}" for i in range(1, 6)],
-            [f"FLAIR_Sub{i:02}" for i in range(1, 6)],
-        ]
-
-        cohortGeneratorWindow = CohortGeneratorWindow(sample_data)
+        cohortGeneratorWindow = CohortGeneratorWindow(self.logic.data_path)
         cohortGeneratorWindow.show()
 
     def buildCohortTable(self):

@@ -1,7 +1,10 @@
 import csv
 import traceback
 from pathlib import Path
-from typing import Optional
+from typing import *
+from collections import defaultdict
+import re
+import shutil
 
 import vtk
 import ctk
@@ -125,21 +128,70 @@ class CohortGeneratorLogic:
     def __init__(self, data_path):
         self.data_path: Path = data_path
 
-        self.csv_data = self.load_csv_data(self.data_path)
+        self.csv_data = self.load_cohort_data(self.data_path)
 
         self.disabled_rows = []
         self.disabled_columns = []
         self.is_accepted = False
 
-    def load_csv_data(self, file_path):
+    def load_cohort_data(self, data_path: Path) -> List[List[str]]:
         """
+        Recursively scans a directory to create a 2D array of subjects and their
+        associated file resources using pathlib.
+
+        Args:
+            data_path: The path to the root directory to scan.
+
+        Returns:
+            A list of lists representing a table where the first column is the
+            'Subject ID' (a relative path) and subsequent columns are resource
+            types. The cells contain the filename of the corresponding file.
         """
-        csv_data = []
-        with open(file_path, 'r', newline='', encoding='utf-8') as csvfile:
-            csv_reader = csv.reader(csvfile)
-            for row in csv_reader:
-                csv_data.append(row)
-        return csv_data
+        root_path = Path(data_path).resolve()
+        if not root_path.is_dir():
+            raise ValueError(f"Provided path '{data_path}' is not a valid directory.")
+
+        subjects_data = {}
+        all_resource_keys = set()
+
+        # Find all directories that contain files but no subdirectories.
+        for current_path in root_path.rglob('*'):
+            if current_path.is_dir():
+                files = [f for f in current_path.iterdir() if f.is_file()]
+                subdirs = [d for d in current_path.iterdir() if d.is_dir()]
+
+                if files and not subdirs:
+                    subject_id = current_path.relative_to(root_path).as_posix()
+                    resource_map = {}
+                    for file_path in files:
+                        try:
+                            # Split by common delimiters like '_', '.', or '-' to find the key.
+                            resource_key = re.split(r'[_.-]+', file_path.stem)[-1]
+                            # Store just the filename, which is relative to its parent.
+                            resource_map[resource_key] = Path(("/").join(file_path.parts[-2:]))
+                            all_resource_keys.add(resource_key)
+                        except IndexError:
+                            print(f"Warning: Could not parse resource key from filename: {file_path.name}")
+                            continue
+
+                    if resource_map:
+                        subjects_data[subject_id] = resource_map
+
+        if not subjects_data:
+            return []
+
+        sorted_headers = sorted(list(all_resource_keys))
+        header_row = ['Subject ID'] + sorted_headers
+        cohort_data = [header_row]
+
+        for subject_id in sorted(subjects_data.keys()):
+            row = [subject_id]
+            resources = subjects_data[subject_id]
+            for resource_key in sorted_headers:
+                row.append(resources.get(resource_key, ''))
+            cohort_data.append(row)
+
+        return cohort_data
 
     def toggle_row(self, row_index, is_disabled):
         """Adds or removes a row index from the disabled list."""
