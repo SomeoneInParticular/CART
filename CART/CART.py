@@ -506,9 +506,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Exit task mode; any active task is no longer relevant.
             self._disableTaskMode()
 
-    def onCohortChanged(self):
-        # Get the currently selected cohort file from the widget
-        new_cohort = Path(self.cohortFileSelectionButton.currentPath)
+    def onCohortChanged(self, new_cohort = None):
+
+        # If the cohort has not already been generated using auto-generation
+        if not new_cohort:
+            new_cohort = Path(self.cohortFileSelectionButton.currentPath)
 
         # Attempt to update the cohort in our logic instance
         success = self.logic.set_current_cohort(new_cohort)
@@ -576,7 +578,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onCohortGeneratorButtonClicked(self):
         cohortGeneratorWindow = CohortGeneratorWindow(self.logic.data_path)
-        cohortGeneratorWindow.show()
+        cohortGeneratorWindowResult = cohortGeneratorWindow.exec_()
+
+        if cohortGeneratorWindowResult == qt.QDialog.Accepted:
+            self.onCohortChanged(cohortGeneratorWindow.logic.cohort_path)
 
     def buildCohortTable(self):
 

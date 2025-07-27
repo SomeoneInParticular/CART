@@ -6,6 +6,7 @@ from collections import defaultdict
 import re
 import shutil
 
+
 import vtk
 import ctk
 import qt
@@ -14,41 +15,46 @@ from slicer import vtkMRMLScalarVolumeNode
 from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
-
-from CARTLib.utils.config import config
-from CARTLib.core.DataManager import DataManager
-from CARTLib.core.DataUnitBase import DataUnitBase
-from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-
-CURRENT_DIR = Path(__file__).parent
-CONFIGURATION_FILE_NAME = CURRENT_DIR / "configuration.json"
-sample_data_path = CURRENT_DIR.parent / "sample_data"
-sample_data_cohort_csv = sample_data_path / "example_cohort.csv"
-
-
 class CohortGeneratorWindow(qt.QDialog):
     """GUI to display a 2D array and toggle rows/columns."""
     def __init__(self, data_path, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Iteration Configuration")
+
+        # Flag to check if the auto-generated cohort gets accepted, for widget use
+        self.is_cohort_accepted = False
+
+        ### UI ###
+
+        self.setWindowTitle("Cohort Configuration")
         self.logic = CohortGeneratorLogic(data_path)
-        self.setMinimumSize(600, 400)
+        self.setMinimumSize(800, 500) # Increased size for better viewing
 
         # --- Colors for visual state ---
+        self.palette = self.palette
         self.disabled_color = qt.QColor(qt.Qt.gray)
         self.enabled_color = self.palette.color(qt.QPalette.Base) # Default background
 
         # --- Main Layout ---
         layout = qt.QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10) # Added margins for aesthetics
 
         # --- Table Widget ---
         self.table_widget = qt.QTableWidget()
         layout.addWidget(self.table_widget)
 
+        # --- Add spacing between table and buttons ---
+        layout.addSpacing(15)
+
         # --- Buttons ---
         button_layout = qt.QHBoxLayout()
         self.apply_button = qt.QPushButton("Apply")
         self.cancel_button = qt.QPushButton("Cancel")
+
+        # --- Add styling to buttons for a nicer look ---
+        self.apply_button.setDefault(True)
+        self.apply_button.setStyleSheet("padding: 5px 15px;")
+        self.cancel_button.setStyleSheet("padding: 5px 15px;")
+
         button_layout.addStretch()
         button_layout.addWidget(self.apply_button)
         button_layout.addWidget(self.cancel_button)
@@ -56,38 +62,76 @@ class CohortGeneratorWindow(qt.QDialog):
 
         # --- Populate and Connect ---
         self._populate_table()
+        self._configure_table_sizing() # New method for sizing
         self._connect_signals()
 
     def _populate_table(self):
         """Fills the table with data and control checkboxes."""
-        data = self.logic.csv_data
-        num_data_rows = len(data)
-        num_data_cols = len(data[0]) if num_data_rows > 0 else 0
+        data = self.logic.cohort_data
+        if not data or not data[0]:
+             self.table_widget.setRowCount(0)
+             self.table_widget.setColumnCount(0)
+             return
 
-        self.table_widget.setRowCount(num_data_rows + 1)
-        self.table_widget.setColumnCount(num_data_cols + 1)
+        header_row = data[0]
+        data_rows = data[1:]
 
-        # --- Create Checkboxes for the first row and column ---
-        for r in range(num_data_rows):
+        self.table_widget.setColumnCount(len(header_row) + 1)
+        self.table_widget.setRowCount(len(data_rows) + 2)
+
+        # Set headers (in the table itself, not the header widget)
+        # Leave cell (0,0) blank
+        for c, header_text in enumerate(header_row):
+             item = qt.QTableWidgetItem(header_text)
+             item.setFlags(item.flags() & ~qt.Qt.ItemIsEditable)
+             item.setTextAlignment(qt.Qt.AlignCenter)
+             self.table_widget.setItem(1, c + 1, item)
+
+        # --- Create Checkboxes for the first column (case controls) ---
+        for r in range(1, len(data_rows)):
             self._create_checkbox(r + 1, 0, self.handle_row_toggle)
 
-        for c in range(num_data_cols):
+        # --- Create Checkboxes for the first row (resource controls) ---
+        for c in range(1, len(header_row)):
             self._create_checkbox(0, c + 1, self.handle_column_toggle)
 
         # --- Fill data cells ---
-        for r, row_data in enumerate(data):
+        for r, row_data in enumerate(data_rows):
             for c, cell_value in enumerate(row_data):
                 item = qt.QTableWidgetItem(str(cell_value))
                 item.setFlags(item.flags() & ~qt.Qt.ItemIsEditable) # Make read-only
-                self.table_widget.setItem(r + 1, c + 1, item)
+                self.table_widget.setItem(r + 2, c + 1, item)
+
+    def _configure_table_sizing(self):
+        """Adjusts column widths for better readability and to fill space."""
+        header = self.table_widget.horizontalHeader()
+        header.hide() # Hide default header, as we put headers in the table
+        self.table_widget.verticalHeader().hide()
+
+        # Column 0 (row checkboxes): Resize to fit the content snugly.
+        self.table_widget.setColumnWidth(0, 40)
+
+        # Column 1 ('uid'): Resize to fit the content.
+        self.table_widget.resizeColumnToContents(1)
+
+        # Columns 2 onwards: Stretch to fill the remaining available width.
+        for col_idx in range(2, self.table_widget.columnCount):
+            header.setSectionResizeMode(col_idx, qt.QHeaderView.Stretch)
 
     def _create_checkbox(self, row, col, handler_slot):
         """Helper to create and place a checkbox in the table."""
+        # A container widget is needed to center the checkbox
+        cell_widget = qt.QWidget()
+        layout = qt.QHBoxLayout(cell_widget)
+        layout.setAlignment(qt.Qt.AlignCenter)
+        layout.setContentsMargins(0,0,0,0)
+
         checkbox = qt.QCheckBox()
-        checkbox.setStyleSheet("margin-left: 50%; margin-right: 50%;") # Center checkbox
         checkbox.setChecked(True)
         checkbox.toggled.connect(lambda state, r=row, c=col: handler_slot(r, c, not state))
-        self.table_widget.setCellWidget(row, col, checkbox)
+
+        layout.addWidget(checkbox)
+        self.table_widget.setCellWidget(row, col, cell_widget)
 
     def _connect_signals(self):
         """Connect button signals to dialog actions."""
@@ -96,12 +140,14 @@ class CohortGeneratorWindow(qt.QDialog):
 
     def handle_row_toggle(self, row, col, is_disabled):
         """Handles a click on a row-control checkbox."""
-        data_row_index = row - 1
+        data_row_index = row - 1 # Adjust for header row in data model
         self.logic.toggle_row(data_row_index, is_disabled)
         self._update_row_visuals(row, is_disabled)
 
     def handle_column_toggle(self, row, col, is_disabled):
         """Handles a click on a column-control checkbox."""
+        # This function is not connected as column toggles were removed for clarity
+        # but the logic is kept if you wish to re-implement it.
         data_col_index = col - 1
         self.logic.toggle_column(data_col_index, is_disabled)
         self._update_column_visuals(col, is_disabled)
@@ -109,13 +155,13 @@ class CohortGeneratorWindow(qt.QDialog):
     def _update_row_visuals(self, table_row, is_disabled):
         """Grays out or illuminates an entire row."""
         color = self.disabled_color if is_disabled else self.enabled_color
-        for col in range(1, self.table_widget.columnCount()):
+        for col in range(1, self.table_widget.columnCount):
             self.table_widget.item(table_row, col).setBackground(color)
 
     def _update_column_visuals(self, table_col, is_disabled):
         """Grays out or illuminates an entire column."""
         color = self.disabled_color if is_disabled else self.enabled_color
-        for row in range(1, self.table_widget.rowCount()):
+        for row in range(1, self.table_widget.rowCount):
             self.table_widget.item(row, table_col).setBackground(color)
 
     def on_apply(self):
@@ -123,38 +169,32 @@ class CohortGeneratorWindow(qt.QDialog):
         self.logic.apply_changes()
         self.accept()
 
+
 class CohortGeneratorLogic:
     """Handles the data and state for contrast selection."""
     def __init__(self, data_path):
         self.data_path: Path = data_path
-
-        self.csv_data = self.load_cohort_data(self.data_path)
-
+        self.cohort_data = self.load_cohort_data(self.data_path)
         self.disabled_rows = []
         self.disabled_columns = []
         self.is_accepted = False
+
+        # Generated
+        self.cohort_path: Path = None
 
     def load_cohort_data(self, data_path: Path) -> List[List[str]]:
         """
         Recursively scans a directory to create a 2D array of subjects and their
         associated file resources using pathlib.
-
-        Args:
-            data_path: The path to the root directory to scan.
-
-        Returns:
-            A list of lists representing a table where the first column is the
-            'Subject ID' (a relative path) and subsequent columns are resource
-            types. The cells contain the filename of the corresponding file.
         """
         root_path = Path(data_path).resolve()
         if not root_path.is_dir():
-            raise ValueError(f"Provided path '{data_path}' is not a valid directory.")
+            print(f"Warning: Provided path '{data_path}' is not a valid directory. Returning empty.")
+            return []
 
         subjects_data = {}
         all_resource_keys = set()
 
-        # Find all directories that contain files but no subdirectories.
         for current_path in root_path.rglob('*'):
             if current_path.is_dir():
                 files = [f for f in current_path.iterdir() if f.is_file()]
@@ -165,23 +205,19 @@ class CohortGeneratorLogic:
                     resource_map = {}
                     for file_path in files:
                         try:
-                            # Split by common delimiters like '_', '.', or '-' to find the key.
                             resource_key = re.split(r'[_.-]+', file_path.stem)[-1]
-                            # Store just the filename, which is relative to its parent.
-                            resource_map[resource_key] = ("/").join(file_path.parts[-2:])
+                            resource_map[resource_key] = "/".join(file_path.parts[-2:])
                             all_resource_keys.add(resource_key)
                         except IndexError:
                             print(f"Warning: Could not parse resource key from filename: {file_path.name}")
                             continue
-
                     if resource_map:
                         subjects_data[subject_id] = resource_map
-
         if not subjects_data:
             return []
 
         sorted_headers = sorted(list(all_resource_keys))
-        header_row = ['Subject ID'] + sorted_headers
+        header_row = ['uid'] + sorted_headers
         cohort_data = [header_row]
 
         for subject_id in sorted(subjects_data.keys()):
@@ -190,7 +226,6 @@ class CohortGeneratorLogic:
             for resource_key in sorted_headers:
                 row.append(resources.get(resource_key, ''))
             cohort_data.append(row)
-
         return cohort_data
 
     def toggle_row(self, row_index, is_disabled):
@@ -210,24 +245,29 @@ class CohortGeneratorLogic:
     def apply_changes(self):
         """Marks the action as accepted."""
         self.is_accepted = True
+
+        # Update cohort data to match unwanted rows or columns
+        row_count, col_count = len(self.cohort_data), len(self.cohort_data[0])
+
+        for disabled_row in self.disabled_rows:
+            self.cohort_data[disabled_row - 1] = col_count * ['']
+
+        for disabled_col in self.disabled_columns:
+            for row in range(row_count):
+                self.cohort_data[row][disabled_col - 1] = ''
+
+        # Create a CSV file using the cohort data and use it as cohort file
+        dir_path = Path(self.data_path / "code")
+        dir_path.mkdir(parents=True, exist_ok=True)
+
+        self.cohort_path = Path(dir_path / "cohort.csv")
+
+        with open(self.cohort_path, 'w', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerows(self.cohort_data)
+
+        self.is_accepted = True
+
         print(f"Applying changes. Disabled Rows: {self.disabled_rows}, Disabled Columns: {self.disabled_columns}")
 
 
-# --- Example of how to run this inside a Slicer module ---
-#
-# # Example 2D array data
-# sample_data = [
-#     [f"T1_Sub{i:02}" for i in range(1, 6)],
-#     [f"T2_Sub{i:02}" for i in range(1, 6)],
-#     [f"FLAIR_Sub{i:02}" for i in range(1, 6)],
-# ]
-#
-# window = ContrastSelectionWindow(data=sample_data)
-#
-# # Use exec_() to make the dialog modal
-# if window.exec_() == qt.QDialog.Accepted:
-#     print("Dialog was accepted.")
-#     print("Final Disabled Rows:", window.logic.disabled_rows)
-#     print("Final Disabled Columns:", window.logic.disabled_columns)
-# else:
-#     print("Dialog was canceled.")
