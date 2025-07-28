@@ -88,22 +88,36 @@ class CohortGeneratorWindow(qt.QDialog):
         headers = self.logic.get_headers()
         num_rows = len(data)
         num_cols = len(headers)
-        self.table_widget.setRowCount(num_rows)
+
+        # Need extra row for header checkboxes
+        self.table_widget.setRowCount(num_rows + 1)
         self.table_widget.setColumnCount(num_cols + 1)
         self.table_widget.setHorizontalHeaderLabels([""] + headers)
 
+        # Create column checkboxes in header row (row 0)
         for c_idx in range(num_cols):
-            self._create_checkbox(0, c_idx + 1, self.handle_column_toggle, self.logic.is_column_enabled(c_idx), is_header=True)
+            self._create_checkbox(0, c_idx + 1, self.handle_column_toggle,
+                                self.logic.is_column_enabled(c_idx), is_header=True)
 
+        # Create row checkboxes and populate data
         for r_idx in range(num_rows):
-            if r_idx > 0:
-                self._create_checkbox(r_idx, 0, self.handle_row_toggle, self.logic.is_row_enabled(r_idx))
+            table_row = r_idx + 1  # Data starts at row 1 (row 0 is for column checkboxes)
+
+            # Create row checkbox
+            self._create_checkbox(table_row, 0, self.handle_row_toggle,
+                                self.logic.is_row_enabled(r_idx))
+
+            # Populate data cells
             for c_idx, header in enumerate(headers):
                 item = qt.QTableWidgetItem(str(data[r_idx].get(header, '')))
                 item.setFlags(qt.Qt.ItemIsEnabled | qt.Qt.ItemIsSelectable)
-                self.table_widget.setItem(r_idx + 1, c_idx + 1, item)
+                self.table_widget.setItem(table_row, c_idx + 1, item)
 
         self.table_widget.resizeColumnsToContents()
+        self.table_widget.verticalHeader().setVisible(False)
+        self.table_widget.horizontalHeader().setSectionResizeMode(qt.QHeaderView.Interactive)
+        self.update_all_visuals()
+        self.table_widget.blockSignals(False)
         self.table_widget.verticalHeader().setVisible(False)
         self.table_widget.horizontalHeader().setSectionResizeMode(qt.QHeaderView.Interactive)
         self.update_all_visuals()
@@ -175,9 +189,10 @@ class CohortGeneratorWindow(qt.QDialog):
             else:
                 qt.QMessageBox.warning(self, "Rename Error", "Column name already exists.")
 
-    def handle_row_toggle(self, row_idx, is_enabled):
-        self.logic.toggle_row(row_idx, is_enabled)
-        self._update_row_visuals(row_idx, is_enabled)
+    def handle_row_toggle(self, table_row_idx, is_enabled):
+        logical_row_idx = table_row_idx - 1
+        self.logic.toggle_row(logical_row_idx, is_enabled)
+        self._update_row_visuals(table_row_idx, is_enabled)
 
     def handle_column_toggle(self, col_idx, is_enabled):
         self.logic.toggle_column(col_idx, is_enabled)
@@ -187,14 +202,19 @@ class CohortGeneratorWindow(qt.QDialog):
         color = self.palette.color(qt.QPalette.Base) if is_enabled else qt.QColor(qt.Qt.lightGray)
         for col in range(self.table_widget.columnCount):
             item = self.table_widget.item(table_row, col)
-            if item: item.setBackground(color)
+            if item:
+                item.setBackground(color)
 
     def update_all_visuals(self):
+        # Update row visuals (remember: table rows start at index 1)
         for r_idx in range(self.logic.get_case_count()):
-             self._update_row_visuals(r_idx, self.logic.is_row_enabled(r_idx))
+            table_row = r_idx + 1
+            self._update_row_visuals(table_row, self.logic.is_row_enabled(r_idx))
+
+        # Update column visibility
         for c_idx, header in enumerate(self.logic.get_headers()):
-             is_enabled = self.logic.is_column_enabled(c_idx)
-             self.table_widget.setColumnHidden(c_idx + 1, not is_enabled)
+            is_enabled = self.logic.is_column_enabled(c_idx)
+            self.table_widget.setColumnHidden(c_idx + 1, not is_enabled)
 
     def on_apply(self):
         self.logic.apply_changes()
@@ -313,11 +333,30 @@ class CohortGeneratorLogic:
         enabled_headers = [h for i, h in enumerate(self.headers) if self.is_column_enabled(i)]
         final_data.append(enabled_headers)
 
+        print("DISABLED ROWS")
+        print(self.disabled_rows)
+
+        # Build the filtered data
+        filtered_cohort_data = []
         for r_idx, row_data in enumerate(self.cohort_data):
             if self.is_row_enabled(r_idx):
+                # Filter to only enabled columns
+                filtered_row = {h: row_data.get(h, '') for h in enabled_headers}
+                filtered_cohort_data.append(filtered_row)
+
+                # Add to CSV data
                 row_to_add = [row_data.get(h, '') for h in enabled_headers]
                 final_data.append(row_to_add)
 
+        # Update the internal data to reflect the changes
+        self.cohort_data = filtered_cohort_data
+        self.headers = enabled_headers
+
+        # Clear disabled states since we've applied them permanently
+        self.disabled_rows.clear()
+        self.disabled_columns.clear()
+
+        # Save to CSV
         dir_path = self.data_path / "code"
         dir_path.mkdir(parents=True, exist_ok=True)
         self.cohort_path = Path(dir_path / "cohort.csv")
