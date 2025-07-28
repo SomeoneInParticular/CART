@@ -1,6 +1,6 @@
 import traceback
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import vtk
 import ctk
@@ -587,13 +587,21 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._disableTaskMode()
 
     def onCohortGeneratorButtonClicked(self):
-        cohortGeneratorWindow = CohortGeneratorWindow(self.logic.data_path)
+        case_data = None
+        if self.logic.data_manager and self.logic.data_manager.case_data:
+            case_data = self.logic.data_manager.case_data
+
+        cohortGeneratorWindow = CohortGeneratorWindow(data_path=self.logic.data_path, cohort_data=case_data)
         cohortGeneratorWindowResult = cohortGeneratorWindow.exec_()
 
         if cohortGeneratorWindowResult == qt.QDialog.Accepted:
+            if not self.logic.data_manager:
+                self.logic.rebuild_data_manager()
+            self.logic.data_manager.case_data = cohortGeneratorWindow.logic.cohort_data
+            self.logic.cohort_path = cohortGeneratorWindow.logic.cohort_path
             self.onCohortChanged(cohortGeneratorWindow.logic.cohort_path)
             self.cohortGeneratorButton.setText("Edit cohort file")
-            self.cohortFileSelectionButton.setCurrentPath(cohortGeneratorWindow.logic.cohort_path)
+            self.cohortFileSelectionButton.setCurrentPath(str(cohortGeneratorWindow.logic.cohort_path))
 
     def buildCohortTable(self):
 
@@ -1029,6 +1037,10 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
     ## Cohort Path/Data Path Management ##
     def set_current_cohort(self, new_path: Path) -> bool:
+        # If we don't have a data manager, create one
+        if not self.data_manager:
+            self.rebuild_data_manager()
+
         # Confirm the file exists
         if not new_path.exists():
             print(f"Error: Cohort file does not exist: {new_path}")

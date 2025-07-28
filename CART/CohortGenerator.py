@@ -1,3 +1,5 @@
+# CohortGenerator.py
+
 import csv
 from pathlib import Path
 from typing import *
@@ -8,9 +10,9 @@ from slicer.i18n import tr as _
 
 class CohortGeneratorWindow(qt.QDialog):
     """GUI to display and configure a cohort from a data directory."""
-    def __init__(self, data_path, parent=None):
+    def __init__(self, data_path, cohort_data=None, parent=None):
         super().__init__(parent)
-        self.logic = CohortGeneratorLogic(data_path)
+        self.logic = CohortGeneratorLogic(data_path=data_path, cohort_data=cohort_data)
         self.setWindowFlags(self.windowFlags() | qt.Qt.WindowMaximizeButtonHint | qt.Qt.WindowMinimizeButtonHint | qt.Qt.Window)
 
         # Make dialog/window non-modal, to allow interaction with main window
@@ -94,11 +96,12 @@ class CohortGeneratorWindow(qt.QDialog):
             self._create_checkbox(0, c_idx + 1, self.handle_column_toggle, self.logic.is_column_enabled(c_idx), is_header=True)
 
         for r_idx in range(num_rows):
-            self._create_checkbox(r_idx, 0, self.handle_row_toggle, self.logic.is_row_enabled(r_idx))
+            if r_idx > 0:
+                self._create_checkbox(r_idx, 0, self.handle_row_toggle, self.logic.is_row_enabled(r_idx))
             for c_idx, header in enumerate(headers):
                 item = qt.QTableWidgetItem(str(data[r_idx].get(header, '')))
                 item.setFlags(qt.Qt.ItemIsEnabled | qt.Qt.ItemIsSelectable)
-                self.table_widget.setItem(r_idx, c_idx + 1, item)
+                self.table_widget.setItem(r_idx + 1, c_idx + 1, item)
 
         self.table_widget.resizeColumnsToContents()
         self.table_widget.verticalHeader().setVisible(False)
@@ -202,18 +205,25 @@ class CohortGeneratorWindow(qt.QDialog):
 
 
 class CohortGeneratorLogic:
-    def __init__(self, data_path):
+    def __init__(self, data_path, cohort_data=None):
         self.data_path = Path(data_path)
         self.all_files_by_case = {}
-        self.cohort_data = []
-        self.headers = ['uid']
+        self.cohort_data = cohort_data if cohort_data is not None else []
+        self.headers = []
         self.disabled_rows = set()
         self.disabled_columns = set()
-        self.load_cohort_data(self.data_path, ['.json', '.py'])
 
-    def load_cohort_data(self, data_path, excluded_extensions=None):
+        self._scan_filesystem(['.json', '.py'])
+
+        if not self.cohort_data:
+            self.clear_filters()
+        else:
+            if self.cohort_data:
+                self.headers = list(self.cohort_data[0].keys())
+
+    def _scan_filesystem(self, excluded_extensions=None):
         self.all_files_by_case.clear()
-        root_path = Path(data_path).resolve()
+        root_path = Path(self.data_path).resolve()
         if not root_path.is_dir(): return
 
         excluded_ext = [e.lower().strip() for e in excluded_extensions or []]
@@ -227,9 +237,12 @@ class CohortGeneratorLogic:
                     case_id = case_dir.relative_to(root_path).as_posix()
                     if case_id not in temp_cases:
                         temp_cases[case_id] = []
-                    temp_cases[case_id].append(case_id + '/' + file_path.relative_to(case_dir).as_posix())
+                    temp_cases[case_id].append(file_path.relative_to(root_path).as_posix())
 
         self.all_files_by_case = {case_id: files for case_id, files in sorted(temp_cases.items())}
+
+    def load_cohort_data(self, data_path, excluded_extensions=None):
+        self._scan_filesystem(excluded_extensions)
         self.clear_filters()
 
     def clear_filters(self):
