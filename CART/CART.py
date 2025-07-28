@@ -153,14 +153,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # User selection/registration
         self.buildUserUI(mainLayout)
 
+        # Task UI
+        self.buildTaskUI(mainLayout)
+
         # Base Path input UI
         self.buildBasePathUI(mainLayout)
 
         # Cohort Selection
         self.buildCohortUI(mainLayout)
-
-        # Task UI
-        self.buildTaskUI(mainLayout)
 
         # Button panel
         self.buildButtonPanel(mainLayout)

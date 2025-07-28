@@ -20,13 +20,27 @@ class CohortGeneratorWindow(qt.QDialog):
     def __init__(self, data_path, parent=None):
         super().__init__(parent)
 
+        self.logic = CohortGeneratorLogic(data_path)
+
+
         # Flag to check if the auto-generated cohort gets accepted, for widget use
         self.is_cohort_accepted = False
 
-        ### UI ###
+
+
+        # --- Populate and Connect ---
+        self.buildCohortTableUI()
+        self._populate_table()
+        self._configure_table_sizing() # New method for sizing
+        self._connect_signals()
+
+
+    def buildCohortTableUI(self):
+        """
+        Build the table
+        """
 
         self.setWindowTitle("Cohort Configuration")
-        self.logic = CohortGeneratorLogic(data_path)
         self.setMinimumSize(800, 500) # Increased size for better viewing
 
         # --- Colors for visual state ---
@@ -59,11 +73,6 @@ class CohortGeneratorWindow(qt.QDialog):
         button_layout.addWidget(self.apply_button)
         button_layout.addWidget(self.cancel_button)
         layout.addLayout(button_layout)
-
-        # --- Populate and Connect ---
-        self._populate_table()
-        self._configure_table_sizing() # New method for sizing
-        self._connect_signals()
 
     def _populate_table(self):
         """Fills the table with data and control checkboxes."""
