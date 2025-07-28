@@ -20,6 +20,9 @@ class CohortGeneratorWindow(qt.QDialog):
         self.connect_signals()
         self.update_ui_from_logic()
 
+        # Not successful, but if a cohort csv has been created
+        self.is_generation_successful = False
+
     def build_ui(self):
         self.setWindowTitle("Cohort Generator and Editor")
         self.setMinimumSize(900, 700)
@@ -132,7 +135,7 @@ class CohortGeneratorWindow(qt.QDialog):
 
     def connect_signals(self):
         self.apply_button.clicked.connect(self.on_apply)
-        self.cancel_button.clicked.connect(self.reject)
+        self.cancel_button.clicked.connect(self.on_cancel)
         self.rescan_button.clicked.connect(self.on_rescan)
         self.apply_filter_button.clicked.connect(self.on_apply_filter)
         self.target_column_combo.currentTextChanged.connect(self.on_target_column_changed)
@@ -195,7 +198,12 @@ class CohortGeneratorWindow(qt.QDialog):
 
     def on_apply(self):
         self.logic.apply_changes()
-        self.accept()
+        self.is_generation_successful = True
+        self.close()
+
+    def on_cancel(self):
+        self.is_generation_successful = False
+        self.close()
 
 
 class CohortGeneratorLogic:
@@ -220,10 +228,11 @@ class CohortGeneratorLogic:
             if file_path.is_file() and file_path.suffix.lower() not in excluded_ext:
                 case_dir = file_path.parent
                 if case_dir != root_path:
+                    # uid is represented as the path from the root until the parent directory of resource files
                     case_id = case_dir.relative_to(root_path).as_posix()
                     if case_id not in temp_cases:
                         temp_cases[case_id] = []
-                    temp_cases[case_id].append(file_path.relative_to(case_dir).as_posix())
+                    temp_cases[case_id].append(case_id + '/' + file_path.relative_to(case_dir).as_posix())
 
         self.all_files_by_case = {case_id: files for case_id, files in sorted(temp_cases.items())}
         self.clear_filters()

@@ -284,8 +284,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def buildCohortUI(self, mainLayout: qt.QFormLayout):
         # Auto-generator window button
-        cohortGeneratorButton = qt.QPushButton(_("Auto-generate cohort file"))
-        cohortGeneratorButton.setStyleSheet("background-color: green;")
+        self.cohortGeneratorButton = qt.QPushButton(_("Auto-generate cohort file"))
+        self.cohortGeneratorButton.setStyleSheet("background-color: green;")
 
         # Directory selection button
         cohortFileSelectionButton = ctk.ctkPathLineEdit()
@@ -300,12 +300,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         cohortFileSelectionButton.currentPathChanged.connect(self.onCohortChanged)
 
         # When clicked, open the auto-generator window
-        cohortGeneratorButton.clicked.connect(self.onCohortGeneratorButtonClicked)
+        self.cohortGeneratorButton.clicked.connect(self.onCohortGeneratorButtonClicked)
 
         # Create a horizontal layout to hold the file selection and the button
         hLayout = qt.QHBoxLayout()
         hLayout.addWidget(cohortFileSelectionButton)
-        hLayout.addWidget(cohortGeneratorButton)
+        hLayout.addWidget(self.cohortGeneratorButton)
 
         # Add the horizontal layout to our main form layout as a single row
         mainLayout.addRow(_("Cohort File:"), hLayout)
@@ -582,6 +582,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         if hasattr(cohortGeneratorWindow.logic, "cohort_path"):
             self.onCohortChanged(cohortGeneratorWindow.logic.cohort_path)
+
+        if cohortGeneratorWindow.is_generation_successful:
+            self.cohortGeneratorButton.setText("Edit cohort file")
 
     def buildCohortTable(self):
 
