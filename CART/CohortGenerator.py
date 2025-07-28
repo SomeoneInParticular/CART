@@ -1,282 +1,303 @@
 import csv
-import traceback
 from pathlib import Path
 from typing import *
-from collections import defaultdict
 import re
-import shutil
 
-
-import vtk
-import ctk
 import qt
-import slicer
-from slicer import vtkMRMLScalarVolumeNode
-from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
-from slicer.util import VTKObservationMixin
+
 class CohortGeneratorWindow(qt.QDialog):
-    """GUI to display a 2D array and toggle rows/columns."""
+    """GUI to display and configure a cohort from a data directory."""
     def __init__(self, data_path, parent=None):
         super().__init__(parent)
-
         self.logic = CohortGeneratorLogic(data_path)
+        self.setWindowFlags(self.windowFlags() | qt.Qt.WindowMaximizeButtonHint | qt.Qt.WindowStaysOnTopHint | qt.Qt.WindowMinimizeButtonHint)
 
+        self.build_ui()
+        self.connect_signals()
+        self.update_ui_from_logic()
 
-        # Flag to check if the auto-generated cohort gets accepted, for widget use
-        self.is_cohort_accepted = False
-
-
-
-        # --- Populate and Connect ---
-        self.buildCohortTableUI()
-        self._populate_table()
-        self._configure_table_sizing() # New method for sizing
-        self._connect_signals()
-
-
-    def buildCohortTableUI(self):
-        """
-        Build the table
-        """
-
-        self.setWindowTitle("Cohort Configuration")
-        self.setMinimumSize(800, 500) # Increased size for better viewing
-
-        # --- Colors for visual state ---
-        self.palette = self.palette
-        self.disabled_color = qt.QColor(qt.Qt.gray)
-        self.enabled_color = self.palette.color(qt.QPalette.Base) # Default background
-
-        # --- Main Layout ---
+    def build_ui(self):
+        self.setWindowTitle("Cohort Generator and Editor")
+        self.setMinimumSize(900, 700)
         layout = qt.QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10) # Added margins for aesthetics
 
-        # --- Table Widget ---
         self.table_widget = qt.QTableWidget()
         layout.addWidget(self.table_widget)
 
-        # --- Add spacing between table and buttons ---
-        layout.addSpacing(15)
+        controls_layout = qt.QHBoxLayout()
+        controls_layout.addWidget(self.build_load_options_groupbox())
+        controls_layout.addWidget(self.build_filtering_groupbox(), 1)
+        layout.addLayout(controls_layout)
 
-        # --- Buttons ---
         button_layout = qt.QHBoxLayout()
-        self.apply_button = qt.QPushButton("Apply")
+        self.apply_button = qt.QPushButton("Save and Apply")
         self.cancel_button = qt.QPushButton("Cancel")
-
-        # --- Add styling to buttons for a nicer look ---
-        self.apply_button.setDefault(True)
-        self.apply_button.setStyleSheet("padding: 5px 15px;")
-        self.cancel_button.setStyleSheet("padding: 5px 15px;")
-
         button_layout.addStretch()
         button_layout.addWidget(self.apply_button)
         button_layout.addWidget(self.cancel_button)
         layout.addLayout(button_layout)
 
-    def _populate_table(self):
-        """Fills the table with data and control checkboxes."""
+    def build_load_options_groupbox(self):
+        groupbox = qt.QGroupBox("Load Options")
+        layout = qt.QFormLayout(groupbox)
+        self.excluded_ext_input = qt.QLineEdit(".json, .py")
+        self.excluded_ext_input.toolTip = "Comma-separated list of file extensions to ignore."
+        self.rescan_button = qt.QPushButton("Rescan Data Path")
+        layout.addRow("Exclude Extensions:", self.excluded_ext_input)
+        layout.addRow(self.rescan_button)
+        return groupbox
+
+    def build_filtering_groupbox(self):
+        groupbox = qt.QGroupBox("Column Filtering")
+        layout = qt.QFormLayout(groupbox)
+        self.include_input = qt.QLineEdit()
+        self.include_input.setPlaceholderText("e.g., T1w, nifti")
+        self.exclude_input = qt.QLineEdit()
+        self.exclude_input.setPlaceholderText("e.g., masked, brain")
+        self.target_column_combo = qt.QComboBox()
+        self.new_column_name_input = qt.QLineEdit()
+        self.apply_filter_button = qt.QPushButton("Apply Filter")
+
+        layout.addRow("Files MUST Contain:", self.include_input)
+        layout.addRow("Files MUST NOT Contain:", self.exclude_input)
+        layout.addRow("Target Column:", self.target_column_combo)
+        layout.addRow("New Column Name:", self.new_column_name_input)
+        layout.addWidget(self.apply_filter_button)
+        return groupbox
+
+    def update_ui_from_logic(self):
+        self.populate_table()
+        self.update_column_combo()
+
+    def populate_table(self):
+        self.table_widget.blockSignals(True)
+        self.table_widget.clear()
         data = self.logic.cohort_data
-        if not data or not data[0]:
-             self.table_widget.setRowCount(0)
-             self.table_widget.setColumnCount(0)
-             return
+        if not data:
+            self.table_widget.setRowCount(0)
+            self.table_widget.setColumnCount(0)
+            self.table_widget.blockSignals(False)
+            return
 
-        header_row = data[0]
-        data_rows = data[1:]
+        headers = self.logic.get_headers()
+        num_rows = len(data)
+        num_cols = len(headers)
+        self.table_widget.setRowCount(num_rows)
+        self.table_widget.setColumnCount(num_cols + 1)
+        self.table_widget.setHorizontalHeaderLabels([""] + headers)
 
-        self.table_widget.setColumnCount(len(header_row) + 1)
-        self.table_widget.setRowCount(len(data_rows) + 2)
+        for c_idx in range(num_cols):
+            self._create_checkbox(0, c_idx + 1, self.handle_column_toggle, self.logic.is_column_enabled(c_idx), is_header=True)
 
-        # Set headers (in the table itself, not the header widget)
-        # Leave cell (0,0) blank
-        for c, header_text in enumerate(header_row):
-             item = qt.QTableWidgetItem(header_text)
-             item.setFlags(item.flags() & ~qt.Qt.ItemIsEditable)
-             item.setTextAlignment(qt.Qt.AlignCenter)
-             self.table_widget.setItem(1, c + 1, item)
+        for r_idx in range(num_rows):
+            self._create_checkbox(r_idx, 0, self.handle_row_toggle, self.logic.is_row_enabled(r_idx))
+            for c_idx, header in enumerate(headers):
+                item = qt.QTableWidgetItem(str(data[r_idx].get(header, '')))
+                item.setFlags(qt.Qt.ItemIsEnabled | qt.Qt.ItemIsSelectable)
+                self.table_widget.setItem(r_idx, c_idx + 1, item)
 
-        # --- Create Checkboxes for the first column (case controls) ---
-        for r in range(1, len(data_rows)):
-            self._create_checkbox(r + 1, 0, self.handle_row_toggle)
+        self.table_widget.resizeColumnsToContents()
+        self.table_widget.verticalHeader().setVisible(False)
+        self.table_widget.horizontalHeader().setSectionResizeMode(qt.QHeaderView.Interactive)
+        self.update_all_visuals()
+        self.table_widget.blockSignals(False)
 
-        # --- Create Checkboxes for the first row (resource controls) ---
-        for c in range(1, len(header_row)):
-            self._create_checkbox(0, c + 1, self.handle_column_toggle)
-
-        # --- Fill data cells ---
-        for r, row_data in enumerate(data_rows):
-            for c, cell_value in enumerate(row_data):
-                item = qt.QTableWidgetItem(str(cell_value))
-                item.setFlags(item.flags() & ~qt.Qt.ItemIsEditable) # Make read-only
-                self.table_widget.setItem(r + 2, c + 1, item)
-
-    def _configure_table_sizing(self):
-        """Adjusts column widths for better readability and to fill space."""
-        header = self.table_widget.horizontalHeader()
-        header.hide() # Hide default header, as we put headers in the table
-        self.table_widget.verticalHeader().hide()
-
-        # Column 0 (row checkboxes): Resize to fit the content snugly.
-        self.table_widget.setColumnWidth(0, 40)
-
-        # Column 1 ('uid'): Resize to fit the content.
-        self.table_widget.resizeColumnToContents(1)
-
-        # Columns 2 onwards: Stretch to fill the remaining available width.
-        for col_idx in range(2, self.table_widget.columnCount):
-            header.setSectionResizeMode(col_idx, qt.QHeaderView.Stretch)
-
-    def _create_checkbox(self, row, col, handler_slot):
-        """Helper to create and place a checkbox in the table."""
-        # A container widget is needed to center the checkbox
+    def _create_checkbox(self, row, col, handler, is_checked, is_header=False):
         cell_widget = qt.QWidget()
         layout = qt.QHBoxLayout(cell_widget)
         layout.setAlignment(qt.Qt.AlignCenter)
-        layout.setContentsMargins(0,0,0,0)
-
+        layout.setContentsMargins(0, 0, 0, 0)
         checkbox = qt.QCheckBox()
-        checkbox.setChecked(True)
-        checkbox.toggled.connect(lambda state, r=row, c=col: handler_slot(r, c, not state))
+        checkbox.setChecked(is_checked)
+        if is_header:
+            checkbox.toggled.connect(lambda state, c=col-1: handler(c, state))
+            self.table_widget.setCellWidget(row, col, cell_widget)
+        else:
+            checkbox.toggled.connect(lambda state, r=row: handler(r, state))
+            self.table_widget.setCellWidget(row, col, cell_widget)
 
-        layout.addWidget(checkbox)
-        self.table_widget.setCellWidget(row, col, cell_widget)
+    def update_column_combo(self):
+        self.target_column_combo.blockSignals(True)
+        self.target_column_combo.clear()
+        self.target_column_combo.addItem("Create New Column")
+        self.target_column_combo.addItems(self.logic.get_headers()[1:]) # Exclude uid
+        self.target_column_combo.blockSignals(False)
 
-    def _connect_signals(self):
-        """Connect button signals to dialog actions."""
+    def connect_signals(self):
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.reject)
+        self.rescan_button.clicked.connect(self.on_rescan)
+        self.apply_filter_button.clicked.connect(self.on_apply_filter)
+        self.target_column_combo.currentTextChanged.connect(self.on_target_column_changed)
+        self.table_widget.horizontalHeader().sectionDoubleClicked.connect(self.on_header_double_clicked)
 
-    def handle_row_toggle(self, row, col, is_disabled):
-        """Handles a click on a row-control checkbox."""
-        data_row_index = row - 1 # Adjust for header row in data model
-        self.logic.toggle_row(data_row_index, is_disabled)
-        self._update_row_visuals(row, is_disabled)
+    def on_rescan(self):
+        ext_to_exclude = [e.strip() for e in self.excluded_ext_input.text.split(',') if e.strip()]
+        self.logic.load_cohort_data(self.logic.data_path, ext_to_exclude)
+        self.logic.clear_filters()
+        self.update_ui_from_logic()
 
-    def handle_column_toggle(self, row, col, is_disabled):
-        """Handles a click on a column-control checkbox."""
-        # This function is not connected as column toggles were removed for clarity
-        # but the logic is kept if you wish to re-implement it.
-        data_col_index = col - 1
-        self.logic.toggle_column(data_col_index, is_disabled)
-        self._update_column_visuals(col, is_disabled)
+    def on_apply_filter(self):
+        include_list = [s.strip() for s in self.include_input.text.split(',') if s.strip()]
+        exclude_list = [s.strip() for s in self.exclude_input.text.split(',') if s.strip()]
+        target_col = self.target_column_combo.currentText
+        new_col = self.new_column_name_input.text.strip()
 
-    def _update_row_visuals(self, table_row, is_disabled):
-        """Grays out or illuminates an entire row."""
-        color = self.disabled_color if is_disabled else self.enabled_color
-        for col in range(1, self.table_widget.columnCount):
-            self.table_widget.item(table_row, col).setBackground(color)
+        if self.logic.apply_filter(include_list, exclude_list, target_col, new_col):
+            self.update_ui_from_logic()
+            self.include_input.clear()
+            self.exclude_input.clear()
+            self.new_column_name_input.clear()
+        else:
+            qt.QMessageBox.warning(self, "Filter Error", "Could not apply filter. Ensure you provide an 'Include' substring and a unique 'New Column Name' if creating a new column.")
 
-    def _update_column_visuals(self, table_col, is_disabled):
-        """Grays out or illuminates an entire column."""
-        color = self.disabled_color if is_disabled else self.enabled_color
-        for row in range(1, self.table_widget.rowCount):
-            self.table_widget.item(row, table_col).setBackground(color)
+    def on_target_column_changed(self, text):
+        is_new_column = (text == "Create New Column")
+        self.new_column_name_input.setEnabled(is_new_column)
+
+    def on_header_double_clicked(self, logical_index):
+        if logical_index <= 1: return
+        old_name = self.logic.get_headers()[logical_index - 1]
+        new_name, ok = qt.QInputDialog.getText(self, "Rename Column", f"Enter new name for '{old_name}':", text=old_name)
+        if ok and new_name and new_name != old_name:
+            if self.logic.rename_column(old_name, new_name):
+                self.update_ui_from_logic()
+            else:
+                qt.QMessageBox.warning(self, "Rename Error", "Column name already exists.")
+
+    def handle_row_toggle(self, row_idx, is_enabled):
+        self.logic.toggle_row(row_idx, is_enabled)
+        self._update_row_visuals(row_idx, is_enabled)
+
+    def handle_column_toggle(self, col_idx, is_enabled):
+        self.logic.toggle_column(col_idx, is_enabled)
+        self.update_all_visuals()
+
+    def _update_row_visuals(self, table_row, is_enabled):
+        color = self.palette.color(qt.QPalette.Base) if is_enabled else qt.QColor(qt.Qt.lightGray)
+        for col in range(self.table_widget.columnCount):
+            item = self.table_widget.item(table_row, col)
+            if item: item.setBackground(color)
+
+    def update_all_visuals(self):
+        for r_idx in range(self.logic.get_case_count()):
+             self._update_row_visuals(r_idx, self.logic.is_row_enabled(r_idx))
+        for c_idx, header in enumerate(self.logic.get_headers()):
+             is_enabled = self.logic.is_column_enabled(c_idx)
+             self.table_widget.setColumnHidden(c_idx + 1, not is_enabled)
 
     def on_apply(self):
-        """Calls the logic's apply method and accepts the dialog."""
         self.logic.apply_changes()
         self.accept()
 
 
 class CohortGeneratorLogic:
-    """Handles the data and state for contrast selection."""
     def __init__(self, data_path):
-        self.data_path: Path = data_path
-        self.cohort_data = self.load_cohort_data(self.data_path)
-        self.disabled_rows = []
-        self.disabled_columns = []
-        self.is_accepted = False
+        self.data_path = Path(data_path)
+        self.all_files_by_case = {}
+        self.cohort_data = []
+        self.headers = ['uid']
+        self.disabled_rows = set()
+        self.disabled_columns = set()
+        self.load_cohort_data(self.data_path, ['.json', '.py'])
 
-        # Generated
-        self.cohort_path: Path = None
-
-    def load_cohort_data(self, data_path: Path) -> List[List[str]]:
-        """
-        Recursively scans a directory to create a 2D array of subjects and their
-        associated file resources using pathlib.
-        """
+    def load_cohort_data(self, data_path, excluded_extensions=None):
+        self.all_files_by_case.clear()
         root_path = Path(data_path).resolve()
-        if not root_path.is_dir():
-            print(f"Warning: Provided path '{data_path}' is not a valid directory. Returning empty.")
-            return []
+        if not root_path.is_dir(): return
 
-        subjects_data = {}
-        all_resource_keys = set()
+        excluded_ext = [e.lower().strip() for e in excluded_extensions or []]
+        temp_cases = {}
 
-        for current_path in root_path.rglob('*'):
-            if current_path.is_dir():
-                files = [f for f in current_path.iterdir() if f.is_file()]
-                subdirs = [d for d in current_path.iterdir() if d.is_dir()]
+        for file_path in root_path.rglob('*'):
+            if file_path.is_file() and file_path.suffix.lower() not in excluded_ext:
+                case_dir = file_path.parent
+                if case_dir != root_path:
+                    case_id = case_dir.relative_to(root_path).as_posix()
+                    if case_id not in temp_cases:
+                        temp_cases[case_id] = []
+                    temp_cases[case_id].append(file_path.relative_to(case_dir).as_posix())
 
-                if files and not subdirs:
-                    subject_id = current_path.relative_to(root_path).as_posix()
-                    resource_map = {}
-                    for file_path in files:
-                        try:
-                            resource_key = re.split(r'[_.-]+', file_path.stem)[-1]
-                            resource_map[resource_key] = "/".join(file_path.parts[-2:])
-                            all_resource_keys.add(resource_key)
-                        except IndexError:
-                            print(f"Warning: Could not parse resource key from filename: {file_path.name}")
-                            continue
-                    if resource_map:
-                        subjects_data[subject_id] = resource_map
-        if not subjects_data:
-            return []
+        self.all_files_by_case = {case_id: files for case_id, files in sorted(temp_cases.items())}
+        self.clear_filters()
 
-        sorted_headers = sorted(list(all_resource_keys))
-        header_row = ['uid'] + sorted_headers
-        cohort_data = [header_row]
+    def clear_filters(self):
+        self.headers = ['uid']
+        self.cohort_data = [{'uid': case_id} for case_id in self.all_files_by_case.keys()]
+        self.disabled_rows.clear()
+        self.disabled_columns.clear()
 
-        for subject_id in sorted(subjects_data.keys()):
-            row = [subject_id]
-            resources = subjects_data[subject_id]
-            for resource_key in sorted_headers:
-                row.append(resources.get(resource_key, ''))
-            cohort_data.append(row)
-        return cohort_data
+    def get_headers(self):
+        return self.headers
 
-    def toggle_row(self, row_index, is_disabled):
-        """Adds or removes a row index from the disabled list."""
-        if is_disabled and row_index not in self.disabled_rows:
-            self.disabled_rows.append(row_index)
-        elif not is_disabled and row_index in self.disabled_rows:
-            self.disabled_rows.remove(row_index)
+    def get_case_count(self):
+        return len(self.cohort_data)
 
-    def toggle_column(self, col_index, is_disabled):
-        """Adds or removes a column index from the disabled list."""
-        if is_disabled and col_index not in self.disabled_columns:
-            self.disabled_columns.append(col_index)
-        elif not is_disabled and col_index in self.disabled_columns:
-            self.disabled_columns.remove(col_index)
+    def rename_column(self, old_name, new_name):
+        if new_name in self.headers: return False
+        try:
+            col_idx = self.headers.index(old_name)
+            self.headers[col_idx] = new_name
+            for row in self.cohort_data:
+                if old_name in row:
+                    row[new_name] = row.pop(old_name)
+            return True
+        except ValueError:
+            return False
+
+    def toggle_row(self, row_index, is_enabled):
+        if is_enabled: self.disabled_rows.discard(row_index)
+        else: self.disabled_rows.add(row_index)
+
+    def is_row_enabled(self, row_index):
+        return row_index not in self.disabled_rows
+
+    def toggle_column(self, col_index, is_enabled):
+        if is_enabled: self.disabled_columns.discard(col_index)
+        else: self.disabled_columns.add(col_index)
+
+    def is_column_enabled(self, col_index):
+        return col_index not in self.disabled_columns
+
+    def apply_filter(self, include, exclude, target_col, new_col_name):
+        if not include: return False
+        is_new = (target_col == "Create New Column")
+        if is_new:
+            if not new_col_name or new_col_name in self.headers: return False
+            self.headers.append(new_col_name)
+            col_name = new_col_name
+        else:
+            col_name = target_col
+
+        for i, row in enumerate(self.cohort_data):
+            case_id = row['uid']
+            found_match = False
+            for file_path in self.all_files_by_case.get(case_id, []):
+                has_includes = all(inc in file_path for inc in include)
+                has_excludes = any(exc in file_path for exc in exclude)
+                if has_includes and not has_excludes:
+                    self.cohort_data[i][col_name] = file_path
+                    found_match = True
+                    break
+            if not found_match and col_name not in self.cohort_data[i]:
+                 self.cohort_data[i][col_name] = ''
+
+        return True
 
     def apply_changes(self):
-        """Marks the action as accepted."""
-        self.is_accepted = True
+        final_data = []
+        enabled_headers = [h for i, h in enumerate(self.headers) if self.is_column_enabled(i)]
+        final_data.append(enabled_headers)
 
-        # Update cohort data to match unwanted rows or columns
-        row_count, col_count = len(self.cohort_data), len(self.cohort_data[0])
+        for r_idx, row_data in enumerate(self.cohort_data):
+            if self.is_row_enabled(r_idx):
+                row_to_add = [row_data.get(h, '') for h in enabled_headers]
+                final_data.append(row_to_add)
 
-        for disabled_row in self.disabled_rows:
-            self.cohort_data[disabled_row - 1] = col_count * ['']
-
-        for disabled_col in self.disabled_columns:
-            for row in range(row_count):
-                self.cohort_data[row][disabled_col - 1] = ''
-
-        # Create a CSV file using the cohort data and use it as cohort file
-        dir_path = Path(self.data_path / "code")
+        dir_path = self.data_path / "code"
         dir_path.mkdir(parents=True, exist_ok=True)
-
-        self.cohort_path = Path(dir_path / "cohort.csv")
-
+        self.cohort_path = dir_path / "cohort.csv"
         with open(self.cohort_path, 'w', newline='') as csvfile:
             csv_writer = csv.writer(csvfile)
-            csv_writer.writerows(self.cohort_data)
-
-        self.is_accepted = True
-
-        print(f"Applying changes. Disabled Rows: {self.disabled_rows}, Disabled Columns: {self.disabled_columns}")
-
-
+            csv_writer.writerows(final_data)
