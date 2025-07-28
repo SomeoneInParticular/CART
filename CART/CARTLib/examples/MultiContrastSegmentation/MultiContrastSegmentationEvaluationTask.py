@@ -249,6 +249,8 @@ class MultiContrastSegmentationEvaluationGUI:
         # Update our save button state to reflect the data unit's state
         self._updatedSaveButtonState()
 
+        self.segmentEditorWidget.refresh()
+
     def _save(self) -> None:
         err = self.bound_task.save()
         self.saveCompletePrompt(err)
