@@ -282,6 +282,27 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Make the user selection button accessible
         self.userSelectButton = userSelectButton
 
+    def buildBasePathUI(self, mainLayout: qt.QFormLayout):
+        """
+        Extends the GUI to add widgets for data directory selection
+        """
+        # Base path selection
+        dataPathSelectionWidget = ctk.ctkPathLineEdit()
+        dataPathSelectionWidget.filters = ctk.ctkPathLineEdit.Dirs
+        dataPathSelectionWidget.toolTip = _(
+            "Select the base directory path. Leave empty to use None as base path."
+        )
+
+        # Add it to our layout
+        mainLayout.addRow(_("Data Path:"), dataPathSelectionWidget)
+
+        # Connect the signal to handle base path changes
+        dataPathSelectionWidget.currentPathChanged.connect(self.onDataPathChanged)
+
+        # Make it accessible
+        self.dataPathSelectionWidget = dataPathSelectionWidget
+
+
     def buildCohortUI(self, mainLayout: qt.QFormLayout):
         # Auto-generator window button
         self.cohortGeneratorButton = qt.QPushButton(_("Auto-generate cohort file"))
@@ -310,25 +331,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Add the horizontal layout to our main form layout as a single row
         mainLayout.addRow(_("Cohort File:"), hLayout)
 
-    def buildBasePathUI(self, mainLayout: qt.QFormLayout):
-        """
-        Extends the GUI to add widgets for data directory selection
-        """
-        # Base path selection
-        dataPathSelectionWidget = ctk.ctkPathLineEdit()
-        dataPathSelectionWidget.filters = ctk.ctkPathLineEdit.Dirs
-        dataPathSelectionWidget.toolTip = _(
-            "Select the base directory path. Leave empty to use None as base path."
-        )
-
-        # Add it to our layout
-        mainLayout.addRow(_("Data Path:"), dataPathSelectionWidget)
-
-        # Connect the signal to handle base path changes
-        dataPathSelectionWidget.currentPathChanged.connect(self.onDataPathChanged)
+        # A valid data path needs to be selected before usage
+        self.cohortGeneratorButton.setEnabled(True)
 
         # Make it accessible
-        self.dataPathSelectionWidget = dataPathSelectionWidget
+        self.cohortFileSelectionButton = cohortFileSelectionButton
 
     def buildTaskUI(self, mainLayout: qt.QFormLayout):
         # Prior users list
@@ -503,6 +510,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # If we succeeded, update the GUI to match
         if success:
+            # Enable the auto-generation of cohort file
+            self.cohortGeneratorButton.setEnabled(True)
+
             # Exit task mode; any active task is no longer relevant.
             self._disableTaskMode()
 
@@ -578,13 +588,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onCohortGeneratorButtonClicked(self):
         cohortGeneratorWindow = CohortGeneratorWindow(self.logic.data_path)
-        cohortGeneratorWindow.show()
+        cohortGeneratorWindowResult = cohortGeneratorWindow.exec_()
 
-        if hasattr(cohortGeneratorWindow.logic, "cohort_path"):
+        if cohortGeneratorWindowResult == qt.QDialog.Accepted:
             self.onCohortChanged(cohortGeneratorWindow.logic.cohort_path)
-
-        if cohortGeneratorWindow.is_generation_successful:
             self.cohortGeneratorButton.setText("Edit cohort file")
+            self.cohortFileSelectionButton.setCurrentPath(cohortGeneratorWindow.logic.cohort_path)
 
     def buildCohortTable(self):
 

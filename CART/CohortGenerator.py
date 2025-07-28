@@ -20,9 +20,6 @@ class CohortGeneratorWindow(qt.QDialog):
         self.connect_signals()
         self.update_ui_from_logic()
 
-        # Not successful, but if a cohort csv has been created
-        self.is_generation_successful = False
-
     def build_ui(self):
         self.setWindowTitle("Cohort Generator and Editor")
         self.setMinimumSize(900, 700)
@@ -198,11 +195,9 @@ class CohortGeneratorWindow(qt.QDialog):
 
     def on_apply(self):
         self.logic.apply_changes()
-        self.is_generation_successful = True
-        self.close()
+        self.accept()
 
     def on_cancel(self):
-        self.is_generation_successful = False
         self.close()
 
 
@@ -312,7 +307,7 @@ class CohortGeneratorLogic:
 
         dir_path = self.data_path / "code"
         dir_path.mkdir(parents=True, exist_ok=True)
-        self.cohort_path = dir_path / "cohort.csv"
+        self.cohort_path = Path(dir_path / "cohort.csv")
         with open(self.cohort_path, 'w', newline='') as csvfile:
             csv_writer = csv.writer(csvfile)
             csv_writer.writerows(final_data)
