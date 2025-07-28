@@ -11,7 +11,10 @@ class CohortGeneratorWindow(qt.QDialog):
     def __init__(self, data_path, parent=None):
         super().__init__(parent)
         self.logic = CohortGeneratorLogic(data_path)
-        self.setWindowFlags(self.windowFlags() | qt.Qt.WindowMaximizeButtonHint | qt.Qt.WindowStaysOnTopHint | qt.Qt.WindowMinimizeButtonHint)
+        self.setWindowFlags(self.windowFlags() | qt.Qt.WindowMaximizeButtonHint | qt.Qt.WindowMinimizeButtonHint | qt.Qt.Window)
+
+        # Make dialog/window non-modal, to allow interaction with main window
+        self.setModal(False)
 
         self.build_ui()
         self.connect_signals()
@@ -110,12 +113,15 @@ class CohortGeneratorWindow(qt.QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         checkbox = qt.QCheckBox()
         checkbox.setChecked(is_checked)
+
+        layout.addWidget(checkbox)
+
         if is_header:
             checkbox.toggled.connect(lambda state, c=col-1: handler(c, state))
-            self.table_widget.setCellWidget(row, col, cell_widget)
         else:
             checkbox.toggled.connect(lambda state, r=row: handler(r, state))
-            self.table_widget.setCellWidget(row, col, cell_widget)
+
+        self.table_widget.setCellWidget(row, col, cell_widget)
 
     def update_column_combo(self):
         self.target_column_combo.blockSignals(True)

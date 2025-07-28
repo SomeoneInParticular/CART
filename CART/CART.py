@@ -578,9 +578,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onCohortGeneratorButtonClicked(self):
         cohortGeneratorWindow = CohortGeneratorWindow(self.logic.data_path)
-        cohortGeneratorWindowResult = cohortGeneratorWindow.exec_()
+        cohortGeneratorWindow.show()
 
-        if cohortGeneratorWindowResult == qt.QDialog.Accepted:
+        if hasattr(cohortGeneratorWindow.logic, "cohort_path"):
             self.onCohortChanged(cohortGeneratorWindow.logic.cohort_path)
 
     def buildCohortTable(self):
