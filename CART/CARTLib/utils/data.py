@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import slicer
 
@@ -197,3 +198,40 @@ def extract_case_keys_by_prefix(
             f"No keys found with prefix '{prefix}' in case_data: {case_data}"
         )
     return keys
+
+
+def create_empty_segmentation_node(
+    name: str,
+    reference_volume: slicer.vtkMRMLScalarVolumeNode,
+    scene: Optional[slicer.vtkMRMLScene] = None,
+) -> slicer.vtkMRMLSegmentationNode:
+    """
+    Create an empty segmentation node with proper display node setup.
+
+    # TODO CREATE SUPPORT FOR KWARGS TO PASS TO THE DISPLAY NODE
+
+    Args:
+        name: Name for the segmentation node
+        reference_volume: Volume node to use for geometry reference
+        scene: MRML scene to add the node to (defaults to slicer.mrmlScene)
+
+    Returns:
+        Empty segmentation node with display node configured
+    """
+    if scene is None:
+        scene = slicer.mrmlScene
+
+    # Create segmentation node
+    seg_node = slicer.vtkMRMLSegmentationNode()
+    scene.AddNode(seg_node)
+    seg_node.SetName(name)
+
+    # Create and set up display node
+    display_node = slicer.vtkMRMLSegmentationDisplayNode()
+    scene.AddNode(display_node)
+    seg_node.SetAndObserveDisplayNodeID(display_node.GetID())
+
+    # Set reference geometry
+    seg_node.SetReferenceImageGeometryParameterFromVolumeNode(reference_volume)
+
+    return seg_node
