@@ -56,20 +56,10 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
             (k for k in self.volume_keys if "primary" in k.lower()),
             self.volume_keys[0],
         )
-        print(f"Primary volume key: {self.primary_volume_key}")
-        # DONT LOVE THIS LOGIC,
-        # Want to handle ANY NUMBER of segmentations
-        # If no segmentation keys are found, we will use the default SEGMENTATION_KEY and create an empty segmentation node.
-        # If any segmentation keys are found, we will use them.
-        # -- If no primary segmentation key is found, we will use the first segmentation key as the primary.
-        if not self.segmentation_keys:
-            # If no segmentation keys, use the primary volume key as a fallback
-            self.segmentation_keys = [self.DEFAULT_SEGMENTATION_KEY]
         self.primary_segmentation_key = next(
             (k for k in self.segmentation_keys if "primary" in k.lower()),
             self.segmentation_keys[0],
         )
-        print(f"Primary segmentation key: {self.primary_segmentation_key}")
 
         # --- Build file paths ---
         self.volume_paths: dict[str, Path] = {
