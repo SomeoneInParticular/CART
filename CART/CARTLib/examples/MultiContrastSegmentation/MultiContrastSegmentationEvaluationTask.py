@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from enum import Enum
 
 import ctk
 import qt
@@ -15,11 +16,14 @@ from CARTLib.utils.widgets import CARTSegmentationEditorWidget
 from CARTLib.utils.data import save_segmentation_to_nifti
 from CARTLib.utils.layout import LayoutHandler, Orientation
 
-
 VERSION = 0.01
 
 
-# TODO Allow for the user to select "All" which will create a row instead of a single view
+class OutputMode(Enum):
+    PARALLEL_DIRECTORY = "parallel"
+    OVERWRITE_ORIGINAL = "overwrite"
+
+
 class MultiContrastSegmentationEvaluationGUI:
     def __init__(self, bound_task: "MultiContrastSegmentationEvaluationTask"):
         self.bound_task = bound_task
@@ -48,8 +52,8 @@ class MultiContrastSegmentationEvaluationGUI:
         # 4) Save controls
         self._addOutputSelectionButton(formLayout)
 
-        # TODO Make this more general and allow for a "None" selection where it saves to original input location
-        self.promptSelectOutput()
+        # Prompt for initial output setup
+        self.promptSelectOutputMode()
 
         return formLayout
 
@@ -66,8 +70,8 @@ class MultiContrastSegmentationEvaluationGUI:
         layout.addRow(qt.QLabel("View Orientation:"), hbox)
 
     def _addOutputSelectionButton(self, layout: qt.QFormLayout) -> None:
-        btn = qt.QPushButton("Change Output Directory")
-        btn.clicked.connect(self.promptSelectOutput)
+        btn = qt.QPushButton("Change Output Settings")
+        btn.clicked.connect(self.promptSelectOutputMode)
         layout.addRow(btn)
 
     #
@@ -89,135 +93,159 @@ class MultiContrastSegmentationEvaluationGUI:
         self.data_unit.layout_handler.apply_layout()
 
     ## USER PROMPTS ##
-    def promptSelectOutput(self):
+    def promptSelectOutputMode(self):
         """
-        Prompt the user to select an output directory.
-
-        The prompt will validate that the chosen output directory is valid,
-        and lock the save button if the user cancel's out of it without
-        selecting such a directory.
-
-        # TODO: Re-add save button disabling.
+        Prompt the user to select output mode and location.
         """
         # Initialize the prompt
-        prompt = self._buildOutputDirPrompt()
+        prompt = self._buildOutputModePrompt()
 
         # Show the prompt with "exec", blocking the main window until resolved
         result = prompt.exec()
 
-        # If the user cancelled out of the prompt, notify them that they will
-        #  need to specify an output directory later!
+        # If the user cancelled out of the prompt, notify them
         if result == 0:
             notif = qt.QErrorMessage()
             if self.bound_task.can_save():
                 notif.setWindowTitle(_("REVERTING!"))
                 notif.showMessage(
-                    _(
-                        "Cancelled out of window; falling back to previous "
-                        "output directory "
-                        f"({str(self.bound_task.output_dir)})"
-                    )
+                    _("Cancelled out of window; keeping previous output settings.")
                 )
                 notif.exec()
             else:
                 notif.setWindowTitle(_("NO OUTPUT!"))
                 notif.showMessage(
                     _(
-                        "No output directory selected! You will need to "
+                        "No output settings selected! You will need to "
                         "specify this before segmentations can be saved."
                     )
                 )
                 notif.exec()
 
-    def _buildOutputDirPrompt(self):
+    def _buildOutputModePrompt(self):
+        """Build the output mode selection dialog."""
         prompt = qt.QDialog()
-        prompt.setWindowTitle("Select Output Directory")
-        # Add a basic layout to hold widgets in this prompt
+        prompt.setWindowTitle("Select Output Mode")
         layout = qt.QVBoxLayout()
         prompt.setLayout(layout)
 
-        # Add a label describing what's being asked
-        label = qt.QLabel("Please select an output directory:")
-        layout.addWidget(label)
+        # Add description
+        description = qt.QLabel("Choose how to save your segmentations:")
+        layout.addWidget(description)
 
-        # Add an output file selection widget
-        outputFileEdit = ctk.ctkPathLineEdit()
-        outputFileEdit.setToolTip(
-            _(
-                "The directory the modified segmentations (and corresponding "
-                "metadata) will be placed."
-            )
+        # Radio buttons for output mode
+        self.outputModeGroup = qt.QButtonGroup()
+
+        # Parallel directory option
+        parallelRadio = qt.QRadioButton("Save to parallel directory structure")
+        parallelRadio.setToolTip("Creates organized output in a separate directory")
+        self.outputModeGroup.addButton(parallelRadio, 0)
+        layout.addWidget(parallelRadio)
+
+        # Overwrite original option
+        overwriteRadio = qt.QRadioButton("Overwrite original segmentation files")
+        overwriteRadio.setToolTip("Saves directly over the input segmentation files")
+        self.outputModeGroup.addButton(overwriteRadio, 1)
+        layout.addWidget(overwriteRadio)
+
+        # Set default selection based on current mode
+        if hasattr(self.bound_task, "output_mode"):
+            if self.bound_task.output_mode == OutputMode.PARALLEL_DIRECTORY:
+                parallelRadio.setChecked(True)
+            else:
+                overwriteRadio.setChecked(True)
+        else:
+            parallelRadio.setChecked(True)  # Default to parallel
+
+        # Directory selection widget (only shown for parallel mode)
+        dirLabel = qt.QLabel("Output directory:")
+        self.outputFileEdit = ctk.ctkPathLineEdit()
+        self.outputFileEdit.setToolTip(
+            _("The directory where modified segmentations will be placed.")
         )
-        # Set the widget to only accept directories
-        outputFileEdit.filters = ctk.ctkPathLineEdit.Dirs
-        # Add it to our layout
-        layout.addWidget(outputFileEdit)
+        self.outputFileEdit.filters = ctk.ctkPathLineEdit.Dirs
 
-        # Add a button box to confirm/cancel out
+        # Set current directory if available
+        if hasattr(self.bound_task, "output_dir") and self.bound_task.output_dir:
+            self.outputFileEdit.currentPath = str(self.bound_task.output_dir)
+
+        layout.addWidget(dirLabel)
+        layout.addWidget(self.outputFileEdit)
+
+        # Store references for enabling/disabling
+        self.dirLabel = dirLabel
+
+        # Connect radio button changes to update UI
+        parallelRadio.toggled.connect(self._onOutputModeChanged)
+
+        # Initial UI state
+        self._onOutputModeChanged(parallelRadio.isChecked())
+
+        # Button box
         buttonBox = qt.QDialogButtonBox()
         buttonBox.addButton(_("Confirm"), qt.QDialogButtonBox.AcceptRole)
+        buttonBox.addButton(_("Cancel"), qt.QDialogButtonBox.RejectRole)
         layout.addWidget(buttonBox)
 
-        # When the user confirms, ensure we have a valid path first
-        buttonBox.accepted.connect(
-            lambda: self._attemptOutputPathUpdate(prompt, outputFileEdit)
-        )
+        # Connect acceptance
+        buttonBox.accepted.connect(lambda: self._attemptOutputModeUpdate(prompt))
+        buttonBox.rejected.connect(prompt.reject)
 
-        # Resize the prompt to be wider, as by default its very tiny
+        # Resize for better appearance
         prompt.resize(500, prompt.minimumHeight)
 
         return prompt
+
+    def _onOutputModeChanged(self, parallel_selected: bool):
+        """Enable/disable directory selection based on mode."""
+        self.dirLabel.setEnabled(parallel_selected)
+        self.outputFileEdit.setEnabled(parallel_selected)
 
     def _linkedPathErrorPrompt(self, err_msg, prompt):
         """
         Prompt the user with an error message
         """
-        # Prompt the user with the error, locking the original prompt until
-        #  acknowledged by the user
         failurePrompt = qt.QErrorMessage(prompt)
-
-        # Add some details on what's happening for the user
-        failurePrompt.setWindowTitle("PATH ERROR!")
-
-        # Show the message
+        failurePrompt.setWindowTitle("ERROR!")
         failurePrompt.showMessage(err_msg)
         failurePrompt.exec()
 
-    def _attemptOutputPathUpdate(self, prompt: qt.QDialog, widget: ctk.ctkPathLineEdit):
+    def _attemptOutputModeUpdate(self, prompt: qt.QDialog):
         """
-        Validates the output path provided by a user, only closing the
-        associated prompt if it was valid.
+        Validates and applies the selected output mode and path.
         """
-        # Strip whitespace to avoid a "space" path
-        output_path_str = widget.currentPath.strip()
-
-        if not output_path_str:
-            # Prompt the user with the error
-            err_msg = "Output path was empty"
-            self._linkedPathErrorPrompt(err_msg, prompt)
-
-            # Reset it to our prior managed directory for convenience sakes
-            widget.currentPath = str(self.bound_task.output_dir)
-
-            # Return early, which keeps the prompt active
+        # Get the selected mode
+        selected_id = self.outputModeGroup.checkedId()
+        if selected_id == 0:
+            selected_mode = OutputMode.PARALLEL_DIRECTORY
+        elif selected_id == 1:
+            selected_mode = OutputMode.OVERWRITE_ORIGINAL
+        else:
+            self._linkedPathErrorPrompt("Please select an output mode", prompt)
             return
 
-        # Convert it to a Path for ease of use
-        output_path = Path(output_path_str)
+        # Handle parallel directory mode
+        if selected_mode == OutputMode.PARALLEL_DIRECTORY:
+            output_path_str = self.outputFileEdit.currentPath.strip()
 
-        # Otherwise, try to update the task's path; we rely on its validation
-        #  to ensure parity with any other checks
-        err_msg = self.bound_task.set_output_dir(output_path)
+            if not output_path_str:
+                err_msg = "Output path was empty"
+                self._linkedPathErrorPrompt(err_msg, prompt)
+                return
 
-        # If we got an error message, prompt the user about why and return
+            output_path = Path(output_path_str)
+            err_msg = self.bound_task.set_output_mode(selected_mode, output_path)
+        else:
+            # Overwrite original mode
+            err_msg = self.bound_task.set_output_mode(selected_mode)
+
+        # Check for errors
         if err_msg:
             self._linkedPathErrorPrompt(err_msg, prompt)
-
-            # Return, keeping the prompt alive
             return
-        # Otherwise, close the prompt with an "accepted" signal
-        else:
-            prompt.accept()
+
+        # Success - close the prompt
+        prompt.accept()
 
     def update(self, data_unit: MultiContrastSegmentationEvaluationDataUnit) -> None:
         """
@@ -248,12 +276,20 @@ class MultiContrastSegmentationEvaluationGUI:
         if err_msg is None:
             msg = qt.QMessageBox()
             msg.setWindowTitle("Success!")
-            seg_out, __ = self.bound_task.output_manager.get_output_destinations(
-                self.bound_task.data_unit
-            )
-            msg.setText(
-                f"Segmentation '{self.bound_task.data_unit.uid}' saved to:\n{seg_out.resolve()}"
-            )
+
+            # Get appropriate success message based on output mode
+            if self.bound_task.output_mode == OutputMode.PARALLEL_DIRECTORY:
+                seg_out, __ = self.bound_task.output_manager.get_output_destinations(
+                    self.bound_task.data_unit
+                )
+                msg.setText(
+                    f"Segmentation '{self.bound_task.data_unit.uid}' saved to:\n{seg_out.resolve()}"
+                )
+            else:
+                msg.setText(
+                    f"Segmentation '{self.bound_task.data_unit.uid}' saved over original file."
+                )
+
             msg.addButton(_("Confirm"), qt.QMessageBox.AcceptRole)
             msg.exec()
         else:
@@ -280,6 +316,7 @@ class MultiContrastSegmentationEvaluationTask(
     def __init__(self, user: str):
         super().__init__(user)
         self.gui: Optional[MultiContrastSegmentationEvaluationGUI] = None
+        self.output_mode: OutputMode = OutputMode.PARALLEL_DIRECTORY
         self.output_dir: Optional[Path] = None
         self.output_manager: Optional[_MultiContrastOutputManager] = None
         self.data_unit: Optional[MultiContrastSegmentationEvaluationDataUnit] = None
@@ -320,20 +357,91 @@ class MultiContrastSegmentationEvaluationTask(
             # Return the result for further use
             return result
         else:
-            # TODO: Prompt if we can not save for some reason to inform the user
-            print("*" * 100)
+            # Handle case where we need to prompt for file location
+            if self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
+                if not self.data_unit.get_primary_segmentation_path():
+                    return self._promptForSaveLocation()
             return "Could not save!"
+
+    def _promptForSaveLocation(self) -> Optional[str]:
+        """
+        Prompt user for save location when original file doesn't exist.
+        """
+        prompt = qt.QFileDialog()
+        prompt.setWindowTitle("Select Save Location")
+        prompt.setAcceptMode(qt.QFileDialog.AcceptSave)
+        prompt.setFileMode(qt.QFileDialog.AnyFile)
+        prompt.setNameFilter("NIfTI files (*.nii.gz *.nii)")
+
+        # Set default filename based on data unit
+        default_name = f"{self.data_unit.uid}_seg.nii.gz"
+        prompt.selectFile(default_name)
+
+        if prompt.exec():
+            selected_files = prompt.selectedFiles()
+            if selected_files:
+                save_path = Path(selected_files[0])
+                try:
+                    # Save directly to selected location
+                    save_segmentation_to_nifti(
+                        self.data_unit.primary_segmentation_node,
+                        self.data_unit.primary_volume_node,
+                        save_path,
+                    )
+
+                    # Also save sidecar if possible
+                    sidecar_path = save_path.with_suffix(".json")
+                    self._save_sidecar_to_path(sidecar_path)
+
+                    return None  # Success
+                except Exception as e:
+                    return str(e)
+
+        return "Save cancelled by user"
+
+    def _save_sidecar_to_path(self, sidecar_path: Path):
+        """Save sidecar file to a specific path."""
+        sidecar_data = {}
+
+        # Try to read existing sidecar from original location
+        original_sidecar = self.data_unit.get_primary_segmentation_path().with_suffix(
+            ".json"
+        )
+        if original_sidecar.exists():
+
+            with open(original_sidecar) as fp:
+                sidecar_data = json.load(fp)
+
+        # Add new entry
+        entry_time = datetime.now()
+        new_entry = {
+            "Name": "Segmentation Review [CART]",
+            "Author": self.user,
+            "Version": VERSION,
+            "Date": entry_time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        generated_by = sidecar_data.get("GeneratedBy", [])
+        generated_by.append(new_entry)
+        sidecar_data["GeneratedBy"] = generated_by
+
+        # Write sidecar
+        with open(sidecar_path, "w") as fp:
+            json.dump(sidecar_data, fp, indent=2)
 
     def can_save(self) -> bool:
         """
-        Shortcut for checking whether we can save the current segmentation or
-         not. Checks three things:
-        * We have set an output path,
-        * That output path exists, and
-        * That output path is a directory (and thus, files can be placed within it)
-        :return: True if we are ready to save, false otherwise
+        Check whether we can save the current segmentation.
         """
-        return self.output_dir and self.output_dir.exists() and self.output_dir.is_dir()
+        if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
+            return (
+                self.output_dir
+                and self.output_dir.exists()
+                and self.output_dir.is_dir()
+            )
+        elif self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
+            return self.data_unit is not None
+        return False
 
     def enter(self) -> None:
         if self.gui:
@@ -352,29 +460,52 @@ class MultiContrastSegmentationEvaluationTask(
         return {"Segmentation": MultiContrastSegmentationEvaluationDataUnit}
 
     ## Utils ##
+    def set_output_mode(
+        self, mode: OutputMode, output_path: Optional[Path] = None
+    ) -> Optional[str]:
+        """
+        Set the output mode and path if needed.
+        Returns error message if failed, None if successful.
+        """
+        self.output_mode = mode
+
+        if mode == OutputMode.PARALLEL_DIRECTORY:
+            if not output_path:
+                return "Output path required for parallel directory mode"
+
+            # Validate the directory
+            if not output_path.exists():
+                return f"Error: Output path does not exist: {output_path}"
+
+            if not output_path.is_dir():
+                return f"Error: Output path is not a directory: {output_path}"
+
+            # Set up parallel directory output
+            self.output_dir = output_path
+            self.output_manager = _MultiContrastOutputManager(
+                self.output_dir, self.user
+            )
+            print(f"Output mode set to parallel directory: {self.output_dir}")
+
+        elif mode == OutputMode.OVERWRITE_ORIGINAL:
+            # Set up overwrite original output
+            self.output_dir = None
+            self.output_manager = _OverwriteOriginalOutputManager(self.user)
+            print("Output mode set to overwrite original")
+
+        return None
+
+    # Backward compatibility
     def set_output_dir(self, new_path: Path) -> Optional[str]:
         """
-        Update the output directory; returns an error message if it failed!
+        Update the output directory (legacy method for backward compatibility).
         """
-        # Confirm the directory exists
-        if not new_path.exists():
-            err = f"Error: Data path does not exist: {new_path}"
-            return err
-
-        # Confirm that it is a directory
-        if not new_path.is_dir():
-            err = f"Error: Data path was not a directory: {new_path}"
-            return err
-
-        # If that all ran, update our data path to the new data path
-        self.output_dir = new_path
-        print(f"Output path set to: {self.output_dir}")
-        self.output_manager = _MultiContrastOutputManager(self.output_dir, self.user)
-        return None
+        return self.set_output_mode(OutputMode.PARALLEL_DIRECTORY, new_path)
 
 
 class _MultiContrastOutputManager:
-    # TODO Make this more general as it is nearly identical to the original "OutputManager"
+    """Output manager for parallel directory structure."""
+
     def __init__(self, output_dir: Path, user: str):
         self.output_dir = output_dir
         self.user = user
@@ -405,13 +536,9 @@ class _MultiContrastOutputManager:
 
     def get_output_destinations(
         self, data_unit: MultiContrastSegmentationEvaluationDataUnit
-    ) -> (Path, Path):
+    ) -> tuple[Path, Path]:
         """
         Get the output paths for the files managed by this manager
-        :param data_unit: The data unit whose data will be saved
-        :return: Two paths, one per output file:
-            * The path to the (.nii.gz) segmentation file
-            * The path to the (.json) sidecar file, corresponding to the prior
         """
         # Define the "target" output directory
         target_dir = self.output_dir / f"{data_unit.uid}/anat/"
@@ -432,17 +559,13 @@ class _MultiContrastOutputManager:
         data_unit: MultiContrastSegmentationEvaluationDataUnit, target_file: Path
     ):
         """
-        Save the data unit's currently tracked segmentation to the designated
-        output
+        Save the data unit's currently tracked segmentation to the designated output
         """
         # Extract the relevant node data from the data unit
         seg_node = data_unit.primary_segmentation_node
-        vol_node = (
-            data_unit.primary_volume_node
-        )  # THIS IS THE MAIN DIFFERENCE BETWEEN THIS MULTICONTRAST OUTPUT MANAGER
-        # AND THE ORIGINAL OUTPUT MANAGER
+        vol_node = data_unit.primary_volume_node
 
-        # Try to save the segmenattion using them
+        # Try to save the segmentation using them
         save_segmentation_to_nifti(seg_node, vol_node, target_file)
 
     def _save_sidecar(
@@ -476,3 +599,67 @@ class _MultiContrastOutputManager:
         # Write the sidecar file to our target file
         with open(target_file, "w") as fp:
             json.dump(sidecar_data, fp, indent=2)
+
+
+class _OverwriteOriginalOutputManager:
+    """Output manager for overwriting original files."""
+
+    def __init__(self, user: str):
+        self.user = user
+
+    def save_segmentation(
+        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+    ) -> Optional[str]:
+        """Save segmentation by overwriting the original file."""
+
+        segmentation_path = data_unit.get_primary_segmentation_path()
+        sidecar_path = segmentation_path.with_suffix(".json")
+
+        try:
+            # Save the segmentation to original location
+            save_segmentation_to_nifti(
+                data_unit.primary_segmentation_node,
+                data_unit.primary_volume_node,
+                segmentation_path,
+            )
+
+            # Update the sidecar file
+            self._save_sidecar(sidecar_path)
+
+            return None  # Success
+        except Exception as e:
+            return str(e)
+
+    def _save_sidecar(self, target_file: Path):
+        """Save/update sidecar file."""
+        sidecar_data = {}
+
+        # Read existing sidecar if it exists
+        if target_file.exists():
+            with open(target_file) as fp:
+                sidecar_data = json.load(fp)
+
+        # Add new entry
+        entry_time = datetime.now()
+        new_entry = {
+            "Name": "Segmentation Review [CART]",
+            "Author": self.user,
+            "Version": VERSION,
+            "Date": entry_time.strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        generated_by = sidecar_data.get("GeneratedBy", [])
+        generated_by.append(new_entry)
+        sidecar_data["GeneratedBy"] = generated_by
+
+        # Write the updated sidecar file
+        with open(target_file, "w") as fp:
+            json.dump(sidecar_data, fp, indent=2)
+
+    def get_output_destinations(
+        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+    ) -> tuple[Path, Path]:
+        """Get output destinations (original file locations)."""
+        segmentation_path = data_unit.get_primary_segmentation_path()
+        sidecar_path = segmentation_path.with_suffix(".json")
+        return segmentation_path, sidecar_path
