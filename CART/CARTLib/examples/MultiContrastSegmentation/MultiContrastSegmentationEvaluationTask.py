@@ -277,18 +277,11 @@ class MultiContrastSegmentationEvaluationGUI:
             msg = qt.QMessageBox()
             msg.setWindowTitle("Success!")
 
-            # Get appropriate success message based on output mode
-            if self.bound_task.output_mode == OutputMode.PARALLEL_DIRECTORY:
-                seg_out, __ = self.bound_task.output_manager.get_output_destinations(
-                    self.bound_task.data_unit
-                )
-                msg.setText(
-                    f"Segmentation '{self.bound_task.data_unit.uid}' saved to:\n{seg_out.resolve()}"
-                )
-            else:
-                msg.setText(
-                    f"Segmentation '{self.bound_task.data_unit.uid}' saved over original file."
-                )
+            # Get success message from the output manager
+            success_message = self.bound_task.output_manager.get_success_message(
+                self.bound_task.data_unit
+            )
+            msg.setText(success_message)
 
             msg.addButton(_("Confirm"), qt.QMessageBox.AcceptRole)
             msg.exec()
@@ -318,7 +311,7 @@ class MultiContrastSegmentationEvaluationTask(
         self.gui: Optional[MultiContrastSegmentationEvaluationGUI] = None
         self.output_mode: OutputMode = OutputMode.PARALLEL_DIRECTORY
         self.output_dir: Optional[Path] = None
-        self.output_manager: Optional[_MultiContrastOutputManager] = None
+        self.output_manager: Optional[MultiContrastOutputManager] = None
         self.data_unit: Optional[MultiContrastSegmentationEvaluationDataUnit] = None
 
     def setup(self, container: qt.QWidget) -> None:
@@ -346,22 +339,6 @@ class MultiContrastSegmentationEvaluationTask(
     def cleanup(self) -> None:
         # Break the cyclical link with our GUI so garbage collection can run
         self.gui = None
-
-    def save(self) -> Optional[str]:
-        if self.can_save():
-            # Have the output manager save the result
-            result = self.output_manager.save_segmentation(self.data_unit)
-            # If we have a GUI, have it provide the appropriate response to the user
-            if self.gui:
-                self.gui.saveCompletePrompt(result)
-            # Return the result for further use
-            return result
-        else:
-            # Handle case where we need to prompt for file location
-            if self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
-                if not self.data_unit.get_primary_segmentation_path():
-                    return self._promptForSaveLocation()
-            return "Could not save!"
 
     def _promptForSaveLocation(self) -> Optional[str]:
         """
@@ -433,15 +410,28 @@ class MultiContrastSegmentationEvaluationTask(
         """
         Check whether we can save the current segmentation.
         """
-        if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
-            return (
-                self.output_dir
-                and self.output_dir.exists()
-                and self.output_dir.is_dir()
-            )
-        elif self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
-            return self.data_unit is not None
+        if self.output_manager:
+            return self.output_manager.can_save(self.data_unit)
         return False
+
+    def save(self) -> Optional[str]:
+        """
+        Save the current segmentation using the output manager.
+        """
+        if self.can_save():
+            # Have the output manager save the result
+            result = self.output_manager.save_segmentation(self.data_unit)
+            # If we have a GUI, have it provide the appropriate response to the user
+            if self.gui:
+                self.gui.saveCompletePrompt(result)
+            # Return the result for further use
+            return result
+        else:
+            # Handle case where we need to prompt for file location
+            if self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
+                if not self.data_unit.get_primary_segmentation_path().exists():
+                    return self._promptForSaveLocation()
+            return "Could not save!"
 
     def enter(self) -> None:
         if self.gui:
@@ -480,17 +470,19 @@ class MultiContrastSegmentationEvaluationTask(
             if not output_path.is_dir():
                 return f"Error: Output path is not a directory: {output_path}"
 
-            # Set up parallel directory output
+            # Set up the consolidated output manager
             self.output_dir = output_path
-            self.output_manager = _MultiContrastOutputManager(
-                self.output_dir, self.user
+            self.output_manager = MultiContrastOutputManager(
+                user=self.user, output_mode=mode, output_dir=output_path
             )
             print(f"Output mode set to parallel directory: {self.output_dir}")
 
         elif mode == OutputMode.OVERWRITE_ORIGINAL:
-            # Set up overwrite original output
+            # Set up the consolidated output manager
             self.output_dir = None
-            self.output_manager = _OverwriteOriginalOutputManager(self.user)
+            self.output_manager = MultiContrastOutputManager(
+                user=self.user, output_mode=mode
+            )
             print("Output mode set to overwrite original")
 
         return None
@@ -503,143 +495,134 @@ class MultiContrastSegmentationEvaluationTask(
         return self.set_output_mode(OutputMode.PARALLEL_DIRECTORY, new_path)
 
 
-class _MultiContrastOutputManager:
-    """Output manager for parallel directory structure."""
+class MultiContrastOutputManager:
+    """
+    Unified output manager that handles both parallel directory and overwrite original modes.
+    """
 
-    def __init__(self, output_dir: Path, user: str):
-        self.output_dir = output_dir
+    def __init__(
+        self, user: str, output_mode: OutputMode, output_dir: Optional[Path] = None
+    ):
+        """
+        Initialize the output manager.
+
+        Args:
+            user: Username for the author field in sidecar files
+            output_mode: OutputMode enum value (PARALLEL_DIRECTORY or OVERWRITE_ORIGINAL)
+            output_dir: Required for PARALLEL_DIRECTORY mode, ignored for OVERWRITE_ORIGINAL
+        """
         self.user = user
+        self.output_mode = output_mode
+        self.output_dir = output_dir
+
+        # Validate configuration
+        if output_mode == OutputMode.PARALLEL_DIRECTORY and not output_dir:
+            raise ValueError("output_dir is required for PARALLEL_DIRECTORY mode")
 
     def save_segmentation(
         self, data_unit: MultiContrastSegmentationEvaluationDataUnit
     ) -> Optional[str]:
-        # Calculate the designation paths for our files
-        segmentation_out, sidecar_out = self.get_output_destinations(data_unit)
+        """
+        Save segmentation according to the configured output mode.
 
-        # Create the directories needed for these outputs
-        segmentation_out.parent.mkdir(parents=True, exist_ok=True)
-        sidecar_out.parent.mkdir(parents=True, exist_ok=True)
-
-        # Attempt to save our results
+        Returns:
+            None if successful, error message string if failed
+        """
         try:
-            # Save the node
+            # Get output destinations based on mode
+            segmentation_out, sidecar_out = self.get_output_destinations(data_unit)
+
+            # Create directories if needed (only for parallel mode)
+            if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
+                segmentation_out.parent.mkdir(parents=True, exist_ok=True)
+                sidecar_out.parent.mkdir(parents=True, exist_ok=True)
+
+            # Save the segmentation file
             self._save_segmentation(data_unit, segmentation_out)
 
-            # Save/update the side-car file, if it exists
+            # Save/update the sidecar file
             self._save_sidecar(data_unit, sidecar_out)
 
-            # Return nothing, indicating a successful save
-            return None
+            return None  # Success
         except Exception as e:
-            # If any error occurred, return a string version of it for reporting
             return str(e)
 
     def get_output_destinations(
         self, data_unit: MultiContrastSegmentationEvaluationDataUnit
     ) -> tuple[Path, Path]:
         """
-        Get the output paths for the files managed by this manager
+        Get output paths for segmentation and sidecar files based on the current mode.
+
+        Returns:
+            Tuple of (segmentation_path, sidecar_path)
         """
-        # Define the "target" output directory
+        if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
+            return self._get_parallel_destinations(data_unit)
+        elif self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
+            return self._get_overwrite_destinations(data_unit)
+        else:
+            raise ValueError(f"Unknown output mode: {self.output_mode}")
+
+    def _get_parallel_destinations(
+        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+    ) -> tuple[Path, Path]:
+        """Get destinations for parallel directory mode."""
+        # Define the target output directory
         target_dir = self.output_dir / f"{data_unit.uid}/anat/"
 
         # File name, before extensions
         fname = f"{data_unit.uid}_{self.user}_seg"
 
-        # Define the target output file placement
+        # Define the target output file paths
         segmentation_out = target_dir / f"{fname}.nii.gz"
-
-        # Define the path for our side-care
         sidecar_out = target_dir / f"{fname}.json"
 
         return segmentation_out, sidecar_out
+
+    def _get_overwrite_destinations(
+        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+    ) -> tuple[Path, Path]:
+        """Get destinations for overwrite original mode."""
+        segmentation_path = data_unit.get_primary_segmentation_path()
+        sidecar_path = segmentation_path.with_suffix(".json")
+        return segmentation_path, sidecar_path
 
     @staticmethod
     def _save_segmentation(
         data_unit: MultiContrastSegmentationEvaluationDataUnit, target_file: Path
     ):
         """
-        Save the data unit's currently tracked segmentation to the designated output
+        Save the data unit's segmentation to the designated output file.
         """
         # Extract the relevant node data from the data unit
         seg_node = data_unit.primary_segmentation_node
         vol_node = data_unit.primary_volume_node
 
-        # Try to save the segmentation using them
+        # Save the segmentation using the utility function
         save_segmentation_to_nifti(seg_node, vol_node, target_file)
 
     def _save_sidecar(
         self, data_unit: MultiContrastSegmentationEvaluationDataUnit, target_file: Path
     ):
-        # Check for an existing sidecar, and use it as our basis if it exists
-        fname = str(data_unit.get_primary_segmentation_path()).split(".")[0]
-
-        # Read in the existing side-car file first, if possible
-        sidecar_file = Path(f"{fname}.json")
-        if sidecar_file.exists():
-            with open(sidecar_file) as fp:
-                sidecar_data = json.load(fp)
-        else:
-            sidecar_data = dict()
-
-        # New entry
-        entry_time = datetime.now()
-        new_entry = {
-            "Name": "Segmentation Review [CART]",
-            "Author": self.user,
-            "Version": VERSION,
-            "Date": entry_time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-        # Add a new entry to the side-car's contents
-        generated_by = sidecar_data.get("GeneratedBy", [])
-        generated_by.append(new_entry)
-        sidecar_data["GeneratedBy"] = generated_by
-
-        # Write the sidecar file to our target file
-        with open(target_file, "w") as fp:
-            json.dump(sidecar_data, fp, indent=2)
-
-
-class _OverwriteOriginalOutputManager:
-    """Output manager for overwriting original files."""
-
-    def __init__(self, user: str):
-        self.user = user
-
-    def save_segmentation(
-        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
-    ) -> Optional[str]:
-        """Save segmentation by overwriting the original file."""
-
-        segmentation_path = data_unit.get_primary_segmentation_path()
-        sidecar_path = segmentation_path.with_suffix(".json")
-
-        try:
-            # Save the segmentation to original location
-            save_segmentation_to_nifti(
-                data_unit.primary_segmentation_node,
-                data_unit.primary_volume_node,
-                segmentation_path,
-            )
-
-            # Update the sidecar file
-            self._save_sidecar(sidecar_path)
-
-            return None  # Success
-        except Exception as e:
-            return str(e)
-
-    def _save_sidecar(self, target_file: Path):
-        """Save/update sidecar file."""
+        """
+        Save or update the sidecar JSON file with processing metadata.
+        """
         sidecar_data = {}
 
-        # Read existing sidecar if it exists
-        if target_file.exists():
-            with open(target_file) as fp:
-                sidecar_data = json.load(fp)
+        # Try to read existing sidecar data
+        if self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
+            # For overwrite mode, read from the target location if it exists
+            if target_file.exists():
+                with open(target_file) as fp:
+                    sidecar_data = json.load(fp)
+        else:
+            # For parallel mode, read from the original location
+            original_sidecar = self._get_original_sidecar_path(data_unit)
+            if original_sidecar and original_sidecar.exists():
+                with open(original_sidecar) as fp:
+                    sidecar_data = json.load(fp)
 
-        # Add new entry
+        # Create new entry for this processing step
         entry_time = datetime.now()
         new_entry = {
             "Name": "Segmentation Review [CART]",
@@ -648,6 +631,7 @@ class _OverwriteOriginalOutputManager:
             "Date": entry_time.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
+        # Add the new entry to the GeneratedBy list
         generated_by = sidecar_data.get("GeneratedBy", [])
         generated_by.append(new_entry)
         sidecar_data["GeneratedBy"] = generated_by
@@ -656,10 +640,52 @@ class _OverwriteOriginalOutputManager:
         with open(target_file, "w") as fp:
             json.dump(sidecar_data, fp, indent=2)
 
-    def get_output_destinations(
+    def _get_original_sidecar_path(
         self, data_unit: MultiContrastSegmentationEvaluationDataUnit
-    ) -> tuple[Path, Path]:
-        """Get output destinations (original file locations)."""
-        segmentation_path = data_unit.get_primary_segmentation_path()
-        sidecar_path = segmentation_path.with_suffix(".json")
-        return segmentation_path, sidecar_path
+    ) -> Optional[Path]:
+        """
+        Get the path to the original sidecar file for reading existing metadata.
+        """
+        # Get the base filename without extension from the segmentation path
+        fname = str(data_unit.get_primary_segmentation_path()).split(".")[0]
+        return Path(f"{fname}.json")
+
+    def can_save(
+        self, data_unit: Optional[MultiContrastSegmentationEvaluationDataUnit]
+    ) -> bool:
+        """
+        Check whether we can save with the current configuration.
+
+        Args:
+            data_unit: The data unit to potentially save (can be None)
+
+        Returns:
+            True if saving is possible, False otherwise
+        """
+        if not data_unit:
+            return False
+
+        if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
+            return (
+                self.output_dir
+                and self.output_dir.exists()
+                and self.output_dir.is_dir()
+            )
+        elif self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
+            return (
+                True  # Can always attempt to overwrite (file will be created if needed)
+            )
+
+        return False
+
+    def get_success_message(
+        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+    ) -> str:
+        """
+        Get an appropriate success message based on the output mode.
+        """
+        if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
+            seg_out, _ = self.get_output_destinations(data_unit)
+            return f"Segmentation '{data_unit.uid}' saved to:\n{seg_out.resolve()}"
+        else:
+            return f"Segmentation '{data_unit.uid}' saved over original file."
