@@ -110,7 +110,6 @@ class MultiContrastOutputManager:
             # Create directories if needed (only for parallel mode)
             if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
                 segmentation_out.parent.mkdir(parents=True, exist_ok=True)
-                sidecar_out.parent.mkdir(parents=True, exist_ok=True)
 
             # Save the segmentation file
             self._save_segmentation(data_unit, segmentation_out)
