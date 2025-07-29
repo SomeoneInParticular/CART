@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Optional
+import itertools
 
 import slicer
 from CARTLib.core.DataUnitBase import DataUnitBase
@@ -116,11 +117,11 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
     def focus_gained(self) -> None:
         """Show all volumes and segmentation when this unit gains focus."""
         # Reveal all the data nodes again
-        for node in [
-            *self.volume_nodes.values(),
-            *self.segmentation_nodes.values(),
-            *self.markup_nodes.values(),
-        ]:
+        for node in itertools.chain(
+            self.volume_nodes.values(),
+            self.segmentation_nodes.values(),
+            self.markup_nodes.values(),
+        ):
             node.SetDisplayVisibility(True)
             node.SetSelectable(True)
             node.SetHideFromEditors(False)
@@ -129,11 +130,11 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
 
     def focus_lost(self) -> None:
         """Hide all volumes and segmentation when focus is lost."""
-        for node in [
-            *self.volume_nodes.values(),
-            *self.segmentation_nodes.values(),
-            *self.markup_nodes.values(),
-        ]:
+        for node in itertools.chain(
+            self.volume_nodes.values(),
+            self.segmentation_nodes.values(),
+            self.markup_nodes.values(),
+        ):
             node.SetDisplayVisibility(False)
             node.SetSelectable(False)
             node.SetHideFromEditors(True)
