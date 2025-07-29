@@ -77,8 +77,10 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         self.volume_paths: dict[str, Path] = {
             k: data_path / case_data[k] for k in self.volume_keys
         }
+        # KO: Here we use the walrus operator to assign during a comparison
         self.segmentation_paths: dict[str, Path] = {
-            k: data_path / case_data.get(k, "") for k in self.segmentation_keys
+            (k):(data_path / v if (v := case_data.get(k, None)) is not None else None)
+            for k in self.segmentation_keys
         }
 
         # --- Node storage ---
@@ -171,6 +173,9 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         for key in self.volume_keys:
             self.validate_key_is_file(key)
         for key in self.segmentation_keys:
+            # Special case; a "default" segmentation is created if none are provided
+            if key == self.DEFAULT_SEGMENTATION_KEY:
+                continue
             if key is not None:
                 self.validate_key_is_file(key)
 
