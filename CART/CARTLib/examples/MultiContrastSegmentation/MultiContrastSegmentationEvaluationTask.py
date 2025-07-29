@@ -441,99 +441,6 @@ class MultiContrastSegmentationEvaluationTask(
         # Break the cyclical link with our GUI so garbage collection can run
         self.gui = None
 
-    def _promptForSaveLocation(self) -> Optional[str]:
-        """
-        Prompt user for save location when original file doesn't exist.
-        """
-        prompt = qt.QFileDialog()
-        prompt.setWindowTitle("Select Save Location")
-        prompt.setAcceptMode(qt.QFileDialog.AcceptSave)
-        prompt.setFileMode(qt.QFileDialog.AnyFile)
-        prompt.setNameFilter("NIfTI files (*.nii.gz *.nii)")
-
-        # Set default filename based on data unit
-        default_name = f"{self.data_unit.uid}_seg.nii.gz"
-        prompt.selectFile(default_name)
-
-        if prompt.exec():
-            selected_files = prompt.selectedFiles()
-            if selected_files:
-                save_path = Path(selected_files[0])
-                try:
-                    # Save directly to selected location
-                    save_segmentation_to_nifti(
-                        self.data_unit.primary_segmentation_node,
-                        self.data_unit.primary_volume_node,
-                        save_path,
-                    )
-
-                    # Also save sidecar if possible
-                    sidecar_path = save_path.with_suffix(".json")
-                    self._save_sidecar_to_path(sidecar_path)
-
-                    return None  # Success
-                except Exception as e:
-                    return str(e)
-
-        return "Save cancelled by user"
-
-    def _save_sidecar_to_path(self, sidecar_path: Path):
-        """Save sidecar file to a specific path."""
-        sidecar_data = {}
-
-        # Try to read existing sidecar from original location
-        original_sidecar = self.data_unit.get_primary_segmentation_path().with_suffix(
-            ".json"
-        )
-        if original_sidecar.exists():
-
-            with open(original_sidecar) as fp:
-                sidecar_data = json.load(fp)
-
-        # Add new entry
-        entry_time = datetime.now()
-        new_entry = {
-            "Name": "Segmentation Review [CART]",
-            "Author": self.user,
-            "Version": VERSION,
-            "Date": entry_time.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-        generated_by = sidecar_data.get("GeneratedBy", [])
-        generated_by.append(new_entry)
-        sidecar_data["GeneratedBy"] = generated_by
-
-        # Write sidecar
-        with open(sidecar_path, "w") as fp:
-            json.dump(sidecar_data, fp, indent=2)
-
-    def can_save(self) -> bool:
-        """
-        Check whether we can save the current segmentation.
-        """
-        if self.output_manager:
-            return self.output_manager.can_save(self.data_unit)
-        return False
-
-    def save(self) -> Optional[str]:
-        """
-        Save the current segmentation using the output manager.
-        """
-        if self.can_save():
-            # Have the output manager save the result
-            result = self.output_manager.save_segmentation(self.data_unit)
-            # If we have a GUI, have it provide the appropriate response to the user
-            if self.gui:
-                self.gui.saveCompletePrompt(result)
-            # Return the result for further use
-            return result
-        else:
-            # Handle case where we need to prompt for file location
-            if self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
-                if not self.data_unit.get_primary_segmentation_path().exists():
-                    return self._promptForSaveLocation()
-            return "Could not save!"
-
     def enter(self) -> None:
         if self.gui:
             self.gui.enter()
@@ -549,23 +456,6 @@ class MultiContrastSegmentationEvaluationTask(
          the user
         """
         return {"Segmentation": MultiContrastSegmentationEvaluationDataUnit}
-
-    def get_processing_summary(self) -> Optional[dict[str, Any]]:
-        """
-        Get a summary of all processing activities.
-        Returns None if no output manager is configured.
-        """
-        if self.output_manager:
-            return self.output_manager.get_processing_summary()
-        return None
-
-    def get_csv_log_path(self) -> Optional[Path]:
-        """Get the path to the CSV log file."""
-        if self.output_manager:
-            return self.output_manager.get_csv_log_path()
-        return None
-
-    ## Utils ##
 
     def set_output_mode(
         self,
@@ -612,10 +502,3 @@ class MultiContrastSegmentationEvaluationTask(
             print(f"CSV log will be saved to: {self.output_manager.get_csv_log_path()}")
 
         return None
-
-    # Backward compatibility
-    def set_output_dir(self, new_path: Path) -> Optional[str]:
-        """
-        Update the output directory (legacy method for backward compatibility).
-        """
-        return self.set_output_mode(OutputMode.PARALLEL_DIRECTORY, new_path)
