@@ -8,6 +8,7 @@ from CARTLib.utils.data import (
     load_volume,
     create_subject,
     load_markups,
+    extract_case_keys_by_prefix,
 )
 from CARTLib.utils.layout import LayoutHandler, Orientation
 
@@ -25,7 +26,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
     and uses one as the primary for geometry alignment.
     """
 
-    SEGMENTATION_KEY = "segmentation"
+    SEGMENTATION_KEY = "default_segmentation"
     COMPLETED_KEY = "completed"
     COMPLETED_BY_KEY = "completed_by"
 
@@ -40,21 +41,20 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         super().__init__(case_data, data_path, scene)
 
         # --- Discover volume and segmentation keys ---
-        self.volume_keys = [k for k in case_data if "volume" in k.lower()]
-        if not self.volume_keys:
-            raise ValueError(f"No volume keys found in case_data for case {self.uid}")
+        self.volume_keys = extract_case_keys_by_prefix(
+            case_data, "Volume", force_present=True
+        )
 
-        self.segmentation_keys = [k for k in case_data if "seg" in k.lower()]
+        self.segmentation_keys = extract_case_keys_by_prefix(
+            case_data, "Segmentation", force_present=False
+        )
 
-        self.markup_keys = [
-            k for k in case_data if "markups" in k.lower() or "mrk" in k.lower()
-        ]
+        self.markup_keys = extract_case_keys_by_prefix(
+            case_data, "Markup", force_present=False
+        )
         # Fallback to a single default key if none found
         if not self.segmentation_keys:
             self.segmentation_keys = [self.SEGMENTATION_KEY]
-            self._created_empty_by_default = True
-        else:
-            self._created_empty_by_default = False
 
         # --- Determine primaries ---
         self.primary_volume_key = next(
@@ -62,7 +62,6 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
             self.volume_keys[0],
         )
         print(f"Primary volume key: {self.primary_volume_key}")
-        self.NO_PRIMARY_SEGMENTATION_KEY: bool = False
         # DONT LOVE THIS LOGIC,
         # Want to handle ANY NUMBER of segmentations
         # If no segmentation keys are found, we will use the default SEGMENTATION_KEY and create an empty segmentation node.
@@ -136,7 +135,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         for node in [
             *self.volume_nodes.values(),
             *self.segmentation_nodes.values(),
-            *self.markup_nodes.values()
+            *self.markup_nodes.values(),
         ]:
             node.SetDisplayVisibility(True)
             node.SetSelectable(True)
@@ -149,7 +148,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         for node in [
             *self.volume_nodes.values(),
             *self.segmentation_nodes.values(),
-            *self.markup_nodes.values()
+            *self.markup_nodes.values(),
         ]:
             node.SetDisplayVisibility(False)
             node.SetSelectable(False)

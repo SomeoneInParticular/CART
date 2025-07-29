@@ -164,3 +164,36 @@ def create_subject(label: str, *child_nodes):
 
     # Return the ID for the newly created subject
     return subject_id
+
+
+def extract_case_keys_by_prefix(
+    case_data: dict[str, str], prefix: str, force_present: bool = False
+) -> list[str]:
+    """
+    Extract keys from a case_data dictionary where the given prefix
+    appears as a full word (split by "_"), case-insensitively.
+
+    Parameters
+    ----------
+    case_data : dict[str, str]
+        Dictionary containing keys like 'T2w_Volume', 'Lesion_Segmentation', etc.
+    prefix : str
+        The prefix to match exactly (e.g., "Volume", "Segmentation", "Markup").
+    force_present: bool
+        Whether to raise an error if no keys match the prefix.
+
+    Returns
+    -------
+    list[str]
+        Keys in case_data that contain the prefix as a full word.
+
+    """
+    prefix_lower = prefix.lower()
+    keys = [
+        k for k in case_data if prefix_lower in (part.lower() for part in k.split("_"))
+    ]
+    if not keys and force_present:
+        raise ValueError(
+            f"No keys found with prefix '{prefix}' in case_data: {case_data}"
+        )
+    return keys
