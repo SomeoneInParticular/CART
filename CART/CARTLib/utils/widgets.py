@@ -1,7 +1,8 @@
 from typing import Optional
 
 import ctk
-import qt, slicer
+import qt
+import slicer
 
 # The code below does actually work, but the Slicer widgets are only added
 #  to the namespace after slicer boots, hence the error suppression
@@ -18,6 +19,7 @@ class _NodeComboBoxProxy(qt.QComboBox):
     whether the node's its tracking have become hidden since it initialized. This is
     the only way to allow access to (and modification of
     """
+
     def __init__(self, bound_widget: slicer.qMRMLNodeComboBox, *args):
         super().__init__(*args)
 
@@ -113,6 +115,7 @@ class _NodeComboBoxProxy(qt.QComboBox):
     def showHidden(self, val: bool):
         self._bound_widget.showHidden = val
 
+
 class CARTSegmentationEditorWidget(
     qSlicerSegmentationsModuleWidgetsPythonQt.qMRMLSegmentEditorWidget
 ):
@@ -165,7 +168,7 @@ class CARTSegmentationEditorWidget(
 
         # By default, hide the "add/remove" segmentations button;
         # we assume a CART task will do that for us.
-        self.setAddRemoveSegmentButtonsVisible(False)
+        self.setAddRemoveSegmentButtonsVisible(True)
 
         # Likewise, we expect the task to select the most relevant "source" volume
         self.setSourceVolumeNodeSelectorVisible(False)
