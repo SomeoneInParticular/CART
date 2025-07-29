@@ -61,6 +61,17 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
             (k for k in self.segmentation_keys if "primary" in k.lower()),
             self.segmentation_keys[0],
         )
+        # Move primaries to the front of the list so they are auto-selected by the GUI
+        self.volume_keys.remove(self.primary_volume_key)
+        self.volume_keys = [
+            self.primary_volume_key,
+            *self.volume_keys
+        ]
+        self.segmentation_keys.remove(self.primary_segmentation_key)
+        self.segmentation_keys = [
+            self.primary_segmentation_key,
+            *self.segmentation_keys
+        ]
 
         # --- Build file paths ---
         self.volume_paths: dict[str, Path] = {
