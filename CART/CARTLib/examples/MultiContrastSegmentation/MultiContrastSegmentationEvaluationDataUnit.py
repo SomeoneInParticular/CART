@@ -218,7 +218,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         Then pick the primary segmentation.
         """
 
-        for key in self.segmentation_keys:
+        for i, key in enumerate(self.segmentation_keys):
             seg_path = self.segmentation_paths.get(key)
             if seg_path and seg_path.exists():
                 node = load_segmentation(seg_path)
@@ -232,8 +232,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
 
             node.SetName(f"{self.uid}_{key}")
             node.SetReferenceImageGeometryParameterFromVolumeNode(primary_vol)
-            # Setup the color table for the segmentation
-
+            # Set the colors of each segmentation
             if key == self.primary_segmentation_key:
                 node.GetDisplayNode().SetOpacity(1.0)
             else:
@@ -245,10 +244,17 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
                 )
                 # TODO MAKE THIS COLOR SETTING A UTIL FUNCTION AND MORE CONFIGURABLE
                 # display_node.SetOpacity(0.1)
-                for segment_id in segmentIds:
+                for i, segment_id in enumerate(segmentIds):
                     print(f"Setting color for segment {segment_id} in {key} ")
                     display_node.SetSegmentVisibility2DFill(segment_id, False)
                     display_node.SetSegmentVisibility2DOutline(segment_id, True)
+                    segment = node.GetSegmentation().GetSegment(segment_id)
+                    colors = slicer.util.getNode("GenericColors")
+                    lookup_table = colors.GetLookupTable()
+                    segment.SetColor(
+                        # Trim the last element (alpha)
+                        *lookup_table.GetTableValue(i+2)[:-1]
+                    )
                 else:
                     print(
                         f"Warning: Display node for {key} is None. Skipping color setup."
