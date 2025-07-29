@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 import ctk
 import qt
@@ -117,9 +117,12 @@ class MultiContrastSegmentationEvaluationGUI:
                 notif.exec()
 
     def _buildOutputModePrompt(self):
-        """Build the output mode selection dialog."""
+        """Build the output mode selection dialog with CSV logging option."""
+        from datetime import datetime
+        import csv
+
         prompt = qt.QDialog()
-        prompt.setWindowTitle("Select Output Mode")
+        prompt.setWindowTitle("Select Output Mode & Logging")
         layout = qt.QVBoxLayout()
         prompt.setLayout(layout)
 
@@ -169,11 +172,74 @@ class MultiContrastSegmentationEvaluationGUI:
         # Store references for enabling/disabling
         self.dirLabel = dirLabel
 
+        # Add separator
+        separator = qt.QFrame()
+        separator.setFrameShape(qt.QFrame.HLine)
+        separator.setFrameShadow(qt.QFrame.Sunken)
+        layout.addWidget(separator)
+
+        # CSV logging section with group box for better organization
+        csvGroupBox = qt.QGroupBox("Processing Log (CSV)")
+        csvGroupLayout = qt.QVBoxLayout()
+        csvGroupBox.setLayout(csvGroupLayout)
+
+        # CSV log option checkbox
+        self.enableCsvLogging = qt.QCheckBox("Enable centralized logging")
+        self.enableCsvLogging.setChecked(True)  # Default to enabled
+        self.enableCsvLogging.setToolTip(
+            "Log all processing activities to a CSV file for tracking"
+        )
+        csvGroupLayout.addWidget(self.enableCsvLogging)
+
+        # CSV file path selection
+        self.csvLogLabel = qt.QLabel(
+            "CSV log file (optional - auto-generated if empty):"
+        )
+
+        # Create horizontal layout for CSV path input and buttons
+        csvPathLayout = qt.QHBoxLayout()
+
+        self.csvLogEdit = ctk.ctkPathLineEdit()
+        self.csvLogEdit.setToolTip(
+            _(
+                "Optional: Specify custom CSV log file path. If empty, will be auto-generated."
+            )
+        )
+        self.csvLogEdit.filters = ctk.ctkPathLineEdit.Files
+        self.csvLogEdit.nameFilters = ["CSV files (*.csv)"]
+
+        # Add browse button for CSV file selection
+        self.csvBrowseButton = qt.QPushButton("Browse...")
+        self.csvBrowseButton.setToolTip("Browse for CSV log file location")
+        self.csvBrowseButton.clicked.connect(self._browseCsvLocation)
+        self.csvBrowseButton.setMaximumWidth(80)
+
+        # Add clear button to reset CSV path
+        self.csvClearButton = qt.QPushButton("Clear")
+        self.csvClearButton.setToolTip("Clear CSV path (will use auto-generated path)")
+        self.csvClearButton.clicked.connect(self._clearCsvLocation)
+        self.csvClearButton.setMaximumWidth(60)
+
+        # Set current CSV log path if available
+        if hasattr(self.bound_task, "csv_log_path") and self.bound_task.csv_log_path:
+            self.csvLogEdit.currentPath = str(self.bound_task.csv_log_path)
+
+        csvPathLayout.addWidget(self.csvLogEdit)
+        csvPathLayout.addWidget(self.csvBrowseButton)
+        csvPathLayout.addWidget(self.csvClearButton)
+
+        csvGroupLayout.addWidget(self.csvLogLabel)
+        csvGroupLayout.addLayout(csvPathLayout)
+
+        layout.addWidget(csvGroupBox)
+
         # Connect radio button changes to update UI
         parallelRadio.toggled.connect(self._onOutputModeChanged)
+        self.enableCsvLogging.toggled.connect(self._onCsvLoggingChanged)
 
         # Initial UI state
         self._onOutputModeChanged(parallelRadio.isChecked())
+        self._onCsvLoggingChanged(self.enableCsvLogging.isChecked())
 
         # Button box
         buttonBox = qt.QDialogButtonBox()
@@ -190,6 +256,98 @@ class MultiContrastSegmentationEvaluationGUI:
 
         return prompt
 
+    def _onCsvLoggingChanged(self, enabled: bool):
+        """Enable/disable CSV logging options based on checkbox."""
+        self.csvLogLabel.setEnabled(enabled)
+        self.csvLogEdit.setEnabled(enabled)
+        self.csvBrowseButton.setEnabled(enabled)
+        self.csvClearButton.setEnabled(enabled)
+
+    def _browseCsvLocation(self):
+        """Open file dialog to browse for CSV log file location."""
+        dialog = qt.QFileDialog()
+        dialog.setWindowTitle("Select CSV Log File Location")
+        dialog.setAcceptMode(qt.QFileDialog.AcceptSave)
+        dialog.setFileMode(qt.QFileDialog.AnyFile)
+        dialog.setNameFilter("CSV files (*.csv)")
+        dialog.setDefaultSuffix("csv")
+
+        # Set default filename if none exists
+        if not self.csvLogEdit.currentPath.strip():
+            # Generate default filename based on user and current date
+            default_name = f"segmentation_review_log_{self.bound_task.user}_{datetime.now().strftime('%Y%m%d')}.csv"
+            dialog.selectFile(default_name)
+        else:
+            # Use existing path as starting point
+            existing_path = Path(self.csvLogEdit.currentPath.strip())
+            if existing_path.parent.exists():
+                dialog.setDirectory(str(existing_path.parent))
+            dialog.selectFile(existing_path.name)
+
+        # Show dialog and update path if user selects a file
+        if dialog.exec():
+            selected_files = dialog.selectedFiles()
+            if selected_files:
+                selected_path = selected_files[0]
+                self.csvLogEdit.currentPath = selected_path
+
+    def _clearCsvLocation(self):
+        """Clear the CSV log file path."""
+        self.csvLogEdit.currentPath = ""
+
+    def _attemptOutputModeUpdate(self, prompt: qt.QDialog):
+        """
+        Validates and applies the selected output mode and path, including CSV logging.
+        """
+        # Get the selected mode
+        selected_id = self.outputModeGroup.checkedId()
+        if selected_id == 0:
+            selected_mode = OutputMode.PARALLEL_DIRECTORY
+        elif selected_id == 1:
+            selected_mode = OutputMode.OVERWRITE_ORIGINAL
+        else:
+            self._linkedPathErrorPrompt("Please select an output mode", prompt)
+            return
+
+        # Get CSV log path if enabled
+        csv_log_path = None
+        if self.enableCsvLogging.isChecked():
+            csv_path_str = self.csvLogEdit.currentPath.strip()
+            if csv_path_str:
+                csv_log_path = Path(csv_path_str)
+                # Validate CSV path parent directory exists
+                if not csv_log_path.parent.exists():
+                    err_msg = f"CSV log directory does not exist: {csv_log_path.parent}"
+                    self._linkedPathErrorPrompt(err_msg, prompt)
+                    return
+
+        # Handle parallel directory mode
+        if selected_mode == OutputMode.PARALLEL_DIRECTORY:
+            output_path_str = self.outputFileEdit.currentPath.strip()
+
+            if not output_path_str:
+                err_msg = "Output path was empty"
+                self._linkedPathErrorPrompt(err_msg, prompt)
+                return
+
+            output_path = Path(output_path_str)
+            err_msg = self.bound_task.set_output_mode(
+                selected_mode, output_path, csv_log_path
+            )
+        else:
+            # Overwrite original mode
+            err_msg = self.bound_task.set_output_mode(
+                selected_mode, csv_log_path=csv_log_path
+            )
+
+        # Check for errors
+        if err_msg:
+            self._linkedPathErrorPrompt(err_msg, prompt)
+            return
+
+        # Success - close the prompt
+        prompt.accept()
+
     def _onOutputModeChanged(self, parallel_selected: bool):
         """Enable/disable directory selection based on mode."""
         self.dirLabel.setEnabled(parallel_selected)
@@ -203,43 +361,6 @@ class MultiContrastSegmentationEvaluationGUI:
         failurePrompt.setWindowTitle("ERROR!")
         failurePrompt.showMessage(err_msg)
         failurePrompt.exec()
-
-    def _attemptOutputModeUpdate(self, prompt: qt.QDialog):
-        """
-        Validates and applies the selected output mode and path.
-        """
-        # Get the selected mode
-        selected_id = self.outputModeGroup.checkedId()
-        if selected_id == 0:
-            selected_mode = OutputMode.PARALLEL_DIRECTORY
-        elif selected_id == 1:
-            selected_mode = OutputMode.OVERWRITE_ORIGINAL
-        else:
-            self._linkedPathErrorPrompt("Please select an output mode", prompt)
-            return
-
-        # Handle parallel directory mode
-        if selected_mode == OutputMode.PARALLEL_DIRECTORY:
-            output_path_str = self.outputFileEdit.currentPath.strip()
-
-            if not output_path_str:
-                err_msg = "Output path was empty"
-                self._linkedPathErrorPrompt(err_msg, prompt)
-                return
-
-            output_path = Path(output_path_str)
-            err_msg = self.bound_task.set_output_mode(selected_mode, output_path)
-        else:
-            # Overwrite original mode
-            err_msg = self.bound_task.set_output_mode(selected_mode)
-
-        # Check for errors
-        if err_msg:
-            self._linkedPathErrorPrompt(err_msg, prompt)
-            return
-
-        # Success - close the prompt
-        prompt.accept()
 
     def update(self, data_unit: MultiContrastSegmentationEvaluationDataUnit) -> None:
         """
@@ -271,13 +392,11 @@ class MultiContrastSegmentationEvaluationGUI:
             msg = qt.QMessageBox()
             msg.setWindowTitle("Success!")
 
-            # Get success message from the output manager
+            # Get success message from the output manager (now includes CSV log info)
             success_message = self.bound_task.output_manager.get_success_message(
                 self.bound_task.data_unit
             )
             msg.setText(success_message)
-
-            msg.addButton(_("Confirm"), qt.QMessageBox.AcceptRole)
             msg.exec()
         else:
             errBox = qt.QErrorMessage()
@@ -307,6 +426,7 @@ class MultiContrastSegmentationEvaluationTask(
         self.output_dir: Optional[Path] = None
         self.output_manager: Optional[MultiContrastOutputManager] = None
         self.data_unit: Optional[MultiContrastSegmentationEvaluationDataUnit] = None
+        self.csv_log_path: Optional[Path] = None  # Optional custom CSV log path
 
     def setup(self, container: qt.QWidget) -> None:
         print(f"Running {self.__class__.__name__} setup!")
@@ -443,15 +563,35 @@ class MultiContrastSegmentationEvaluationTask(
         """
         return {"Segmentation": MultiContrastSegmentationEvaluationDataUnit}
 
+    def get_processing_summary(self) -> Optional[dict[str, Any]]:
+        """
+        Get a summary of all processing activities.
+        Returns None if no output manager is configured.
+        """
+        if self.output_manager:
+            return self.output_manager.get_processing_summary()
+        return None
+
+    def get_csv_log_path(self) -> Optional[Path]:
+        """Get the path to the CSV log file."""
+        if self.output_manager:
+            return self.output_manager.get_csv_log_path()
+        return None
+
     ## Utils ##
+
     def set_output_mode(
-        self, mode: OutputMode, output_path: Optional[Path] = None
+        self,
+        mode: OutputMode,
+        output_path: Optional[Path] = None,
+        csv_log_path: Optional[Path] = None,
     ) -> Optional[str]:
         """
-        Set the output mode and path if needed.
+        Set the output mode and path if needed, with optional CSV logging path.
         Returns error message if failed, None if successful.
         """
         self.output_mode = mode
+        self.csv_log_path = csv_log_path
 
         if mode == OutputMode.PARALLEL_DIRECTORY:
             if not output_path:
@@ -464,20 +604,25 @@ class MultiContrastSegmentationEvaluationTask(
             if not output_path.is_dir():
                 return f"Error: Output path is not a directory: {output_path}"
 
-            # Set up the consolidated output manager
+            # Set up the consolidated output manager with CSV tracking
             self.output_dir = output_path
             self.output_manager = MultiContrastOutputManager(
-                user=self.user, output_mode=mode, output_dir=output_path
+                user=self.user,
+                output_mode=mode,
+                output_dir=output_path,
+                csv_log_path=csv_log_path,
             )
             print(f"Output mode set to parallel directory: {self.output_dir}")
+            print(f"CSV log will be saved to: {self.output_manager.get_csv_log_path()}")
 
         elif mode == OutputMode.OVERWRITE_ORIGINAL:
-            # Set up the consolidated output manager
+            # Set up the consolidated output manager with CSV tracking
             self.output_dir = None
             self.output_manager = MultiContrastOutputManager(
-                user=self.user, output_mode=mode
+                user=self.user, output_mode=mode, csv_log_path=csv_log_path
             )
             print("Output mode set to overwrite original")
+            print(f"CSV log will be saved to: {self.output_manager.get_csv_log_path()}")
 
         return None
 
