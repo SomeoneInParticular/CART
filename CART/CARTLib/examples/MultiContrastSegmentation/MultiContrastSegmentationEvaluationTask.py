@@ -251,10 +251,6 @@ class MultiContrastSegmentationEvaluationGUI:
         self.segmentEditorWidget.setSegmentationNode(
             self.data_unit.primary_segmentation_node
         )
-        print(f"Orientation: {self.currentOrientation}")
-        print(
-            f"list(data_unit.volume_nodes.values()) = {list(self.data_unit.volume_nodes.values())}"
-        )
 
         # Apply the data unit's layout to our viewer
         self.data_unit.layout_handler.apply_layout()
