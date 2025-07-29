@@ -206,19 +206,16 @@ class MultiContrastSegmentationEvaluationGUI:
             )
         )
         self.csvLogEdit.filters = ctk.ctkPathLineEdit.Files
+        button = self.csvLogEdit.findChildren(qt.QToolButton)[0]
+        button.setText("Select Existing")
+
         self.csvLogEdit.nameFilters = ["CSV files (*.csv)"]
 
         # Add browse button for CSV file selection
-        self.csvBrowseButton = qt.QPushButton("Browse...")
-        self.csvBrowseButton.setToolTip("Browse for CSV log file location")
+        self.csvBrowseButton = qt.QPushButton("Add...")
+        self.csvBrowseButton.setToolTip("Add new CSV log file location")
         self.csvBrowseButton.clicked.connect(self._browseCsvLocation)
         self.csvBrowseButton.setMaximumWidth(80)
-
-        # Add clear button to reset CSV path
-        self.csvClearButton = qt.QPushButton("Clear")
-        self.csvClearButton.setToolTip("Clear CSV path (will use auto-generated path)")
-        self.csvClearButton.clicked.connect(self._clearCsvLocation)
-        self.csvClearButton.setMaximumWidth(60)
 
         # Set current CSV log path if available
         if hasattr(self.bound_task, "csv_log_path") and self.bound_task.csv_log_path:
@@ -226,7 +223,6 @@ class MultiContrastSegmentationEvaluationGUI:
 
         csvPathLayout.addWidget(self.csvLogEdit)
         csvPathLayout.addWidget(self.csvBrowseButton)
-        csvPathLayout.addWidget(self.csvClearButton)
 
         csvGroupLayout.addWidget(self.csvLogLabel)
         csvGroupLayout.addLayout(csvPathLayout)
@@ -261,7 +257,6 @@ class MultiContrastSegmentationEvaluationGUI:
         self.csvLogLabel.setEnabled(enabled)
         self.csvLogEdit.setEnabled(enabled)
         self.csvBrowseButton.setEnabled(enabled)
-        self.csvClearButton.setEnabled(enabled)
 
     def _browseCsvLocation(self):
         """Open file dialog to browse for CSV log file location."""
@@ -290,10 +285,6 @@ class MultiContrastSegmentationEvaluationGUI:
             if selected_files:
                 selected_path = selected_files[0]
                 self.csvLogEdit.currentPath = selected_path
-
-    def _clearCsvLocation(self):
-        """Clear the CSV log file path."""
-        self.csvLogEdit.currentPath = ""
 
     def _attemptOutputModeUpdate(self, prompt: qt.QDialog):
         """
