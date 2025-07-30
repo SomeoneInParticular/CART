@@ -502,3 +502,19 @@ class MultiContrastSegmentationEvaluationTask(
             print(f"CSV log will be saved to: {self.output_manager.get_csv_log_path()}")
 
         return None
+
+    def save(self) -> Optional[str]:
+        """
+        Save the current segmentation using the output manager.
+        """
+        if self.output_manager.can_save(self.data_unit):
+            # Have the output manager save the result
+            # TODO handle the case where the original file doesn't exist And we are in "Overwrite Original" mode
+            result = self.output_manager.save_segmentation(self.data_unit)
+            # If we have a GUI, have it provide the appropriate response to the user
+            if self.gui:
+                self.gui.saveCompletePrompt(result)
+            # Return the result for further use
+            return result
+        else:
+            return "Could not save!"

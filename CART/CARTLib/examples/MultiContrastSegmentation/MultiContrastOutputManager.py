@@ -237,6 +237,9 @@ class MultiContrastOutputManager:
     ) -> tuple[Path, Path]:
         """Get destinations for overwrite original mode."""
         segmentation_path = data_unit.get_primary_segmentation_path()
+        if segmentation_path is None:
+            # If no segmentation path is found, prompt user for save location
+            segmentation_path = self._promptForSaveLocation(data_unit)
         sidecar_path = (
             segmentation_path.parent / f"{segmentation_path.name.split('.')[0]}.json"
         )
@@ -310,6 +313,29 @@ class MultiContrastOutputManager:
         # Get the base filename without extension from the segmentation path
         fname = str(data_unit.get_primary_segmentation_path()).split(".")[0]
         return Path(f"{fname}.json")
+
+    def _promptForSaveLocation(self, data_unit) -> Optional[str]:
+        """
+        Prompt user for save location when original file doesn't exist.
+        """
+        prompt = qt.QFileDialog()
+        prompt.setWindowTitle("Select Save Location")
+        prompt.setAcceptMode(qt.QFileDialog.AcceptSave)
+        prompt.setFileMode(qt.QFileDialog.AnyFile)
+
+        # Set default filename based on data unit
+        default_name = f"{data_unit.uid}_seg.nii.gz"
+        prompt.selectFile(default_name)
+
+        if prompt.exec():
+            selected_files = prompt.selectedFiles()
+            if selected_files:
+                save_path = Path(selected_files[0])
+                return save_path.as_posix()
+        # If user cancels or no file is selected, return None
+        slicer.util.warningDisplay("No save location selected. Please try again.")
+
+        return None
 
     def can_save(
         self, data_unit: Optional[MultiContrastSegmentationEvaluationDataUnit]
