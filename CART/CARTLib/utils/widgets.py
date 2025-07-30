@@ -170,8 +170,7 @@ class CARTSegmentationEditorWidget(
         # we assume a CART task will do that for us.
         self.setAddRemoveSegmentButtonsVisible(True)
 
-        # Likewise, we expect the task to select the most relevant "source" volume
-        self.setSourceVolumeNodeSelectorVisible(False)
+        # We expect the task to select the most relevant "source" volume
 
         # Hide "swap to Segmentations Button" as well
         self.setSwitchToSegmentationsButtonVisible(False)
