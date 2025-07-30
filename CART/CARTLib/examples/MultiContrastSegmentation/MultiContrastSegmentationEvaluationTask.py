@@ -503,18 +503,27 @@ class MultiContrastSegmentationEvaluationTask(
 
         return None
 
+    def can_save(self):
+        # If we don't have a data unit or output manager, we can't even consider saving
+        if not self.data_unit or not self.output_manager:
+            return False
+        # Otherwise, check with our output manager
+        return self.output_manager.can_save(self.data_unit)
+
     def save(self) -> Optional[str]:
         """
         Save the current segmentation using the output manager.
         """
-        if self.output_manager.can_save(self.data_unit):
-            # Have the output manager save the result
-            # TODO handle the case where the original file doesn't exist And we are in "Overwrite Original" mode
-            result = self.output_manager.save_segmentation(self.data_unit)
-            # If we have a GUI, have it provide the appropriate response to the user
-            if self.gui:
-                self.gui.saveCompletePrompt(result)
-            # Return the result for further use
-            return result
-        else:
+        # If we can't save, just return early
+        # TODO improve how descriptive this error is
+        if not self.can_save():
             return "Could not save!"
+        # Have the output manager save the result
+        # TODO handle the case where the original file doesn't exist And we are in "Overwrite Original" mode
+        result = self.output_manager.save_segmentation(self.data_unit)
+        # If we have a GUI, have it provide the appropriate response to the user
+        if self.gui:
+            self.gui.saveCompletePrompt(result)
+        # Return the result for further use
+        return result
+
