@@ -386,25 +386,3 @@ class MultiContrastOutputManager:
     def get_csv_log_path(self) -> Path:
         """Get the path to the CSV log file."""
         return self.csv_log_path
-
-    def get_processing_summary(self) -> dict[str, Any]:
-        """Get a summary of all processing activities from the CSV log."""
-        if not self.csv_log_path.exists():
-            return {"total_processed": 0, "by_author": {}, "by_mode": {}}
-
-        summary = {"total_processed": 0, "by_author": {}, "by_mode": {}}
-
-        with open(self.csv_log_path, newline="") as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
-                summary["total_processed"] += 1
-
-                # Count by author
-                author = row.get("author", "unknown")
-                summary["by_author"][author] = summary["by_author"].get(author, 0) + 1
-
-                # Count by mode
-                mode = row.get("output_mode", "unknown")
-                summary["by_mode"][mode] = summary["by_mode"].get(mode, 0) + 1
-
-        return summary
