@@ -31,6 +31,18 @@ class MultiContrastOutputManager:
     Now includes CSV tracking for centralized logging of all completed data.
     """
 
+    HEADERS = [
+        "uid",
+        "author",
+        "timestamp",
+        "output_mode",
+        "segmentation_path",
+        "sidecar_path",
+        "original_segmentation_path",
+        "version",
+        "processing_notes",
+    ]
+
     def __init__(
         self,
         user: str,
@@ -75,23 +87,12 @@ class MultiContrastOutputManager:
         """Ensure the CSV log file exists with proper headers."""
         if not self.csv_log_path.exists():
             # Create the CSV file with headers
-            headers = [
-                "uid",
-                "author",
-                "timestamp",
-                "output_mode",
-                "segmentation_path",
-                "sidecar_path",
-                "original_segmentation_path",
-                "version",
-                "processing_notes",
-            ]
 
             # Create parent directory if it doesn't exist
             self.csv_log_path.parent.mkdir(parents=True, exist_ok=True)
 
             with open(self.csv_log_path, "w", newline="") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=headers)
+                writer = csv.DictWriter(csvfile, fieldnames=self.HEADERS)
                 writer.writeheader()
 
     def save_segmentation(
@@ -236,7 +237,11 @@ class MultiContrastOutputManager:
     ) -> tuple[Path, Path]:
         """Get destinations for overwrite original mode."""
         segmentation_path = data_unit.get_primary_segmentation_path()
-        sidecar_path = segmentation_path.with_suffix(".json")
+        sidecar_path = (
+            segmentation_path.parent / f"{segmentation_path.name.split('.')[0]}.json"
+        )
+        # Assumes there are not any "." in the filename, which is a reasonable assumption for segmentation files.
+        # Now will be able to suppoort both .nii.gz, .nii files, and .nrrd files ect.
         return segmentation_path, sidecar_path
 
     @staticmethod
