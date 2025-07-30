@@ -382,7 +382,3 @@ class MultiContrastOutputManager:
                 f"Segmentation '{data_unit.uid}' saved over original file.\n\n"
                 f"Processing logged to: {self.csv_log_path.resolve()}"
             )
-
-    def get_csv_log_path(self) -> Path:
-        """Get the path to the CSV log file."""
-        return self.csv_log_path

@@ -490,7 +490,7 @@ class MultiContrastSegmentationEvaluationTask(
                 csv_log_path=csv_log_path,
             )
             print(f"Output mode set to parallel directory: {self.output_dir}")
-            print(f"CSV log will be saved to: {self.output_manager.get_csv_log_path()}")
+            print(f"CSV log will be saved to: {self.output_manager.csv_log_path}")
 
         elif mode == OutputMode.OVERWRITE_ORIGINAL:
             # Set up the consolidated output manager with CSV tracking
@@ -499,7 +499,7 @@ class MultiContrastSegmentationEvaluationTask(
                 user=self.user, output_mode=mode, csv_log_path=csv_log_path
             )
             print("Output mode set to overwrite original")
-            print(f"CSV log will be saved to: {self.output_manager.get_csv_log_path()}")
+            print(f"CSV log will be saved to: {self.output_manager.csv_log_path}")
 
         return None
 
@@ -526,4 +526,3 @@ class MultiContrastSegmentationEvaluationTask(
             self.gui.saveCompletePrompt(result)
         # Return the result for further use
         return result
-
