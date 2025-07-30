@@ -166,8 +166,6 @@ class CARTSegmentationEditorWidget(
         self.editor_node = None
         self._set_up_editor_node()
 
-        # By default, hide the "add/remove" segmentations button;
-        # we assume a CART task will do that for us.
         self.setAddRemoveSegmentButtonsVisible(True)
 
         # Likewise, we expect the task to select the most relevant "source" volume
