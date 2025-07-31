@@ -46,11 +46,22 @@ class CohortGeneratorWindow(qt.QDialog):
         layout.addLayout(controls_layout)
 
         button_layout = qt.QHBoxLayout()
+
+        # If a preious cohort file was generated, give the option to override
+        self.override_previous_cohort_file_toggle_button = qt.QCheckBox("Override Previous Cohort File ?")
+        self.override_previous_cohort_file_toggle_button.setEnabled(self.logic.previous_cohort_path is not None)
+
+        print("PREVIOUS COHORT PATH")
+        print(self.logic.previous_cohort_path)
+
         self.apply_button = qt.QPushButton("Save and Apply")
         self.cancel_button = qt.QPushButton("Cancel")
+
         button_layout.addStretch()
         button_layout.addWidget(self.apply_button)
         button_layout.addWidget(self.cancel_button)
+        button_layout.addWidget(self.override_previous_cohort_file_toggle_button)
+
         layout.addLayout(button_layout)
 
     def build_load_options_groupbox(self):
@@ -67,6 +78,9 @@ class CohortGeneratorWindow(qt.QDialog):
 
         layout.addRow("Exclude Extensions:", self.excluded_ext_input)
         layout.addRow(self.rescan_button)
+
+        # Temporarily disable
+        groupbox.setEnabled(False)
 
         return groupbox
 
@@ -94,9 +108,6 @@ class CohortGeneratorWindow(qt.QDialog):
         layout.addRow("Target Column:", self.target_column_combo)
         layout.addRow("New Column Name:", self.new_column_name_input)
         layout.addWidget(self.apply_filter_button)
-
-        # Temporarily disable
-        groupbox.setEnabled(False)
 
         return groupbox
 
@@ -126,7 +137,7 @@ class CohortGeneratorWindow(qt.QDialog):
         self.table_widget.setHorizontalHeaderLabels([""] + headers)
 
         # Create column checkboxes in header row (row 0)
-        for c_idx in range(num_cols):
+        for c_idx in range(1, num_cols):
             self._create_checkbox(0, c_idx + 1, self.handle_column_toggle,
                                 self.logic.is_column_enabled(c_idx), is_header=True)
 
@@ -189,17 +200,22 @@ class CohortGeneratorWindow(qt.QDialog):
         """
         for row in range(self.logic.get_case_count()):
             item = self.table_widget.item(row + 1, 1)
-            if item:
+            if item and self.logic.is_row_enabled(row):
                 item.setBackground(qt.QColor("#8f6ae7"))
 
     ### Connection signals ###
     def connect_signals(self):
+        """
+        Connect
+        """
+        self.override_previous_cohort_file_toggle_button.stateChanged.connect(self.on_toggle_override_previous_cohort_file)
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
         self.rescan_button.clicked.connect(self.on_rescan)
         self.apply_filter_button.clicked.connect(self.on_apply_filter)
         self.target_column_combo.currentTextChanged.connect(self.on_target_column_changed)
         self.table_widget.horizontalHeader().sectionDoubleClicked.connect(self.on_header_double_clicked)
+
 
     ### Callback functions ###
     def on_rescan(self):
@@ -210,6 +226,10 @@ class CohortGeneratorWindow(qt.QDialog):
         self.logic.load_cohort_data(self.logic.data_path, ext_to_exclude)
         self.logic.clear_filters()
         self.update_ui_from_logic()
+
+    def on_toggle_override_previous_cohort_file(self):
+        is_checked = self.override_previous_cohort_file_toggle_button.isChecked()
+        self.logic.override_previous_cohort_file = is_checked
 
     def on_apply_filter(self):
         """
@@ -227,7 +247,7 @@ class CohortGeneratorWindow(qt.QDialog):
             self.exclude_input.clear()
             self.new_column_name_input.clear()
         else:
-            qt.QMessageBox.warning(self, "Filter Error", "Could not apply filter. Ensure you provide an 'Include' substring and a unique 'New Column Name' if creating a new column.")
+            qt.QMessageBox.warning(self, "Filter Error", "Could not apply filters. Your filters either contradict or no results yielded from your filters. Provide a unique 'New Column Name' if creating a new column.")
 
     def on_target_column_changed(self, text):
         """
@@ -251,6 +271,10 @@ class CohortGeneratorWindow(qt.QDialog):
         self.logic.toggle_row(logical_row_idx, is_enabled)
         self._update_row_visuals(table_row_idx, is_enabled)
 
+        # Make sure the coloring comes back for the uid column
+        self.highlight_uid_col()
+
+
     def handle_column_toggle(self, col_idx, is_enabled):
         self.logic.toggle_column(col_idx, is_enabled)
         self.update_all_visuals()
@@ -262,6 +286,13 @@ class CohortGeneratorWindow(qt.QDialog):
             if item:
                 item.setBackground(color)
 
+    def _update_col_visuals(self, table_col, is_enabled):
+        color = self.palette.color(qt.QPalette.Base) if is_enabled else qt.QColor(qt.Qt.lightGray)
+        for row in range(self.logic.get_case_count()):
+            item = self.table_widget.item(row + 1, table_col)
+            if item:
+                item.setBackground(color)
+
     def update_all_visuals(self):
         # Update row visuals (table rows start at index 1)
         for r_idx in range(self.logic.get_case_count()):
@@ -270,8 +301,8 @@ class CohortGeneratorWindow(qt.QDialog):
 
         # Update column visibility
         for c_idx, header in enumerate(self.logic.get_headers()):
-            is_enabled = self.logic.is_column_enabled(c_idx)
-            self.table_widget.setColumnHidden(c_idx + 1, not is_enabled)
+            table_col = c_idx + 1
+            self._update_col_visuals(table_col, self.logic.is_column_enabled(c_idx))
 
         # Highlight uid column
         self.highlight_uid_col()
@@ -303,6 +334,10 @@ class CohortGeneratorLogic:
         else:
             if self.cohort_data:
                 self.headers = list(self.cohort_data[0].keys())
+
+        # Location of the saved auto-generated cohort CSV file - also the path returned to the main widget
+        self.previous_cohort_path = None
+        self.override_previous_cohort_file: bool = False
 
     def _scan_filesystem(self, excluded_extensions=None):
         """
@@ -370,11 +405,13 @@ class CohortGeneratorLogic:
         if is_enabled: self.disabled_columns.discard(col_index)
         else: self.disabled_columns.add(col_index)
 
+        print("DISABLED COLUMNS")
+        print(self.disabled_columns)
+
     def is_column_enabled(self, col_index):
         return col_index not in self.disabled_columns
 
     def apply_filter(self, include, exclude, target_col, new_col_name):
-        if not include: return False
         is_new = (target_col == "Create New Column")
         if is_new:
             if not new_col_name or new_col_name in self.headers: return False
@@ -383,28 +420,41 @@ class CohortGeneratorLogic:
         else:
             col_name = target_col
 
+        # One of the flags to test the filters
+        found_match_in_root = False
+
         for i, row in enumerate(self.cohort_data):
             case_id = row['uid']
             found_match = False
             for file_path in self.all_files_by_case.get(case_id, []):
                 has_includes = all(inc in file_path for inc in include)
                 has_excludes = any(exc in file_path for exc in exclude)
+
+                # This would load the first encountered resource within a case folder
                 if has_includes and not has_excludes:
                     self.cohort_data[i][col_name] = file_path
                     found_match = True
+
+                    # If a single match throughout the entire dataset is found, no error should be raised
+                    found_match_in_root = True
                     break
+
             if not found_match and col_name not in self.cohort_data[i]:
                  self.cohort_data[i][col_name] = ''
+
+        # This means that the set filters are either contradicting or yield nothing
+        if not found_match_in_root:
+            return False
 
         return True
 
     def apply_changes(self):
+        """
+        Close the popup window and save the generated cohort file
+        """
         final_data = []
         enabled_headers = [h for i, h in enumerate(self.headers) if self.is_column_enabled(i)]
         final_data.append(enabled_headers)
-
-        print("DISABLED ROWS")
-        print(self.disabled_rows)
 
         # Build the filtered data
         filtered_cohort_data = []
@@ -427,9 +477,36 @@ class CohortGeneratorLogic:
         self.disabled_columns.clear()
 
         # Save to CSV
-        dir_path = self.data_path / "code"
+        dir_path = Path(self.data_path / "code")
         dir_path.mkdir(parents=True, exist_ok=True)
-        self.cohort_path = Path(dir_path / "cohort.csv")
-        with open(self.cohort_path, 'w', newline='') as csvfile:
+        #cohort_path = Path(dir_path / "cohort.csv")
+
+        self._write_to_csv(dir_path, final_data)
+
+    ###  CSV cohort file generation ###
+    def _write_to_csv(self, dir_path, csv_data) -> None:
+        """
+        Write to CSV file
+        """
+        override: bool = self.override_previous_cohort_file
+
+        cohort_path = self.previous_cohort_path
+
+        if not override:
+            index = self._determine_next_cohort_filename(dir_path)
+            cohort_name = "cohort" + str(index) + ".csv"
+            cohort_path = Path(dir_path / cohort_name)
+
+        # Update the previous cohort path
+        self.previous_cohort_path = cohort_path
+
+        with open(cohort_path, 'w', newline='') as csvfile:
             csv_writer = csv.writer(csvfile)
-            csv_writer.writerows(final_data)
+            csv_writer.writerows(csv_data)
+
+
+    def _determine_next_cohort_filename(self, dir_path) -> int:
+        return sum(
+            1 for file in dir_path.iterdir()
+            if file.is_file() and file.name.lower().startswith("cohort") and file.suffix.lower() == ".csv"
+        )
