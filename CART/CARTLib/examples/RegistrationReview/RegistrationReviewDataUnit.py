@@ -1,23 +1,15 @@
-from pathlib import Path
-from typing import Optional
-import itertools
-
 import slicer
-from CARTLib.core.DataUnitBase import DataUnitBase
+
+
+from pathlib import Path
+
+
 from CARTLib.examples.MultiContrastSegmentation.MultiContrastSegmentationEvaluationDataUnit import (
     MultiContrastSegmentationEvaluationDataUnit,
 )
 from CARTLib.utils.data import (
     load_segmentation,
-    load_volume,
-    create_subject,
-    load_markups,
-    extract_case_keys_by_prefix,
-    create_empty_segmentation_node,
-    parse_segmentations,
-    parse_markups,
 )
-from CARTLib.utils.layout import LayoutHandler, Orientation
 
 
 class RegistrationReviewDataUnit(MultiContrastSegmentationEvaluationDataUnit):
@@ -31,7 +23,8 @@ class RegistrationReviewDataUnit(MultiContrastSegmentationEvaluationDataUnit):
         self,
         case_data: dict[str, str],
         data_path: Path,
-        scene: Optional[slicer.vtkMRMLScene] = None,
+        scene: slicer.vtkMRMLScene = slicer.mrmlScene,  # Scene is NOT optional.
+        # Default scene is the global MRML scene, which is always available.
     ):
         super().__init__(case_data, data_path, scene)
 
