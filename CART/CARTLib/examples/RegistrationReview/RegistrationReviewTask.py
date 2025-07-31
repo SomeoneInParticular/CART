@@ -184,7 +184,7 @@ class RegistrationReviewGUI:
         buttonBox.rejected.connect(prompt.reject)
 
         # Resize for better appearance
-        prompt.resize(450, prompt.minimumHeight())
+        prompt.resize(450, prompt.minimumHeight)
 
         return prompt
 
