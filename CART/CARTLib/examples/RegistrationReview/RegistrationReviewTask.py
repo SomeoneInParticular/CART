@@ -35,6 +35,9 @@ class RegistrationReviewGUI:
         self.registrationClassificationGroup: Optional[qt.QButtonGroup] = None
         self.selectedClassification: Optional[str] = None
 
+        # Review status tracking
+        self.reviewStatusLabel: Optional[qt.QLabel] = None
+
     def setup(self) -> qt.QFormLayout:
         """
         Build the GUI's contents, returning the resulting layout for use.
@@ -42,19 +45,30 @@ class RegistrationReviewGUI:
         # Initialize the layout we'll insert everything into
         formLayout = qt.QFormLayout()
 
-        # 1) Orientation buttons
+        # 1) Review status display
+        self._addReviewStatusDisplay(formLayout)
+
+        # 2) Orientation buttons
         self._addOrientationButtons(formLayout)
 
-        # 2) Registration classification options
+        # 3) Registration classification options
         self._addClassificationButtons(formLayout)
 
-        # 3) CSV output selection
+        # 4) CSV output selection
         self._addCsvSelectionButton(formLayout)
 
         # Prompt for initial CSV setup
         self.promptSelectCsvOutput()
 
         return formLayout
+
+    def _addReviewStatusDisplay(self, layout: qt.QFormLayout) -> None:
+        """
+        Display current review status for this case.
+        """
+        self.reviewStatusLabel = qt.QLabel("Review Status: Not checked")
+        self.reviewStatusLabel.setStyleSheet("QLabel { font-weight: bold; }")
+        layout.addRow(self.reviewStatusLabel)
 
     def _addOrientationButtons(self, layout: qt.QFormLayout) -> None:
         """
@@ -300,6 +314,55 @@ class RegistrationReviewGUI:
         if hasattr(self.data_unit, "layout_handler"):
             self.data_unit.layout_handler.apply_layout()
 
+        # Update review status and classification for this case
+        self._updateReviewStatus()
+
+    def _updateReviewStatus(self) -> None:
+        """Update the review status display and classification selection for current case."""
+        if not self.data_unit or not self.bound_task.csv_log_path:
+            if self.reviewStatusLabel:
+                self.reviewStatusLabel.setText("Review Status: Not checked")
+            return
+
+        # Get review status from CSV
+        review_info = self.bound_task.get_review_status(self.data_unit.uid)
+
+        if review_info:
+            # Case has been reviewed
+            status_text = f"Review Status: ✓ Reviewed ({review_info['registration_classification']})"
+            self.reviewStatusLabel.setText(status_text)
+            self.reviewStatusLabel.setStyleSheet(
+                "QLabel { font-weight: bold; color: green; }"
+            )
+
+            # Set the classification selection to match existing review
+            self._setClassificationSelection(review_info["registration_classification"])
+        else:
+            # Case not yet reviewed
+            self.reviewStatusLabel.setText("Review Status: ✗ Not reviewed")
+            self.reviewStatusLabel.setStyleSheet(
+                "QLabel { font-weight: bold; color: red; }"
+            )
+
+            # Clear classification selection
+            if self.registrationClassificationGroup:
+                self.registrationClassificationGroup.setExclusive(False)
+                for button in self.registrationClassificationGroup.buttons():
+                    button.setChecked(False)
+                self.registrationClassificationGroup.setExclusive(True)
+                self.selectedClassification = None
+
+    def _setClassificationSelection(self, classification: str) -> None:
+        """Set the radio button selection to match the given classification."""
+        if not self.registrationClassificationGroup:
+            return
+
+        for button in self.registrationClassificationGroup.buttons():
+            if button.text == classification:
+                button.setChecked(True)
+                self.selectedClassification = classification
+                break
+
     ## GUI SYNCHRONIZATION ##
     def enter(self) -> None:
         """Called when entering the task."""
@@ -328,6 +391,9 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
         # Current data unit
         self.data_unit: Optional[RegistrationReviewDataUnit] = None
 
+        # Review status cache
+        self._review_status_cache: Optional[dict] = None
+
     def setup(self, container: qt.QWidget):
         """Set up the GUI for this task."""
         print(f"Running {self.__class__.__name__} setup!")
@@ -350,6 +416,10 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
         """Receive a new data unit for review."""
         # Track the data unit for later
         self.data_unit = data_unit
+
+        # Update GUI if it exists
+        if self.gui:
+            self.gui.update(data_unit)
 
     def cleanup(self):
         """Clean up resources when task is destroyed."""
@@ -431,6 +501,39 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
             print(error_msg)
             return error_msg
 
+    def get_review_status(self, uid: str) -> Optional[dict]:
+        """Get review status for a specific UID from the CSV file."""
+        if not self.csv_log_path or not self.csv_log_path.exists():
+            return None
+
+        try:
+            with open(self.csv_log_path, newline="") as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    if row.get("uid") == uid and row.get("user") == self.user:
+                        return row
+            return None
+        except Exception as e:
+            print(f"Error reading review status: {str(e)}")
+            return None
+
+    def _load_review_status_cache(self) -> dict:
+        """Load all review statuses into cache for efficient lookup."""
+        if not self.csv_log_path or not self.csv_log_path.exists():
+            return {}
+
+        cache = {}
+        try:
+            with open(self.csv_log_path, newline="") as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    if row.get("user") == self.user:
+                        cache[row.get("uid")] = row
+        except Exception as e:
+            print(f"Error loading review status cache: {str(e)}")
+
+        return cache
+
     def can_save(self) -> bool:
         """Check if we can save the current registration review."""
         return self.csv_log_path is not None and self.data_unit is not None
@@ -456,6 +559,9 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
                 with open(csv_path, "w", newline="") as csvfile:
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                     writer.writeheader()
+
+            # Clear the review status cache when CSV path changes
+            self._review_status_cache = None
 
             return None  # Success
 
