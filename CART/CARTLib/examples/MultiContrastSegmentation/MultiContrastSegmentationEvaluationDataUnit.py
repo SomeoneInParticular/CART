@@ -29,7 +29,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
     COMPLETED_KEY = "completed"
     COMPLETED_BY_KEY = "completed_by"
 
-    DEFAULT_ORIENTATION = Orientation.TRIO
+    DEFAULT_ORIENTATION = Orientation.AXIAL
 
     def __init__(
         self,
