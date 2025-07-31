@@ -38,6 +38,10 @@ class RegistrationReviewGUI:
         # Review status tracking
         self.reviewStatusLabel: Optional[qt.QLabel] = None
 
+        # Opacity control
+        self.opacitySlider: Optional[qt.QSlider] = None
+        self.opacityLabel: Optional[qt.QLabel] = None
+
     def setup(self) -> qt.QFormLayout:
         """
         Build the GUI's contents, returning the resulting layout for use.
@@ -51,10 +55,13 @@ class RegistrationReviewGUI:
         # 2) Orientation buttons
         self._addOrientationButtons(formLayout)
 
-        # 3) Registration classification options
+        # 3) Opacity control slider
+        self._addOpacityControl(formLayout)
+
+        # 4) Registration classification options
         self._addClassificationButtons(formLayout)
 
-        # 4) CSV output selection
+        # 5) CSV output selection
         self._addCsvSelectionButton(formLayout)
 
         # Prompt for initial CSV setup
@@ -81,6 +88,56 @@ class RegistrationReviewGUI:
             btn.clicked.connect(lambda _, o=orientation: self.onOrientationChanged(o))
             hbox.addWidget(btn)
         layout.addRow(qt.QLabel("View Orientation:"), hbox)
+
+    def _addOpacityControl(self, layout: qt.QFormLayout) -> None:
+        """
+        Slider to control foreground/background opacity focus.
+        """
+        # Create a horizontal layout for the opacity controls
+        opacityLayout = qt.QHBoxLayout()
+
+        # Create the slider
+        self.opacitySlider = qt.QSlider(qt.Qt.Horizontal)
+        self.opacitySlider.setMinimum(0)
+        self.opacitySlider.setMaximum(100)
+        self.opacitySlider.setValue(50)  # Default to 50% opacity
+        self.opacitySlider.setTickPosition(qt.QSlider.TicksBelow)
+        self.opacitySlider.setTickInterval(25)
+        self.opacitySlider.valueChanged.connect(self.onOpacityChanged)
+
+        # Create the label to show current opacity value
+        self.opacityLabel = qt.QLabel("50%")
+        self.opacityLabel.setMinimumWidth(40)
+        self.opacityLabel.setAlignment(qt.Qt.AlignCenter)
+
+        # Add labels for background and foreground focus
+        backgroundLabel = qt.QLabel("Background Focus")
+        backgroundLabel.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        backgroundLabel.setAlignment(qt.Qt.AlignLeft)
+
+        foregroundLabel = qt.QLabel("Foreground Focus")
+        foregroundLabel.setStyleSheet("QLabel { font-size: 10px; color: gray; }")
+        foregroundLabel.setAlignment(qt.Qt.AlignRight)
+
+        # Create a vertical layout for the slider and labels
+        sliderVLayout = qt.QVBoxLayout()
+
+        # Add focus labels layout
+        focusLayout = qt.QHBoxLayout()
+        focusLayout.addWidget(backgroundLabel)
+        focusLayout.addStretch()
+        focusLayout.addWidget(foregroundLabel)
+        sliderVLayout.addLayout(focusLayout)
+
+        # Add slider
+        sliderVLayout.addWidget(self.opacitySlider)
+
+        # Add to main opacity layout
+        opacityLayout.addLayout(sliderVLayout)
+        opacityLayout.addWidget(self.opacityLabel)
+
+        # Add to form layout with a descriptive label
+        layout.addRow(qt.QLabel("Volume Focus:"), opacityLayout)
 
     def _addClassificationButtons(self, layout: qt.QFormLayout) -> None:
         """
@@ -142,6 +199,18 @@ class RegistrationReviewGUI:
         # Apply the layout if data unit has layout handler
         if hasattr(self.data_unit, "layout_handler"):
             self.data_unit.layout_handler.apply_layout()
+
+    def onOpacityChanged(self, value: int) -> None:
+        """Handle opacity slider changes."""
+        # Convert slider value (0-100) to opacity (0.0-1.0)
+        opacity = value / 100.0
+
+        # Update the label
+        self.opacityLabel.setText(f"{value}%")
+
+        # Update the data unit's opacity if available
+        if self.data_unit and hasattr(self.data_unit, "set_foreground_opacity"):
+            self.data_unit.set_foreground_opacity(opacity)
 
     def onClassificationChanged(self, classification: str) -> None:
         """Handle registration classification selection."""

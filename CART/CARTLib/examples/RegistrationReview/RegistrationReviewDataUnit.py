@@ -10,6 +10,7 @@ from CARTLib.examples.MultiContrastSegmentation.MultiContrastSegmentationEvaluat
 from CARTLib.utils.data import (
     load_segmentation,
 )
+from CARTLib.utils.layout import LayoutHandler, Orientation
 
 
 class RegistrationReviewDataUnit(MultiContrastSegmentationEvaluationDataUnit):
@@ -27,6 +28,7 @@ class RegistrationReviewDataUnit(MultiContrastSegmentationEvaluationDataUnit):
         # Default scene is the global MRML scene, which is always available.
     ):
         super().__init__(case_data, data_path, scene)
+        self.set_orientation(Orientation.AXIAL)
 
     def _init_segmentation_nodes(self) -> None:
         """
@@ -84,3 +86,8 @@ class RegistrationReviewDataUnit(MultiContrastSegmentationEvaluationDataUnit):
         self.primary_segmentation_node = self.segmentation_nodes[
             self.primary_segmentation_key
         ]
+
+    def set_foreground_opacity(self, opacity: float):
+        """Set the foreground opacity for the layout handler."""
+        if hasattr(self, "layout_handler"):
+            self.layout_handler.set_foreground_opacity(opacity)

@@ -87,7 +87,8 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         # cleaned up on a per-unit basis.
         self.layout_handler: LayoutHandler = LayoutHandler(
             list(self.volume_nodes.values()),
-            self.DEFAULT_ORIENTATION,
+            primary_volume_node=self.primary_volume_node,
+            orientation=self.DEFAULT_ORIENTATION,
         )
 
     def get_primary_segmentation_path(self) -> Optional[Path]:
