@@ -302,7 +302,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Make it accessible
         self.dataPathSelectionWidget = dataPathSelectionWidget
 
-
     def buildCohortUI(self, mainLayout: qt.QFormLayout):
         # Auto-generator window button
         self.cohortGeneratorButton = qt.QPushButton(_("Auto-generate cohort file"))

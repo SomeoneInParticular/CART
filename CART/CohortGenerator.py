@@ -1,5 +1,3 @@
-# CohortGenerator.py
-
 import csv
 from pathlib import Path
 from typing import *
@@ -9,7 +7,11 @@ import qt
 from slicer.i18n import tr as _
 
 class CohortGeneratorWindow(qt.QDialog):
-    """GUI to display and configure a cohort from a data directory."""
+    """
+    GUI to display and configure a cohort from a data directory.
+    """
+
+    ### UI ###
     def __init__(self, data_path, cohort_data=None, parent=None):
         super().__init__(parent)
         self.logic = CohortGeneratorLogic(data_path=data_path, cohort_data=cohort_data)
@@ -18,11 +20,19 @@ class CohortGeneratorWindow(qt.QDialog):
         # Make dialog/window non-modal, to allow interaction with main window
         self.setModal(False)
 
+        # Build the UI
         self.build_ui()
+
+        # Connect all buttons to callback functions
         self.connect_signals()
+
+        # Initial table population
         self.update_ui_from_logic()
 
     def build_ui(self):
+        """
+        UI to display tentative cohort table, apply and close buttons
+        """
         self.setWindowTitle("Cohort Generator and Editor")
         self.setMinimumSize(900, 700)
         layout = qt.QVBoxLayout(self)
@@ -44,22 +54,37 @@ class CohortGeneratorWindow(qt.QDialog):
         layout.addLayout(button_layout)
 
     def build_load_options_groupbox(self):
+        """
+        UI to display file extensions to exclude from cell
+        """
         groupbox = qt.QGroupBox("Load Options")
         layout = qt.QFormLayout(groupbox)
-        self.excluded_ext_input = qt.QLineEdit(".json, .py")
+
+        # By default, exclude these files, as they are common
+        self.excluded_ext_input = qt.QLineEdit(".json, .py, .ssh, .csv")
         self.excluded_ext_input.toolTip = "Comma-separated list of file extensions to ignore."
         self.rescan_button = qt.QPushButton("Rescan Data Path")
+
         layout.addRow("Exclude Extensions:", self.excluded_ext_input)
         layout.addRow(self.rescan_button)
+
         return groupbox
 
     def build_filtering_groupbox(self):
+        """
+        UI to display column creation and filtering options
+        """
         groupbox = qt.QGroupBox("Column Filtering")
         layout = qt.QFormLayout(groupbox)
+
+        # Any substring that must exist within all files loaded in a certain resource column
         self.include_input = qt.QLineEdit()
-        self.include_input.setPlaceholderText("e.g., T1w, nifti")
+        self.include_input.setPlaceholderText("e.g., T1w, nii, lesion_seg")
+
+        # Any substring that must not exist within all files loaded in a certain resource column
         self.exclude_input = qt.QLineEdit()
         self.exclude_input.setPlaceholderText("e.g., masked, brain")
+
         self.target_column_combo = qt.QComboBox()
         self.new_column_name_input = qt.QLineEdit()
         self.apply_filter_button = qt.QPushButton("Apply Filter")
@@ -69,6 +94,10 @@ class CohortGeneratorWindow(qt.QDialog):
         layout.addRow("Target Column:", self.target_column_combo)
         layout.addRow("New Column Name:", self.new_column_name_input)
         layout.addWidget(self.apply_filter_button)
+
+        # Temporarily disable
+        groupbox.setEnabled(False)
+
         return groupbox
 
     def update_ui_from_logic(self):
@@ -79,6 +108,8 @@ class CohortGeneratorWindow(qt.QDialog):
         self.table_widget.blockSignals(True)
         self.table_widget.clear()
         data = self.logic.cohort_data
+
+        # If no cohort has previously been created, load empty
         if not data:
             self.table_widget.setRowCount(0)
             self.table_widget.setColumnCount(0)
@@ -118,12 +149,11 @@ class CohortGeneratorWindow(qt.QDialog):
         self.table_widget.horizontalHeader().setSectionResizeMode(qt.QHeaderView.Interactive)
         self.update_all_visuals()
         self.table_widget.blockSignals(False)
-        self.table_widget.verticalHeader().setVisible(False)
-        self.table_widget.horizontalHeader().setSectionResizeMode(qt.QHeaderView.Interactive)
-        self.update_all_visuals()
-        self.table_widget.blockSignals(False)
 
     def _create_checkbox(self, row, col, handler, is_checked, is_header=False):
+        """
+        Create checkboxes to remove column or row from cohort and UI
+        """
         cell_widget = qt.QWidget()
         layout = qt.QHBoxLayout(cell_widget)
         layout.setAlignment(qt.Qt.AlignCenter)
@@ -141,12 +171,28 @@ class CohortGeneratorWindow(qt.QDialog):
         self.table_widget.setCellWidget(row, col, cell_widget)
 
     def update_column_combo(self):
+        """
+        Update resource names from the headers of the currently displayed tentative cohort table
+        """
         self.target_column_combo.blockSignals(True)
         self.target_column_combo.clear()
         self.target_column_combo.addItem("Create New Column")
-        self.target_column_combo.addItems(self.logic.get_headers()[1:]) # Exclude uid
+
+        # Exclude uid
+        self.target_column_combo.addItems(self.logic.get_headers()[1:])
         self.target_column_combo.blockSignals(False)
 
+    # UI enhancement
+    def highlight_uid_col(self):
+        """
+        Highlight the uid column in purple for visibility
+        """
+        for row in range(self.logic.get_case_count()):
+            item = self.table_widget.item(row + 1, 1)
+            if item:
+                item.setBackground(qt.QColor("#8f6ae7"))
+
+    ### Connection signals ###
     def connect_signals(self):
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
@@ -155,18 +201,26 @@ class CohortGeneratorWindow(qt.QDialog):
         self.target_column_combo.currentTextChanged.connect(self.on_target_column_changed)
         self.table_widget.horizontalHeader().sectionDoubleClicked.connect(self.on_header_double_clicked)
 
+    ### Callback functions ###
     def on_rescan(self):
+        """
+        Rebuild entire tentative cohort table while excluding paths with forbidden filetypes
+        """
         ext_to_exclude = [e.strip() for e in self.excluded_ext_input.text.split(',') if e.strip()]
         self.logic.load_cohort_data(self.logic.data_path, ext_to_exclude)
         self.logic.clear_filters()
         self.update_ui_from_logic()
 
     def on_apply_filter(self):
+        """
+        Update or create new column based on filter requests
+        """
         include_list = [s.strip() for s in self.include_input.text.split(',') if s.strip()]
         exclude_list = [s.strip() for s in self.exclude_input.text.split(',') if s.strip()]
         target_col = self.target_column_combo.currentText
         new_col = self.new_column_name_input.text.strip()
 
+        # Rebuild entire tentative cohort table with new/updated column
         if self.logic.apply_filter(include_list, exclude_list, target_col, new_col):
             self.update_ui_from_logic()
             self.include_input.clear()
@@ -176,6 +230,9 @@ class CohortGeneratorWindow(qt.QDialog):
             qt.QMessageBox.warning(self, "Filter Error", "Could not apply filter. Ensure you provide an 'Include' substring and a unique 'New Column Name' if creating a new column.")
 
     def on_target_column_changed(self, text):
+        """
+        Enable creation of new column
+        """
         is_new_column = (text == "Create New Column")
         self.new_column_name_input.setEnabled(is_new_column)
 
@@ -206,7 +263,7 @@ class CohortGeneratorWindow(qt.QDialog):
                 item.setBackground(color)
 
     def update_all_visuals(self):
-        # Update row visuals (remember: table rows start at index 1)
+        # Update row visuals (table rows start at index 1)
         for r_idx in range(self.logic.get_case_count()):
             table_row = r_idx + 1
             self._update_row_visuals(table_row, self.logic.is_row_enabled(r_idx))
@@ -215,6 +272,9 @@ class CohortGeneratorWindow(qt.QDialog):
         for c_idx, header in enumerate(self.logic.get_headers()):
             is_enabled = self.logic.is_column_enabled(c_idx)
             self.table_widget.setColumnHidden(c_idx + 1, not is_enabled)
+
+        # Highlight uid column
+        self.highlight_uid_col()
 
     def on_apply(self):
         self.logic.apply_changes()
@@ -227,21 +287,27 @@ class CohortGeneratorWindow(qt.QDialog):
 class CohortGeneratorLogic:
     def __init__(self, data_path, cohort_data=None):
         self.data_path = Path(data_path)
-        self.all_files_by_case = {}
+        self.all_files_by_case: dict[str, list[str]] = {}
         self.cohort_data = cohort_data if cohort_data is not None else []
         self.headers = []
+
         self.disabled_rows = set()
         self.disabled_columns = set()
 
-        self._scan_filesystem(['.json', '.py'])
+        # Exclude common files found in imagine datasetss
+        self._scan_filesystem(['.json', '.py', '.ssh', '.csv'])
 
         if not self.cohort_data:
+            # Initiliaze the uid column and populate case identifiers
             self.clear_filters()
         else:
             if self.cohort_data:
                 self.headers = list(self.cohort_data[0].keys())
 
     def _scan_filesystem(self, excluded_extensions=None):
+        """
+        Get representation of cohort data as a dict where the key is the case uid
+        """
         self.all_files_by_case.clear()
         root_path = Path(self.data_path).resolve()
         if not root_path.is_dir(): return
@@ -249,11 +315,12 @@ class CohortGeneratorLogic:
         excluded_ext = [e.lower().strip() for e in excluded_extensions or []]
         temp_cases = {}
 
+        # Load rows while excluding all unwanted files
         for file_path in root_path.rglob('*'):
             if file_path.is_file() and file_path.suffix.lower() not in excluded_ext:
                 case_dir = file_path.parent
                 if case_dir != root_path:
-                    # uid is represented as the path from the root until the parent directory of resource files
+                    # uid is represented as the path from the root until the parent directory of any resource file
                     case_id = case_dir.relative_to(root_path).as_posix()
                     if case_id not in temp_cases:
                         temp_cases[case_id] = []
@@ -266,6 +333,9 @@ class CohortGeneratorLogic:
         self.clear_filters()
 
     def clear_filters(self):
+        """
+        Clear all filters and load uids into cohort data
+        """
         self.headers = ['uid']
         self.cohort_data = [{'uid': case_id} for case_id in self.all_files_by_case.keys()]
         self.disabled_rows.clear()
