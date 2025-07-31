@@ -1054,6 +1054,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.cohort_path = new_path
         config.last_used_cohort_file = new_path
         config.save()
+        self.rebuild_data_manager()
         return True
 
     def set_data_path(self, new_path: Path) -> (bool, Optional[str]):
@@ -1071,6 +1072,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.data_path = new_path
         config.last_used_data_path = new_path
         config.save()
+        self.rebuild_data_manager()
         print(f"Data path set to: {self.data_path}")
 
         return True, None
