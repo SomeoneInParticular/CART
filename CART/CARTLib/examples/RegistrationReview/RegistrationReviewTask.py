@@ -31,6 +31,10 @@ class RegistrationReviewGUI:
         # CSV log file path
         self.csv_log_path: Optional[Path] = None
 
+        # Registration classification selection
+        self.registrationClassificationGroup: Optional[qt.QButtonGroup] = None
+        self.selectedClassification: Optional[str] = None
+
     def setup(self) -> qt.QFormLayout:
         """
         Build the GUI's contents, returning the resulting layout for use.
@@ -41,11 +45,11 @@ class RegistrationReviewGUI:
         # 1) Orientation buttons
         self._addOrientationButtons(formLayout)
 
-        # 2) CSV output selection
-        self._addCsvSelectionButton(formLayout)
+        # 2) Registration classification options
+        self._addClassificationButtons(formLayout)
 
-        # 3) Save button
-        self._addSaveButton(formLayout)
+        # 3) CSV output selection
+        self._addCsvSelectionButton(formLayout)
 
         # Prompt for initial CSV setup
         self.promptSelectCsvOutput()
@@ -64,6 +68,38 @@ class RegistrationReviewGUI:
             hbox.addWidget(btn)
         layout.addRow(qt.QLabel("View Orientation:"), hbox)
 
+    def _addClassificationButtons(self, layout: qt.QFormLayout) -> None:
+        """
+        Radio buttons for registration classification selection.
+        """
+        # Create a group box for the classification options
+        classificationGroupBox = qt.QGroupBox("Registration Classification")
+        classificationLayout = qt.QVBoxLayout()
+        classificationGroupBox.setLayout(classificationLayout)
+
+        # Create button group to ensure only one can be selected
+        self.registrationClassificationGroup = qt.QButtonGroup()
+
+        # Define the classification options
+        classifications = [
+            "Correctly Registered",
+            "Non-Registered-Deformable",
+            "Non-Registered-Rigid",
+            "Other",
+        ]
+
+        # Create radio buttons for each classification
+        for i, classification in enumerate(classifications):
+            radioButton = qt.QRadioButton(classification)
+            radioButton.clicked.connect(
+                lambda checked, c=classification: self.onClassificationChanged(c)
+            )
+            self.registrationClassificationGroup.addButton(radioButton, i)
+            classificationLayout.addWidget(radioButton)
+
+        # Add the group box to the main layout
+        layout.addRow(classificationGroupBox)
+
     def _addCsvSelectionButton(self, layout: qt.QFormLayout) -> None:
         """
         Button to change CSV output location.
@@ -71,15 +107,6 @@ class RegistrationReviewGUI:
         btn = qt.QPushButton("Change CSV Output Location")
         btn.clicked.connect(self.promptSelectCsvOutput)
         layout.addRow(btn)
-
-    def _addSaveButton(self, layout: qt.QFormLayout) -> None:
-        """
-        Save button for recording registration review results.
-        """
-        btn = qt.QPushButton("Save Registration Review")
-        btn.clicked.connect(self._save)
-        layout.addRow(btn)
-        self.saveButton = btn
 
     #
     # Handlers
@@ -101,6 +128,11 @@ class RegistrationReviewGUI:
         # Apply the layout if data unit has layout handler
         if hasattr(self.data_unit, "layout_handler"):
             self.data_unit.layout_handler.apply_layout()
+
+    def onClassificationChanged(self, classification: str) -> None:
+        """Handle registration classification selection."""
+        self.selectedClassification = classification
+        print(f"Selected classification: {classification}")
 
     ## USER PROMPTS ##
     def promptSelectCsvOutput(self):
@@ -185,7 +217,7 @@ class RegistrationReviewGUI:
         buttonBox.accepted.connect(lambda: self._attemptCsvUpdate(prompt))
         buttonBox.rejected.connect(prompt.reject)
 
-        # Resize for better appearance
+        # Resize for better appearance - FIXED: minimumHeight is a property, not a method
         prompt.resize(450, prompt.minimumHeight)
 
         return prompt
@@ -268,28 +300,6 @@ class RegistrationReviewGUI:
         if hasattr(self.data_unit, "layout_handler"):
             self.data_unit.layout_handler.apply_layout()
 
-    def _save(self) -> None:
-        """Save the current registration review."""
-        err = self.bound_task.save()
-        self.saveCompletePrompt(err)
-
-    def saveCompletePrompt(self, err_msg: Optional[str]) -> None:
-        """Show save completion message."""
-        if err_msg is None:
-            msg = qt.QMessageBox()
-            msg.setWindowTitle("Success!")
-            msg.setText(
-                f"Registration review for '{self.bound_task.data_unit.uid}' "
-                f"was successfully saved to CSV!\n\n"
-                f"CSV file: {str(self.bound_task.csv_log_path)}"
-            )
-            msg.exec()
-        else:
-            errBox = qt.QErrorMessage()
-            errBox.setWindowTitle("ERROR!")
-            errBox.showMessage(err_msg)
-            errBox.exec()
-
     ## GUI SYNCHRONIZATION ##
     def enter(self) -> None:
         """Called when entering the task."""
@@ -356,16 +366,18 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
         if not self.data_unit:
             return "Cannot save: No data unit available"
 
+        # Check if a classification has been selected
+        if not self.gui or not self.gui.selectedClassification:
+            return "Cannot save: No registration classification selected. Please select a classification option."
+
         try:
             # Prepare the data to save
             review_data = {
                 "uid": self.data_unit.uid,
                 "user": self.user,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "review_status": "reviewed",  # Could be extended with more statuses
-                # TODO Add in the registration classification:
-                # "No_Registration_Required", "Deformable_Registration_Required", "Rigid_Registration_Required"
-                # Add any additional review data here
+                "review_status": "reviewed",
+                "registration_classification": self.gui.selectedClassification,
             }
 
             # Check if CSV file exists
@@ -395,7 +407,13 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
                 existing_data.append(review_data)
 
             # Define field names (CSV headers)
-            fieldnames = ["uid", "user", "timestamp", "review_status"]
+            fieldnames = [
+                "uid",
+                "user",
+                "timestamp",
+                "review_status",
+                "registration_classification",
+            ]
 
             # Write the updated data back to CSV
             with open(self.csv_log_path, "w", newline="") as csvfile:
@@ -403,7 +421,9 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
                 writer.writeheader()
                 writer.writerows(existing_data)
 
-            print(f"Registration review saved for UID: {self.data_unit.uid}")
+            print(
+                f"Registration review saved for UID: {self.data_unit.uid} with classification: {self.gui.selectedClassification}"
+            )
             return None  # Success
 
         except Exception as e:
@@ -426,7 +446,13 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
 
             # Initialize CSV file with headers if it doesn't exist
             if not csv_path.exists():
-                fieldnames = ["uid", "user", "timestamp", "review_status"]
+                fieldnames = [
+                    "uid",
+                    "user",
+                    "timestamp",
+                    "review_status",
+                    "registration_classification",
+                ]
                 with open(csv_path, "w", newline="") as csvfile:
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                     writer.writeheader()
