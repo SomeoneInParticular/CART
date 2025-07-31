@@ -9,6 +9,7 @@ import slicer
 from slicer.i18n import tr as _
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from CARTLib.utils.layout import Orientation
 from .RegistrationReviewDataUnit import RegistrationReviewDataUnit
 
 VERSION = 0.01
@@ -25,7 +26,7 @@ class RegistrationReviewGUI:
         self.data_unit: Optional["RegistrationReviewDataUnit"] = None
 
         # The currently selected orientation in the GUI
-        self.currentOrientation: str = "Axial"
+        self.currentOrientation: Orientation = Orientation.AXIAL
 
         # CSV log file path
         self.csv_log_path: Optional[Path] = None
@@ -56,8 +57,9 @@ class RegistrationReviewGUI:
         Buttons to set Axial/Sagittal/Coronal for all slice views.
         """
         hbox = qt.QHBoxLayout()
-        for orientation in ("Axial", "Sagittal", "Coronal"):
-            btn = qt.QPushButton(orientation)
+        for orientation in Orientation.TRIO:
+            label = orientation.slicer_node_label()
+            btn = qt.QPushButton(label)
             btn.clicked.connect(lambda _, o=orientation: self.onOrientationChanged(o))
             hbox.addWidget(btn)
         layout.addRow(qt.QLabel("View Orientation:"), hbox)
@@ -83,7 +85,7 @@ class RegistrationReviewGUI:
     # Handlers
     #
 
-    def onOrientationChanged(self, orientation: str) -> None:
+    def onOrientationChanged(self, orientation: Orientation) -> None:
         """Update the orientation for all views."""
         # Update our currently tracked orientation
         self.currentOrientation = orientation
