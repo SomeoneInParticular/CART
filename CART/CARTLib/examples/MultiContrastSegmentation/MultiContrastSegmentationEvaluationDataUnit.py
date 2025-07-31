@@ -187,7 +187,7 @@ class MultiContrastSegmentationEvaluationDataUnit(DataUnitBase):
         self._init_segmentation_nodes()
         self._init_markups_nodes()
 
-    def _init_volume_nodes(self) -> slicer.vtkMRMLScalarVolumeNode:
+    def _init_volume_nodes(self) -> None:
         """
         Load each volume path into a volume node, name it,
         store in resources, and identify the primary.
