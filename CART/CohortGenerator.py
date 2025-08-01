@@ -273,10 +273,22 @@ class CohortGeneratorWindow(qt.QDialog):
             self.apply_filter_button.setText(f"Apply Filters on {text} column")
 
     def on_header_double_clicked(self, logical_index):
-        if logical_index <= 1: return
+        if logical_index <= 1:
+            return
+
         old_name = self.logic.get_headers()[logical_index - 1]
-        new_name, ok = qt.QInputDialog.getText(self, "Rename Column", f"Enter new name for '{old_name}':", text=old_name)
-        if ok and new_name and new_name != old_name:
+
+        # Method 1: Use the simpler overload without ok parameter
+        new_name = qt.QInputDialog.getText(
+            self,
+            "Rename Column",
+            f"Enter new name for '{old_name}':",
+            qt.QLineEdit.Normal,
+            old_name
+        )
+
+        # If user cancels, getText returns empty string or None
+        if new_name and new_name != old_name:
             if self.logic.rename_column(old_name, new_name):
                 self.update_ui_from_logic()
             else:
@@ -305,7 +317,9 @@ class CohortGeneratorWindow(qt.QDialog):
         color = self.palette.color(qt.QPalette.Base) if is_enabled else qt.QColor(qt.Qt.lightGray)
         for row in range(self.logic.get_case_count()):
             item = self.table_widget.item(row + 1, table_col)
-            if item:
+
+            # Activating a column cannot activate rows that are already turned off
+            if item and row not in self.logic.disabled_rows:
                 item.setBackground(color)
 
     def update_all_visuals(self):

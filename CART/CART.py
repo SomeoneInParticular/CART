@@ -514,16 +514,22 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Exit task mode; any active task is no longer relevant.
             self._disableTaskMode()
 
-    def onCohortChanged(self, new_cohort = None):
+    def onCohortChanged(self, new_cohort_path=None):
+        """
+        Handles cohort file changes from the ctkPathLineEdit widget or internal calls.
+        Ensures the path is converted to a Path object before being passed to the logic.
+        """
+        if new_cohort_path is None:
+            new_cohort_path = self.cohortFileSelectionButton.currentPath
 
-        # If the cohort has not already been generated using auto-generation
-        if not new_cohort:
-            new_cohort = Path(self.cohortFileSelectionButton.currentPath)
+        # If the provided path is empty (e.g., user cleared the input), stop here.
+        if not new_cohort_path:
+            self.destroyCohortTable()  # Clear the table if the path is removed
+            return
 
-        # Attempt to update the cohort in our logic instance
+        new_cohort = Path(new_cohort_path)
         success = self.logic.set_current_cohort(new_cohort)
 
-        # If we succeeded, update our state to match
         if success:
             # Exit task mode; the new cohort likely makes it obsolete
             self._disableTaskMode()
@@ -1059,6 +1065,9 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.cohort_path = new_path
         config.last_used_cohort_file = new_path
         config.save()
+
+        self.rebuild_data_manager()
+
         return True
 
     def set_data_path(self, new_path: Path) -> (bool, Optional[str]):
