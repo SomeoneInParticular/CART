@@ -16,10 +16,7 @@ from CARTLib.core.DataManager import DataManager
 from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 
-# TODO: Remove this explicit import
-from CARTLib.examples.OrganLabellingDemo.OrganLabellingDemo import (
-    OrganLabellingDemoTask,
-)
+
 from CARTLib.examples.SegmentationEvaluation.SegmentationEvaluationTask import (
     SegmentationEvaluationTask,
 )
@@ -139,7 +136,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # TODO: Dynamically load this dictionary instead
         self.task_map = {
-            "Organ Labels": OrganLabellingDemoTask,
             "Segmentation": SegmentationEvaluationTask,
             "MultiContrast Segmentation": MultiContrastSegmentationEvaluationTask,
             "Registration Review": RegistrationReviewTask,
