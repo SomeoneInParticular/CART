@@ -24,6 +24,7 @@ from CARTLib.examples.MultiContrastSegmentation.MultiContrastSegmentationEvaluat
 )
 
 from CohortGenerator import CohortGeneratorWindow
+from CARTLib.Styles import NoDelayProxyStyle
 
 CURRENT_DIR = Path(__file__).parent
 CONFIGURATION_FILE_NAME = CURRENT_DIR / "configuration.json"
@@ -144,6 +145,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         ## Setup ##
 
+        # Style configuration
+        # Set tooltips to immediately appear upon hover
+        self.setupImmediateTooltips()
+
         # The collapsible button to contain everything in
         mainGUI = ctk.ctkCollapsibleButton()
         # Not the best translation, but it'll do...
@@ -230,6 +235,22 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Finally, attempt to update our task from the config
         self.taskOptions.currentText = config.last_used_task
+
+    ## Style ###
+    def setupImmediateTooltips(self):
+        """
+        Apply custom style to make tooltips appear immediately
+        """
+        try:
+            # Apply to the main Slicer application
+            app = slicer.app
+            if app and hasattr(app, 'setStyle'):
+                self.customStyle = NoDelayProxyStyle()
+                app.setStyle(self.customStyle)
+                print("Applied immediate tooltip style to Slicer application")
+
+        except Exception as e:
+            print(f"Failed to apply immediate tooltip style: {e}")
 
     ## GUI builders ##
     def buildUserUI(self, mainLayout: qt.QFormLayout):

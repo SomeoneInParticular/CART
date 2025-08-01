@@ -57,6 +57,10 @@ class CohortGeneratorWindow(qt.QDialog):
         self.apply_button = qt.QPushButton("Save and Apply")
         self.cancel_button = qt.QPushButton("Cancel")
 
+        # Tooltips
+        self.override_selected_cohort_file_toggle_button.setToolTip("Saves your changes into the file located at " + str(self.logic.selected_cohort_path))
+
+
         button_layout.addStretch()
 
         button_layout.addWidget(self.override_selected_cohort_file_toggle_button)
@@ -105,9 +109,9 @@ class CohortGeneratorWindow(qt.QDialog):
         self.apply_filter_button = qt.QPushButton("Apply Filter")
 
         layout.addRow("Target Column:", self.target_column_combo)
+        layout.addRow("New Column Name:", self.new_column_name_input)
         layout.addRow("Files MUST Contain:", self.include_input)
         layout.addRow("Files MUST NOT Contain:", self.exclude_input)
-        layout.addRow("New Column Name:", self.new_column_name_input)
         layout.addWidget(self.apply_filter_button)
 
         return groupbox
@@ -255,7 +259,7 @@ class CohortGeneratorWindow(qt.QDialog):
         Enable creation of new column
         """
         is_new_column = (text == "Create New Column")
-        self.new_column_name_input.setEnabled(is_new_column)
+        self.new_column_name_input.setVisible(is_new_column)
 
     def on_header_double_clicked(self, logical_index):
         if logical_index <= 1: return
@@ -354,7 +358,8 @@ class CohortGeneratorLogic:
         for file_path in root_path.rglob('*'):
             if file_path.is_file() and file_path.suffix.lower() not in excluded_ext:
                 case_dir = file_path.parent
-                if case_dir != root_path:
+                # Exclude saved cohort files directory from cohort table
+                if case_dir != root_path and case_dir.name != "cohort files":
                     # uid is represented as the path from the root until the parent directory of any resource file
                     case_id = case_dir.relative_to(root_path).as_posix()
                     if case_id not in temp_cases:
