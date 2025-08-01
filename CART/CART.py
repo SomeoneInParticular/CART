@@ -1,6 +1,6 @@
 import traceback
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 import vtk
 import ctk
@@ -15,6 +15,7 @@ from CARTLib.utils.config import config
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 
 # TODO: Remove this explicit import
 from CARTLib.examples.OrganLabellingDemo.OrganLabellingDemo import OrganLabellingDemoTask
@@ -23,7 +24,6 @@ from CARTLib.examples.MultiContrastSegmentation.MultiContrastSegmentationEvaluat
     MultiContrastSegmentationEvaluationTask,
 )
 
-from CohortGenerator import CohortGeneratorWindow
 
 CURRENT_DIR = Path(__file__).parent
 CONFIGURATION_FILE_NAME = CURRENT_DIR / "configuration.json"

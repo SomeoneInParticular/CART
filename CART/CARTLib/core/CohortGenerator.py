@@ -1,10 +1,8 @@
 import csv
 from pathlib import Path
-from typing import *
-import re
 
 import qt
-from slicer.i18n import tr as _
+
 
 class CohortGeneratorWindow(qt.QDialog):
     """
