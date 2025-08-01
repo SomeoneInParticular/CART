@@ -59,7 +59,7 @@ class CohortGeneratorWindow(qt.QDialog):
 
         # Tooltips
         self.override_selected_cohort_file_toggle_button.setToolTip("Saves your changes into the file located at " + str(self.logic.selected_cohort_path))
-
+        self.apply_button.setToolTip("Overrides or creates new cohort file under " + str(self.logic.data_path / "cohort files"))
 
         button_layout.addStretch()
 
@@ -93,7 +93,7 @@ class CohortGeneratorWindow(qt.QDialog):
         """
         UI to display column creation and filtering options
         """
-        groupbox = qt.QGroupBox("Column Filtering")
+        groupbox = qt.QGroupBox("Column Creating, Filtering and Editing")
         layout = qt.QFormLayout(groupbox)
 
         # Any substring that must exist within all files loaded in a certain resource column
@@ -106,12 +106,18 @@ class CohortGeneratorWindow(qt.QDialog):
 
         self.target_column_combo = qt.QComboBox()
         self.new_column_name_input = qt.QLineEdit()
-        self.apply_filter_button = qt.QPushButton("Apply Filter")
+        self.apply_filter_button = qt.QPushButton("Create New Column from Filters")
 
         layout.addRow("Target Column:", self.target_column_combo)
         layout.addRow("New Column Name:", self.new_column_name_input)
         layout.addRow("Files MUST Contain:", self.include_input)
         layout.addRow("Files MUST NOT Contain:", self.exclude_input)
+
+        # Tooltips
+        self.new_column_name_input.setToolTip("Assigns name to the new resource column if creating")
+        self.include_input.setToolTip("All files inserted into the target column must ALL include filters typed here. If left blank, selects all matches.")
+        self.exclude_input.setToolTip("All files inserted into the target column must NOT include filters typed here. If left blank, ignored.")
+
         layout.addWidget(self.apply_filter_button)
 
         return groupbox
@@ -259,7 +265,12 @@ class CohortGeneratorWindow(qt.QDialog):
         Enable creation of new column
         """
         is_new_column = (text == "Create New Column")
-        self.new_column_name_input.setVisible(is_new_column)
+        self.new_column_name_input.setEnabled(is_new_column)
+
+        if is_new_column:
+            self.apply_filter_button.setText("Create New Column from Filters")
+        else:
+            self.apply_filter_button.setText(f"Apply Filters on {text} column")
 
     def on_header_double_clicked(self, logical_index):
         if logical_index <= 1: return
