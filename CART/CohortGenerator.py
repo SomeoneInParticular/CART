@@ -37,9 +37,11 @@ class CohortGeneratorWindow(qt.QDialog):
         self.setMinimumSize(900, 700)
         layout = qt.QVBoxLayout(self)
 
+        # Tentative cohort table UI
         self.table_widget = qt.QTableWidget()
         layout.addWidget(self.table_widget)
 
+        # Filtering UI
         controls_layout = qt.QHBoxLayout()
         controls_layout.addWidget(self.build_load_options_groupbox())
         controls_layout.addWidget(self.build_filtering_groupbox(), 1)
@@ -51,16 +53,15 @@ class CohortGeneratorWindow(qt.QDialog):
         self.override_selected_cohort_file_toggle_button = qt.QCheckBox("Override selected Cohort File ?")
         self.override_selected_cohort_file_toggle_button.setEnabled(self.logic.selected_cohort_path is not None)
 
-        print("selected COHORT PATH")
-        print(self.logic.selected_cohort_path)
-
+        # Utility buttons
         self.apply_button = qt.QPushButton("Save and Apply")
         self.cancel_button = qt.QPushButton("Cancel")
 
         button_layout.addStretch()
+
+        button_layout.addWidget(self.override_selected_cohort_file_toggle_button)
         button_layout.addWidget(self.apply_button)
         button_layout.addWidget(self.cancel_button)
-        button_layout.addWidget(self.override_selected_cohort_file_toggle_button)
 
         layout.addLayout(button_layout)
 
