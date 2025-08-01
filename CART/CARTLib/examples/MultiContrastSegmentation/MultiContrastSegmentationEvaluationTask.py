@@ -1,20 +1,18 @@
-import json
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional
 
 import ctk
 import qt
 import slicer
 from slicer.i18n import tr as _
 
-from .MultiContrastOutputManager import VERSION, OutputMode, MultiContrastOutputManager
+from .MultiContrastOutputManager import OutputMode, MultiContrastOutputManager
 from .MultiContrastSegmentationEvaluationDataUnit import (
     MultiContrastSegmentationEvaluationDataUnit,
 )
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.utils.widgets import CARTSegmentationEditorWidget
-from CARTLib.utils.data import save_segmentation_to_nifti
 from CARTLib.utils.layout import Orientation
 
 
@@ -417,9 +415,24 @@ class MultiContrastSegmentationEvaluationTask(
 
     def setup(self, container: qt.QWidget) -> None:
         print(f"Running {self.__class__.__name__} setup!")
+
+        # Initialize the GUI: this prompts the user to configure some attributes we need
         self.gui = MultiContrastSegmentationEvaluationGUI(self)
         layout = self.gui.setup()
+
+        # Integrate the task's GUI into CART
         container.setLayout(layout)
+
+        # If the user provided output specifications, set up our manager here.
+        if self.output_dir:
+            self.output_manager = MultiContrastOutputManager(
+                self.user,
+                self.output_mode,
+                self.output_dir,
+                self.csv_log_path
+            )
+
+        # If we have a data unit at this point, synchronize the GUI to it
         if self.data_unit:
             self.gui.update(self.data_unit)
         self.gui.enter()

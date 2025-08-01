@@ -1,5 +1,6 @@
 import traceback
 from pathlib import Path
+from types import new_class
 from typing import Optional
 
 import vtk
@@ -800,6 +801,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.taskGUI.collapsed = False
             self.taskGUI.setEnabled(True)
 
+            # Attempt to read a data unit
+            # KO: This needs to be done after GUI init, as many task's (including our
+            #  segmentation review) will either load configurations and/or prompt the
+            #  user for things required to determine whether a task is "complete" or
+            #  not for a given case.
+            self.logic.load_first_unit()
+
             # Load the cohort csv data into the table, if it wasn't already
             self.updateCohortTable()
 
@@ -1149,11 +1157,13 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         """
         Initialize a new Task instance using current settings.
 
-        :return: The Task instance, None if one cannot be created.
+        The task will NOT receive a data unit at this point; that is deferred until after the GUI is built, in case
+        the task needs to prompt the user for details which help determine if a given data unit is complete or not
+        (i.e. output directories); see `CARTLogic:load_first_unit` for details.
         """
         # Safety gate: if we're not ready to start a task, return None
         if not self.is_ready():
-            return None
+            return
 
         # Rebuild our data manager
         self.rebuild_data_manager()
@@ -1169,11 +1179,15 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Act as though CART has just been reloaded so the task can initialize
         #  properly
-        self.current_task_instance.enter()
+        self.enter()
 
+    def load_first_unit(self):
+        """
+        Attempts to load the first data unit into memory and update our task with it
+        """
         # Pass our first data unit to the task
-        new_unit = self.select_current_case()
-        self.current_task_instance.receive(new_unit)
+        data_unit = self.data_manager.first_incomplete(self.current_task_instance)
+        self.current_task_instance.receive(data_unit)
 
     def enter(self):
         """
