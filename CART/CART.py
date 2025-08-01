@@ -1,6 +1,5 @@
 import traceback
 from pathlib import Path
-from types import new_class
 from typing import Optional
 
 import vtk
@@ -1266,7 +1265,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         :return: The next valid case. 'None' if no valid case could be found.
         """
         # Get the next valid case
-        next_unit = self.data_manager.next()
+        next_unit = self.data_manager.next_incomplete(self.current_task_instance)
 
         # Pass it to the current task, so it can update anything it needs to
         self._update_task_with_new_case(next_unit)
