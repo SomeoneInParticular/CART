@@ -432,15 +432,6 @@ class RegistrationReviewGUI:
                 self.selectedClassification = classification
                 break
 
-    ## GUI SYNCHRONIZATION ##
-    def enter(self) -> None:
-        """Called when entering the task."""
-        pass
-
-    def exit(self) -> None:
-        """Called when exiting the task."""
-        pass
-
 
 class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
     """
@@ -638,16 +629,6 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
             error_msg = f"Error setting CSV output path: {str(e)}"
             print(error_msg)
             return error_msg
-
-    def enter(self):
-        """Called when the task is entered/focused."""
-        if self.gui:
-            self.gui.enter()
-
-    def exit(self):
-        """Called when the task is exited/unfocused."""
-        if self.gui:
-            self.gui.exit()
 
     @classmethod
     def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
