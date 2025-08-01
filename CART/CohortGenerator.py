@@ -106,7 +106,15 @@ class CohortGeneratorWindow(qt.QDialog):
 
         self.target_column_combo = qt.QComboBox()
         self.new_column_name_input = qt.QLineEdit()
+
+        column_control_hbox = qt.QHBoxLayout()
+
         self.apply_filter_button = qt.QPushButton("Create New Column from Filters")
+        self.delete_col_button = qt.QPushButton("Delete Column")
+        self.delete_col_button.setStyleSheet("background-color: red; color: white;")
+
+        column_control_hbox.addWidget(self.apply_filter_button)
+        column_control_hbox.addWidget(self.delete_col_button)
 
         layout.addRow("Target Column:", self.target_column_combo)
         layout.addRow("New Column Name:", self.new_column_name_input)
@@ -118,7 +126,7 @@ class CohortGeneratorWindow(qt.QDialog):
         self.include_input.setToolTip("All files inserted into the target column must ALL include filters typed here. If left blank, selects all matches.")
         self.exclude_input.setToolTip("All files inserted into the target column must NOT include filters typed here. If left blank, ignored.")
 
-        layout.addWidget(self.apply_filter_button)
+        layout.addRow(column_control_hbox)
 
         return groupbox
 
@@ -224,9 +232,9 @@ class CohortGeneratorWindow(qt.QDialog):
         self.cancel_button.clicked.connect(self.on_cancel)
         self.rescan_button.clicked.connect(self.on_rescan)
         self.apply_filter_button.clicked.connect(self.on_apply_filter)
+        self.delete_col_button.clicked.connect(self.on_delete_column)
         self.target_column_combo.currentTextChanged.connect(self.on_target_column_changed)
         self.table_widget.horizontalHeader().sectionDoubleClicked.connect(self.on_header_double_clicked)
-
 
     ### Callback functions ###
     def on_rescan(self):
@@ -259,6 +267,31 @@ class CohortGeneratorWindow(qt.QDialog):
             self.new_column_name_input.clear()
         else:
             qt.QMessageBox.warning(self, "Filter Error", "Could not apply filters. Your filters either contradict or no results yielded from your filters. Provide a unique 'New Column Name' if creating a new column.")
+
+    def on_delete_column(self):
+        """
+        Delete the selected column from target_column_combo
+        """
+        target_col = self.target_column_combo.currentText
+
+        # Don't allow deletion of "Create New Column" option or uid column
+        if target_col == "Create New Column" or target_col == "uid":
+            qt.QMessageBox.warning(self, "Delete Error", "Cannot delete this column.")
+            return
+
+        # Confirm deletion
+        reply = qt.QMessageBox.question(
+            self, "Delete Column",
+            f"Are you sure you want to delete column '{target_col}'?",
+            qt.QMessageBox.Yes | qt.QMessageBox.No,
+            qt.QMessageBox.No
+        )
+
+        if reply == qt.QMessageBox.Yes:
+            if self.logic.delete_column(target_col):
+                self.update_ui_from_logic()
+            else:
+                qt.QMessageBox.warning(self, "Delete Error", "Could not delete column.")
 
     def on_target_column_changed(self, text):
         """
@@ -477,6 +510,35 @@ class CohortGeneratorLogic:
 
         self.headers.append(new_col_name)
         return True
+
+    def delete_column(self, column_name):
+        """
+        Delete a column from headers and cohort data
+        """
+        if column_name not in self.headers or column_name == "uid":
+            return False
+
+        try:
+            col_idx = self.headers.index(column_name)
+            self.headers.remove(column_name)
+
+            # Remove column from disabled columns set if it was disabled
+            self.disabled_columns.discard(col_idx)
+
+            # Adjust disabled column indices after deletion
+            self.disabled_columns = {
+                idx - 1 if idx > col_idx else idx
+                for idx in self.disabled_columns
+                if idx != col_idx
+            }
+
+            # Remove column data from all rows
+            for row in self.cohort_data:
+                row.pop(column_name, None)
+
+            return True
+        except ValueError:
+            return False
 
     def apply_changes(self):
         """
