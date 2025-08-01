@@ -12,9 +12,9 @@ class CohortGeneratorWindow(qt.QDialog):
     """
 
     ### UI ###
-    def __init__(self, data_path, cohort_data=None, parent=None):
+    def __init__(self, data_path, cohort_data=None, cohort_path=None, parent=None):
         super().__init__(parent)
-        self.logic = CohortGeneratorLogic(data_path=data_path, cohort_data=cohort_data)
+        self.logic = CohortGeneratorLogic(data_path=data_path, cohort_data=cohort_data, cohort_path=cohort_path)
         self.setWindowFlags(self.windowFlags() | qt.Qt.WindowMaximizeButtonHint | qt.Qt.WindowMinimizeButtonHint | qt.Qt.Window)
 
         # Make dialog/window non-modal, to allow interaction with main window
@@ -48,11 +48,11 @@ class CohortGeneratorWindow(qt.QDialog):
         button_layout = qt.QHBoxLayout()
 
         # If a preious cohort file was generated, give the option to override
-        self.override_previous_cohort_file_toggle_button = qt.QCheckBox("Override Previous Cohort File ?")
-        self.override_previous_cohort_file_toggle_button.setEnabled(self.logic.previous_cohort_path is not None)
+        self.override_selected_cohort_file_toggle_button = qt.QCheckBox("Override selected Cohort File ?")
+        self.override_selected_cohort_file_toggle_button.setEnabled(self.logic.selected_cohort_path is not None)
 
-        print("PREVIOUS COHORT PATH")
-        print(self.logic.previous_cohort_path)
+        print("selected COHORT PATH")
+        print(self.logic.selected_cohort_path)
 
         self.apply_button = qt.QPushButton("Save and Apply")
         self.cancel_button = qt.QPushButton("Cancel")
@@ -60,7 +60,7 @@ class CohortGeneratorWindow(qt.QDialog):
         button_layout.addStretch()
         button_layout.addWidget(self.apply_button)
         button_layout.addWidget(self.cancel_button)
-        button_layout.addWidget(self.override_previous_cohort_file_toggle_button)
+        button_layout.addWidget(self.override_selected_cohort_file_toggle_button)
 
         layout.addLayout(button_layout)
 
@@ -103,9 +103,9 @@ class CohortGeneratorWindow(qt.QDialog):
         self.new_column_name_input = qt.QLineEdit()
         self.apply_filter_button = qt.QPushButton("Apply Filter")
 
+        layout.addRow("Target Column:", self.target_column_combo)
         layout.addRow("Files MUST Contain:", self.include_input)
         layout.addRow("Files MUST NOT Contain:", self.exclude_input)
-        layout.addRow("Target Column:", self.target_column_combo)
         layout.addRow("New Column Name:", self.new_column_name_input)
         layout.addWidget(self.apply_filter_button)
 
@@ -120,7 +120,7 @@ class CohortGeneratorWindow(qt.QDialog):
         self.table_widget.clear()
         data = self.logic.cohort_data
 
-        # If no cohort has previously been created, load empty
+        # If no cohort has selectedly been created, load empty
         if not data:
             self.table_widget.setRowCount(0)
             self.table_widget.setColumnCount(0)
@@ -208,7 +208,7 @@ class CohortGeneratorWindow(qt.QDialog):
         """
         Connect
         """
-        self.override_previous_cohort_file_toggle_button.stateChanged.connect(self.on_toggle_override_previous_cohort_file)
+        self.override_selected_cohort_file_toggle_button.stateChanged.connect(self.on_toggle_override_selected_cohort_file)
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
         self.rescan_button.clicked.connect(self.on_rescan)
@@ -227,9 +227,9 @@ class CohortGeneratorWindow(qt.QDialog):
         self.logic.clear_filters()
         self.update_ui_from_logic()
 
-    def on_toggle_override_previous_cohort_file(self):
-        is_checked = self.override_previous_cohort_file_toggle_button.isChecked()
-        self.logic.override_previous_cohort_file = is_checked
+    def on_toggle_override_selected_cohort_file(self):
+        is_checked = self.override_selected_cohort_file_toggle_button.isChecked()
+        self.logic.override_selected_cohort_file = is_checked
 
     def on_apply_filter(self):
         """
@@ -274,7 +274,6 @@ class CohortGeneratorWindow(qt.QDialog):
         # Make sure the coloring comes back for the uid column
         self.highlight_uid_col()
 
-
     def handle_column_toggle(self, col_idx, is_enabled):
         self.logic.toggle_column(col_idx, is_enabled)
         self.update_all_visuals()
@@ -316,7 +315,7 @@ class CohortGeneratorWindow(qt.QDialog):
 
 
 class CohortGeneratorLogic:
-    def __init__(self, data_path, cohort_data=None):
+    def __init__(self, data_path, cohort_data=None, cohort_path=None):
         self.data_path = Path(data_path)
         self.all_files_by_case: dict[str, list[str]] = {}
         self.cohort_data = cohort_data if cohort_data is not None else []
@@ -336,8 +335,8 @@ class CohortGeneratorLogic:
                 self.headers = list(self.cohort_data[0].keys())
 
         # Location of the saved auto-generated cohort CSV file - also the path returned to the main widget
-        self.previous_cohort_path = None
-        self.override_previous_cohort_file: bool = False
+        self.selected_cohort_path = cohort_path
+        self.override_selected_cohort_file: bool = False
 
     def _scan_filesystem(self, excluded_extensions=None):
         """
@@ -415,7 +414,6 @@ class CohortGeneratorLogic:
         is_new = (target_col == "Create New Column")
         if is_new:
             if not new_col_name or new_col_name in self.headers: return False
-            self.headers.append(new_col_name)
             col_name = new_col_name
         else:
             col_name = target_col
@@ -446,6 +444,7 @@ class CohortGeneratorLogic:
         if not found_match_in_root:
             return False
 
+        self.headers.append(new_col_name)
         return True
 
     def apply_changes(self):
@@ -477,7 +476,7 @@ class CohortGeneratorLogic:
         self.disabled_columns.clear()
 
         # Save to CSV
-        dir_path = Path(self.data_path / "code")
+        dir_path = Path(self.data_path / "cohort files")
         dir_path.mkdir(parents=True, exist_ok=True)
         #cohort_path = Path(dir_path / "cohort.csv")
 
@@ -488,17 +487,17 @@ class CohortGeneratorLogic:
         """
         Write to CSV file
         """
-        override: bool = self.override_previous_cohort_file
+        override: bool = self.override_selected_cohort_file
 
-        cohort_path = self.previous_cohort_path
+        cohort_path = self.selected_cohort_path
 
         if not override:
             index = self._determine_next_cohort_filename(dir_path)
             cohort_name = "cohort" + str(index) + ".csv"
             cohort_path = Path(dir_path / cohort_name)
 
-        # Update the previous cohort path
-        self.previous_cohort_path = cohort_path
+        # Update the selected cohort path
+        self.selected_cohort_path = cohort_path
 
         with open(cohort_path, 'w', newline='') as csvfile:
             csv_writer = csv.writer(csvfile)

@@ -590,17 +590,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if self.logic.data_manager and self.logic.data_manager.case_data:
             case_data = self.logic.data_manager.case_data
 
-        cohortGeneratorWindow = CohortGeneratorWindow(data_path=self.logic.data_path, cohort_data=case_data)
+        cohortGeneratorWindow = CohortGeneratorWindow(data_path=self.logic.data_path, cohort_data=case_data, cohort_path=self.logic.cohort_path)
         cohortGeneratorWindowResult = cohortGeneratorWindow.exec_()
 
         if cohortGeneratorWindowResult == qt.QDialog.Accepted:
             if not self.logic.data_manager:
                 self.logic.rebuild_data_manager()
             self.logic.data_manager.case_data = cohortGeneratorWindow.logic.cohort_data
-            self.logic.cohort_path = cohortGeneratorWindow.logic.previous_cohort_path
-            self.onCohortChanged(Path(cohortGeneratorWindow.logic.previous_cohort_path))
+            self.logic.cohort_path = cohortGeneratorWindow.logic.selected_cohort_path
+            self.onCohortChanged(self.logic.cohort_path)
             self.cohortGeneratorButton.setText("Edit cohort file")
-            self.cohortFileSelectionButton.setCurrentPath(str(cohortGeneratorWindow.logic.previous_cohort_path))
+            self.cohortFileSelectionButton.setCurrentPath(str(cohortGeneratorWindow.logic.selected_cohort_path))
 
     def buildCohortTable(self):
 
