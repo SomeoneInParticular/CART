@@ -28,7 +28,6 @@ class RegistrationReviewDataUnit(MultiContrastSegmentationEvaluationDataUnit):
         # Default scene is the global MRML scene, which is always available.
     ):
         super().__init__(case_data, data_path, scene)
-        self.set_orientation(Orientation.AXIAL)
 
     def _init_segmentation_nodes(self) -> None:
         """
@@ -89,5 +88,4 @@ class RegistrationReviewDataUnit(MultiContrastSegmentationEvaluationDataUnit):
 
     def set_foreground_opacity(self, opacity: float):
         """Set the foreground opacity for the layout handler."""
-        if hasattr(self, "layout_handler"):
-            self.layout_handler.set_foreground_opacity(opacity)
+        self.layout_handler.set_foreground_opacity(opacity)
