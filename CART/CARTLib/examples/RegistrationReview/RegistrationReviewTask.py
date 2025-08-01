@@ -469,9 +469,6 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
         if self.data_unit:
             self.gui.update(self.data_unit)
 
-        # "Enter" the gui to ensure it is loaded correctly
-        self.gui.enter()
-
     def receive(self, data_unit: RegistrationReviewDataUnit):
         """Receive a new data unit for review."""
         # Track the data unit for later
@@ -483,10 +480,8 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
 
     def cleanup(self):
         """Clean up resources when task is destroyed."""
-        # Break the cyclical link with our GUI so garbage collection can run
-        if self.gui:
-            self.gui.exit()
-            self.gui = None
+        # Break the cyclical link with our GUI so garbage collection can ru
+        self.gui = None
 
     def save(self) -> Optional[str]:
         """Save the current registration review to CSV."""
