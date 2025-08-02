@@ -207,7 +207,6 @@ class DataManager:
         # Iterate until we run out of cases
         while idx < len(self.case_data):
             case = self.case_data[idx]
-            print(case)
             if not task.isTaskComplete(case):
                 return self.select_unit_at(idx)
             idx += 1
