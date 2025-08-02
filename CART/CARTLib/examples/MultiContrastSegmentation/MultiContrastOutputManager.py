@@ -125,7 +125,6 @@ class MultiContrastOutputManager:
             # Return an empty dictionary, as we don't have anything yet
             return dict()
 
-
     def save_segmentation(
         self, data_unit: MultiContrastSegmentationEvaluationDataUnit
     ) -> Optional[str]:
