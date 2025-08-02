@@ -210,21 +210,21 @@ class MultiContrastOutputManager:
             Tuple of (segmentation_path, sidecar_path)
         """
         if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
-            return self._get_parallel_destinations(data_unit)
+            return self._get_parallel_destinations(data_unit.uid)
         elif self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
             return self._get_overwrite_destinations(data_unit)
         else:
             raise ValueError(f"Unknown output mode: {self.output_mode}")
 
     def _get_parallel_destinations(
-        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+        self, uid: str
     ) -> tuple[Path, Path]:
         """Get destinations for parallel directory mode."""
         # Define the target output directory
-        target_dir = self.output_dir / f"{data_unit.uid}/anat/"
+        target_dir = self.output_dir / f"{uid}/anat/"
 
         # File name, before extensions
-        fname = f"{data_unit.uid}_{self.user}_seg"
+        fname = f"{uid}_{self.user}_seg"
 
         # Define the target output file paths
         segmentation_out = target_dir / f"{fname}.nii.gz"
@@ -382,3 +382,24 @@ class MultiContrastOutputManager:
                 f"Segmentation '{data_unit.uid}' saved over original file.\n\n"
                 f"Processing logged to: {self.csv_log_path.resolve()}"
             )
+
+    def is_case_completed(self, case_data: dict[str, str]):
+        # If we have a logging CSV, just check against it
+        if self.csv_log_path:
+            # TODO
+            pass
+
+        # Fallback; check using the output files instead
+        if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
+            # If we're saving to a parallel directory, simple check if the output file exist
+            uid = case_data['uid']
+            a, b = self._get_parallel_destinations(uid)
+            return a.exists() and b.exists()
+        if self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
+            # If we're set to override instead, check the sidecar file instead
+            # TODO: Implement this
+            return False
+
+        # If all the above failed, assume this case has not been processed
+        return False
+

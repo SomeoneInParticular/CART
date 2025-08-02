@@ -539,3 +539,12 @@ class MultiContrastSegmentationEvaluationTask(
             self.gui.saveCompletePrompt(result)
         # Return the result for further use
         return result
+
+    def isTaskComplete(self, case_data: dict[str: str]) -> bool:
+        # The user might not have selected an output directory
+        if not self.output_manager:
+            # Without an output specified, we can't determine if we're done or not
+            return False
+
+        # Delegate to the output manager
+        return self.output_manager.is_case_completed(case_data)
