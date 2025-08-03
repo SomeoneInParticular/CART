@@ -160,12 +160,12 @@ class RegistrationReviewGUI:
         ]
 
         # Create radio buttons for each classification
-        for i, classification in enumerate(classifications):
+        for classification in classifications:
             radioButton = qt.QRadioButton(classification)
             radioButton.clicked.connect(
                 lambda checked, c=classification: self.onClassificationChanged(c)
             )
-            self.registrationClassificationGroup.addButton(radioButton, i)
+            self.registrationClassificationGroup.addButton(radioButton)
             classificationLayout.addWidget(radioButton)
 
         # Add the group box to the main layout
@@ -192,13 +192,11 @@ class RegistrationReviewGUI:
         if not self.data_unit:
             return
 
-        # Update the data unit's orientation if it has a layout handler
-        if hasattr(self.data_unit, "set_orientation"):
-            self.data_unit.set_orientation(orientation)
+        # Update the data unit's orientation
+        self.data_unit.set_orientation(orientation)
 
-        # Apply the layout if data unit has layout handler
-        if hasattr(self.data_unit, "layout_handler"):
-            self.data_unit.layout_handler.apply_layout()
+        # Apply the layout
+        self.data_unit.layout_handler.apply_layout()
 
     def onOpacityChanged(self, value: int) -> None:
         """Handle opacity slider changes."""
@@ -229,7 +227,7 @@ class RegistrationReviewGUI:
         result = prompt.exec()
 
         # If the user cancelled out of the prompt, notify them
-        if result == 0:
+        if not result.acepted:
             notif = qt.QErrorMessage()
             if self.bound_task.can_save():
                 notif.setWindowTitle(_("REVERTING!"))
