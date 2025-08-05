@@ -14,7 +14,6 @@ from .RegistrationReviewDataUnit import RegistrationReviewDataUnit
 
 VERSION = 0.01
 
-# TODO Allow for stop and start of the task. Skip to the next case that is not reviewed.
 # First step should be to check the current output CSV file for the current user and the current UID.
 # If the current UID is already in the CSV file Add a button to skip the next unreviewed case.
 # AND update the current data unit to have knowledge of the previous review status.
@@ -436,12 +435,15 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
 
     UID_KEY = "uid"
     USER_KEY = "user"
+    STATUS_KEY = "review_status"
+
+    REVIEW_COMPLETE = "reviewed"
 
     FIELD_NAMES = [
         UID_KEY,
         USER_KEY,
         "timestamp",
-        "review_status",
+        STATUS_KEY,
         "registration_classification",
     ]
 
@@ -511,7 +513,7 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
                 self.UID_KEY: self.data_unit.uid,
                 self.USER_KEY: self.user,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "review_status": "reviewed",
+                self.STATUS_KEY: self.REVIEW_COMPLETE,
                 "registration_classification": self.gui.selectedClassification,
             }
 
@@ -614,3 +616,23 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
     def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
         """Return the data unit factories for this task."""
         return {"Default": RegistrationReviewDataUnit}
+
+    def isTaskComplete(self, case_data: dict[str: str]) -> bool:
+        # If we don't have a CSV log, we can't check whether we're done
+        if not self.csv_log_path or not self.csv_log:
+            return False
+
+        # Check if we have an entry for this user and UID
+        case_entry = self.csv_log.get((self.data_unit.uid, self.user), None)
+        # If not, the task hasn't been completed
+        if not case_entry:
+            return False
+
+        # Check if the case represents a complete review
+        case_status = case_entry.get(self.STATUS_KEY)
+        # If so, the review has been completed
+        if case_status == self.REVIEW_COMPLETE:
+            return True
+
+        # If we've passed all the prior checks, assume the task has yet to be done
+        return False
