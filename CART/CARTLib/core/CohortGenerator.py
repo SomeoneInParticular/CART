@@ -2,7 +2,7 @@ import qt
 import csv
 from pathlib import Path
 
-from CARTLib.utils.bids_init import import_pybids
+from CARTLib.utils.bids_init import import_pybids, get_bids_folders
 class CohortGeneratorWindow(qt.QDialog):
     """
     GUI to display and configure a cohort from a data directory.
@@ -403,28 +403,50 @@ class CohortGeneratorLogic:
 
     def _scan_filesystem(self, excluded_extensions=None):
         """
-        Get representation of cohort data as a dict where the key is the case uid
+        Scan BIDS-formatted dataset: only consider subject folders (sub-*) in root and derivatives.
+        Group derivatives with their corresponding raw subject, so each case (subject) includes both raw and derivatives files.
         """
         self.all_files_by_case.clear()
         root_path = Path(self.data_path).resolve()
-        if not root_path.is_dir(): return
+        if not root_path.is_dir():
+            return
 
         excluded_ext = [e.lower().strip() for e in excluded_extensions or []]
         temp_cases = {}
 
-        # Load rows while excluding all unwanted files
-        for file_path in root_path.rglob('*'):
-            if file_path.is_file() and file_path.suffix.lower() not in excluded_ext:
-                case_dir = file_path.parent
-                # Exclude saved cohort files directory from cohort table
-                if case_dir != root_path and case_dir.name != "cohort files":
-                    # uid is represented as the path from the root until the parent directory of any resource file
-                    case_id = case_dir.relative_to(root_path).as_posix()
-                    if case_id not in temp_cases:
-                        temp_cases[case_id] = []
-                    temp_cases[case_id].append(file_path.relative_to(root_path).as_posix())
+        # Helper to collect files for a subject folder
+        def collect_files_for_subject(subject_path, subject_id_prefix):
+            files = []
+            for file_path in subject_path.rglob('*'):
+                if file_path.is_file() and file_path.suffix.lower() not in excluded_ext:
+                    rel_path = file_path.relative_to(root_path)
+                    files.append(rel_path.as_posix())
+            return files
 
+        # 1. Scan raw BIDS subjects (sub-*) in root
+        for subj_dir in root_path.glob('sub-*'):
+            if subj_dir.is_dir():
+                subj_id = subj_dir.name  # e.g., sub-01
+                files = collect_files_for_subject(subj_dir, subj_id)
+                temp_cases[subj_id] = files
+
+        # 2. Scan derivatives/sub-* and merge with raw subjects
+        derivatives_path = root_path / 'derivatives' / 'labels'
+        if derivatives_path.is_dir():
+            for deriv_subj_dir in derivatives_path.glob('sub-*'):
+                if deriv_subj_dir.is_dir():
+                    subj_id = deriv_subj_dir.name  # e.g., sub-01
+                    files = collect_files_for_subject(deriv_subj_dir, subj_id)
+                    # Merge with raw subject files if present, else create new
+                    if subj_id in temp_cases:
+                        temp_cases[subj_id].extend(files)
+                    else:
+                        temp_cases[subj_id] = files
+
+        # Sort and assign
         self.all_files_by_case = {case_id: files for case_id, files in sorted(temp_cases.items())}
+
+        print("All files by case:", self.all_files_by_case)
 
     def load_cohort_data(self, data_path, excluded_extensions=None):
         self._scan_filesystem(excluded_extensions)
