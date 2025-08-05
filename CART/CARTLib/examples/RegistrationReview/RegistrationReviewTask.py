@@ -28,9 +28,6 @@ class RegistrationReviewGUI:
         # The currently selected orientation in the GUI
         self.currentOrientation: Orientation = Orientation.AXIAL
 
-        # CSV log file path
-        self.csv_log_path: Optional[Path] = None
-
         # Registration classification selection
         self.registrationClassificationGroup: Optional[qt.QButtonGroup] = None
         self.selectedClassification: Optional[str] = None
@@ -437,6 +434,17 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
     Saves review data to a CSV log file.
     """
 
+    UID_KEY = "uid"
+    USER_KEY = "user"
+
+    FIELD_NAMES = [
+        UID_KEY,
+        USER_KEY,
+        "timestamp",
+        "review_status",
+        "registration_classification",
+    ]
+
     def __init__(self, user: str):
         super().__init__(user)
 
@@ -445,6 +453,7 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
 
         # CSV log file path
         self.csv_log_path: Optional[Path] = None
+        self.csv_log: Optional[dict[tuple[str, str], dict[str, str]]] = None
 
         # Current data unit
         self.data_unit: Optional[RegistrationReviewDataUnit] = None
@@ -463,7 +472,10 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
         gui_layout = self.gui.setup()
         container.setLayout(gui_layout)
 
-        # Update this new GUI with our current data unit
+        # Try to initialize our CSV log from the settings provided by the GUI
+        self.csv_log = self._load_csv_log()
+
+        # Update this new GUI with our current data unit if it exists
         if self.data_unit:
             self.gui.update(self.data_unit)
 
@@ -478,7 +490,7 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
 
     def cleanup(self):
         """Clean up resources when task is destroyed."""
-        # Break the cyclical link with our GUI so garbage collection can ru
+        # Break the cyclical link with our GUI so garbage collection can run
         self.gui = None
 
     def save(self) -> Optional[str]:
@@ -496,53 +508,21 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
         try:
             # Prepare the data to save
             review_data = {
-                "uid": self.data_unit.uid,
-                "user": self.user,
+                self.UID_KEY: self.data_unit.uid,
+                self.USER_KEY: self.user,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "review_status": "reviewed",
                 "registration_classification": self.gui.selectedClassification,
             }
 
-            # Check if CSV file exists
-            csv_exists = self.csv_log_path.exists()
+            # Replace/add the entry to our CSV log
+            self.csv_log[(self.data_unit.uid, self.user)] = review_data
 
-            # Read existing data if file exists
-            existing_data = []
-            if csv_exists:
-                with open(self.csv_log_path, newline="") as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    existing_data = list(reader)
-
-            # Check if this UID already has an entry and update it
-            entry_found = False
-            for entry in existing_data:
-                if (
-                    entry.get("uid") == self.data_unit.uid
-                    and entry.get("user") == self.user
-                ):
-                    # Update existing entry
-                    entry.update(review_data)
-                    entry_found = True
-                    break
-
-            # If no existing entry, add new one
-            if not entry_found:
-                existing_data.append(review_data)
-
-            # Define field names (CSV headers)
-            fieldnames = [
-                "uid",
-                "user",
-                "timestamp",
-                "review_status",
-                "registration_classification",
-            ]
-
-            # Write the updated data back to CSV
+            # Write the updated data back to our CSV log file
             with open(self.csv_log_path, "w", newline="") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer = csv.DictWriter(csvfile, fieldnames=self.FIELD_NAMES)
                 writer.writeheader()
-                writer.writerows(existing_data)
+                writer.writerows(self.csv_log.values())
 
             print(
                 f"Registration review saved for UID: {self.data_unit.uid} with classification: {self.gui.selectedClassification}"
@@ -570,22 +550,29 @@ class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
             print(f"Error reading review status: {str(e)}")
             return None
 
-    def _load_review_status_cache(self) -> dict:
+    def _load_csv_log(self) -> dict[tuple[str, str], dict[str, str]]:
         """Load all review statuses into cache for efficient lookup."""
+        # If no log was specified, or a new path was specified, initiate a new log
+        csv_log = {}
         if not self.csv_log_path or not self.csv_log_path.exists():
             return {}
 
-        cache = {}
-        try:
-            with open(self.csv_log_path, newline="") as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    if row.get("user") == self.user:
-                        cache[row.get("uid")] = row
-        except Exception as e:
-            print(f"Error loading review status cache: {str(e)}")
+        # Otherwise, read the contents of the log file ourselves
+        with open(self.csv_log_path, newline="") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for i, row in enumerate(reader):
+                # Confirm the row has a UID; if not, skip it
+                uid = row.get('uid', None)
+                if not uid:
+                    print(f"WARNING: Skipping entry #{i} in {self.csv_log_path}, lacked a valid UID")
+                    continue
+                # Generate a unique uid + author combo to use as our key
+                author = row.get('author', None)
+                # KO: In Python, as long as the contents of a tuple are hashable,
+                # the tuple is hashable as well!
+                csv_log[(uid, author)] = row
 
-        return cache
+        return csv_log
 
     def can_save(self) -> bool:
         """Check if we can save the current registration review."""
