@@ -17,7 +17,7 @@ from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 
-from CARTLib.utils.bids_init import import_pybids
+from CARTLib.utils.bids_init import import_pybids, check_pybids_installation
 
 # TODO: Remove this explicit import
 from CARTLib.examples.OrganLabellingDemo.OrganLabellingDemo import OrganLabellingDemoTask
@@ -492,10 +492,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         Handles changes to the base path selection.
         Falls back the previous base path if the user specified an empty space.
         """
-
-        # Install PyBIDS if not already installed
-        import_pybids()
-
         # Get the current path from the GUI
         current_path = self.dataPathSelectionWidget.currentPath
 
@@ -504,6 +500,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # If the data path is now empty, reset to the previous path and end early
         if not current_path:
+            print("TS FAILED")
             print("Error: Base path was empty, retaining previous base path.")
             self.dataPathSelectionWidget.currentPath = str(self.logic.data_path)
             self.updateButtons()
@@ -517,6 +514,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Clear the cohort file, as it is no longer valid
             self.cohortFileSelectionButton.currentPath = ""
             self.logic.cohort_path = None
+
+            print("TS SUCCESS")
 
             # Enable the auto-generation of cohort file
             self.cohortGeneratorButton.setEnabled(True)
@@ -601,6 +600,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._disableTaskMode()
 
     def onCohortGeneratorButtonClicked(self):
+
+        # TODO: FIX TIS - Install PyBIDS if not already installed
+        # check_pybids_installation()
+
         case_data = None
         if self.logic.data_manager and self.logic.data_manager.case_data:
             case_data = self.logic.data_manager.case_data
