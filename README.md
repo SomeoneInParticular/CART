@@ -27,7 +27,11 @@ Clone this repository somewhere can easily access it. You can do this one of two
 1. Downloading the repository from GitHub:
    1. Open the [CART](https://github.com/SomeoneInParticular/CART) repository in your browser.
    2. Click the green "<> Code" drop-down button on the top-right of of the page
+   <img width="948" height="144" alt="image" src="https://github.com/user-attachments/assets/9e98c9b5-7039-4e1a-bea8-a97c63ee73bd" />
+
    3. Select "Download ZIP"
+   <img width="432" height="349" alt="image" src="https://github.com/user-attachments/assets/0a1360dd-89fe-4cbb-8e46-c5be4282e5aa" />
+
    4. Choose where you want the resulting file to be placed in the resulting popup
    5. Wait for the download to complete
    6. Once complete, navigate to the `CART-main.zip` file and unzip it (on most OS systems, double-clicking on the file should tell you how to do this)
@@ -44,9 +48,15 @@ Clone this repository somewhere can easily access it. You can do this one of two
 0. Open the cloned CART directory you created prior in a file browser
 1. Start up Slicer
 2. Select `Edit` (top left) > `Application Settings`
+<img width="1066" height="154" alt="image" src="https://github.com/user-attachments/assets/1f2c4d4f-ce10-46fd-8165-09c0df87a7e6" />
+
 3. In the "settings" popup, select `Modules` from the left sidebar
+<img width="865" height="650" alt="image" src="https://github.com/user-attachments/assets/ea9d4013-b77b-47ef-84b5-f4d38fd7f044" />
+
 4. Click and drag `CART.py` from the file browser into the "Additional module paths" panel.
 5. Click "OK"; Slicer should prompt you that it needs to restart.
+<img width="395" height="169" alt="image" src="https://github.com/user-attachments/assets/76c1d8c4-bd3a-40d9-b674-01d7787a2a44" />
+
 6. Restart Slicer
 
 ### [Optional] Setting CART as your Default Module
@@ -55,6 +65,8 @@ Clone this repository somewhere can easily access it. You can do this one of two
 2. Select `Edit` (top left) > `Application Settings`
 3. In the "settings" popup, select `Modules` from the left sidebar
 4. Select `CART` from the dropdown button labelled "Default startup module"
+<img width="506" height="760" alt="image" src="https://github.com/user-attachments/assets/66a360ff-8ad6-406e-a498-7e1ff1ae6f20" />
+
 
 ## Using CART
 
