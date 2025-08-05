@@ -2,7 +2,6 @@ from pathlib import Path
 
 import slicer
 
-
 ## LOADING ##
 def load_volume(path: Path):
     """

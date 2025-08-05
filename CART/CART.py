@@ -17,6 +17,8 @@ from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 
+from CARTLib.utils.bids_init import import_pybids
+
 # TODO: Remove this explicit import
 from CARTLib.examples.OrganLabellingDemo.OrganLabellingDemo import OrganLabellingDemoTask
 from CARTLib.examples.SegmentationEvaluation.SegmentationEvaluationTask import SegmentationEvaluationTask
@@ -490,6 +492,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         Handles changes to the base path selection.
         Falls back the previous base path if the user specified an empty space.
         """
+
+        # Install PyBIDS if not already installed
+        import_pybids()
+
         # Get the current path from the GUI
         current_path = self.dataPathSelectionWidget.currentPath
 
