@@ -1,22 +1,62 @@
-# Generic Iterator Project Plan 
+# Case Annotation and Review Tool (CART)
 
-## Prerequisites
+## What is CART?
 
-- Slicer v5.8 (other versions might work, without guaranty)
+CART is a module for the 3D slicer program designed to help you manage  iterative analyses, allowing you to focus on implementing and running task you set out to do. Currently, it provides the following capabilities:
 
-## Getting started
+* Managing sequential cases (be they patients, sub-studies, or other collections of data).
+* Cacheing and memory management.
+* User tracking.
 
-clone this repository
-~~~
-git clone git@github.com:SomeoneInParticular/CART.git
-~~~
+A number of features are currently in progress as well, and will be available upon CART's full release:
 
-Go to Slicer
-**Edit > Application Settings > Modules **
+* Custom task creation and registration.
+* Case pre-fetching/deferred loading.
+* Per-user + per-task configurations.
 
-Drag & Drop the CART/CART folder into the "Additional module paths" window, then click OK and restart Slicer.
+## Setting up CART
 
-Access CART via: **Modules > Utilities > CART**
+### Prerequisites
+
+- Slicer v5.8 (other versions might work, without guarantee)
+
+### Installation
+
+Clone this repository somewhere can easily access it. You can do this one of two ways:
+
+1. Downloading the repository from GitHub:
+   1. Open the [CART](https://github.com/SomeoneInParticular/CART) repository in your browser.
+   2. Click the green "<> Code" drop-down button on the top-right of of the page
+   3. Select "Download ZIP"
+   4. Choose where you want the resulting file to be placed in the resulting popup
+   5. Wait for the download to complete
+   6. Once complete, navigate to the `CART-main.zip` file and unzip it (on most OS systems, double-clicking on the file should tell you how to do this)
+
+2. Cloning the repository via `git`:
+   1. Open a terminal in a directory of your choice
+   2. Run the following command to clone the current `CART` repository:
+    ~~~
+    git clone git@github.com:SomeoneInParticular/CART.git
+    ~~~
+
+### Registering CART in Slicer
+
+0. Open the cloned CART directory you created prior in a file browser
+1. Start up Slicer
+2. Select `Edit` (top left) > `Application Settings`
+3. In the "settings" popup, select `Modules` from the left sidebar
+4. Click and drag `CART.py` from the file browser into the "Additional module paths" panel.
+5. Click "OK"; Slicer should prompt you that it needs to restart.
+6. Restart Slicer
+
+### [Optional] Setting CART as your Default Module
+
+1. Start Slicer
+2. Select `Edit` (top left) > `Application Settings`
+3. In the "settings" popup, select `Modules` from the left sidebar
+4. Select `CART` from the dropdown button labelled "Default startup module"
+
+## Using CART
 
 ### Create a user
 
