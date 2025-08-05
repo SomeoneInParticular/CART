@@ -1,12 +1,8 @@
-from CARTLib
-
+import qt
 import csv
 from pathlib import Path
 
-import qt
-
-
-
+from CARTLib.utils.bids_init import import_pybids
 class CohortGeneratorWindow(qt.QDialog):
     """
     GUI to display and configure a cohort from a data directory.
@@ -69,6 +65,9 @@ class CohortGeneratorWindow(qt.QDialog):
         button_layout.addWidget(self.cancel_button)
 
         layout.addLayout(button_layout)
+
+        print("DATA PATH")
+        print(self.logic.data_path)
 
     def build_load_options_groupbox(self):
         """

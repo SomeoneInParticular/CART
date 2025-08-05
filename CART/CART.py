@@ -514,6 +514,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # If we succeeded, update the GUI to match
         if success:
+            # Clear the cohort file, as it is no longer valid
+            self.cohortFileSelectionButton.currentPath = ""
+            self.logic.cohort_path = None
+
             # Enable the auto-generation of cohort file
             self.cohortGeneratorButton.setEnabled(True)
 
