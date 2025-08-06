@@ -96,6 +96,8 @@ def fetch_layout(data_path, derivatives=False):
             parent=slicer.util.mainWindow()
     )
 
+    progressDialog.setCancelButton(None)
+
     progressDialog.labelText = f"Analyzing BIDS structure at {data_path}..."
     slicer.app.processEvents()
 
