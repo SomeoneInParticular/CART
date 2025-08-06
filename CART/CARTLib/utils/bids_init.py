@@ -99,8 +99,20 @@ def fetch_layout(data_path, derivatives=False):
     progressDialog.labelText = f"Analyzing BIDS structure at {data_path}..."
     slicer.app.processEvents()
 
+    cancelled = progressDialog.wasCanceled
+
+    if cancelled:
+        return None
+
+    slicer.app.processEvents()
+
     try:
         layout = BIDSLayout(data_path, derivatives=derivatives)
+
+        slicer.app.processEvents()
+        if cancelled:
+            return None
+
         progressDialog.close()
         return layout
 
