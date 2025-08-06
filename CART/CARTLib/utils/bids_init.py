@@ -1,5 +1,7 @@
 import slicer
 import qt
+from slicer.i18n import tr as _
+import time
 
 from pathlib import Path
 
@@ -15,8 +17,16 @@ def import_pybids():
         return True
     except ImportError as e:
         print(f"PyBIDS not found, attempting to install: {e}")
+        progressDialog = slicer.util.createProgressDialog(
+            windowTitle="Installing...",
+            labelText="Installing Pandas Python package...",
+            maximum=0,
+        )
+        slicer.app.processEvents()
+
         try:
             slicer.util.pip_install("pybids")
+            progressDialog.close()
 
             # Try importing again after installation
             import bids
@@ -25,6 +35,8 @@ def import_pybids():
             return True
 
         except Exception as install_error:
+            progressDialog.close()
+
             msg = qt.QMessageBox()
             msg.setWindowTitle("Installation Failed")
             msg.setText(f"Failed to install PyBIDS. Please restart 3D Slicer and try again.\n\nError details:\n{str(install_error)}")
@@ -55,21 +67,48 @@ def get_bids_layout(data_path, derivatives=False):
     Helper function to get a BIDSLayout object.
     """
     try:
-        from bids import BIDSLayout
-        return BIDSLayout(data_path, derivatives=derivatives)
+        return fetch_layout(data_path, derivatives=derivatives)
     except ImportError:
         if not import_pybids():
             return None
         # Try again after installation
         try:
-            from bids import BIDSLayout
-            return BIDSLayout(data_path, derivatives=derivatives)
+            return fetch_layout(data_path, derivatives=derivatives)
         except Exception as e:
             print(f"Failed to create BIDSLayout even after installation: {e}")
             return None
     except Exception as e:
         print(f"Error creating BIDSLayout: {e}")
         return None
+
+def fetch_layout(data_path, derivatives=False):
+    """
+    Fetches a BIDSLayout object while displaying a progress dialog.
+    The dialog is shown during the potentially long initialization of BIDSLayout.
+    """
+    import bids
+    from bids import BIDSLayout
+
+    progressDialog = slicer.util.createProgressDialog(
+            title=_("Initializing BIDS"),
+            labelText=_("Analyzing BIDS structure..."),
+            maximum=0, # Use 0 for a "busy" indicator when duration is unknown
+            parent=slicer.util.mainWindow()
+    )
+
+    progressDialog.labelText = f"Analyzing BIDS structure at {data_path}..."
+    slicer.app.processEvents()
+
+    try:
+        layout = BIDSLayout(data_path, derivatives=derivatives)
+        progressDialog.close()
+        return layout
+
+    except:
+        progressDialog.close()
+        return None
+
+
 
 ### Querying ###
 def get_bids_folders(data_path, scope):
