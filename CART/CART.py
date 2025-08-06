@@ -17,7 +17,7 @@ from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 
-from CARTLib.utils.bids_init import import_pybids, check_pybids_installation
+from CARTLib.utils.bids_init import get_bids_layout, check_pybids_installation, get_bids_folders
 
 # TODO: Remove this explicit import
 from CARTLib.examples.OrganLabellingDemo.OrganLabellingDemo import OrganLabellingDemoTask
@@ -132,6 +132,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Tracks whether we are in "Task Mode" (actively working on a task) or not
         self.isTaskMode = False
+
+        # Tracks whether pyBIDS is installed
+        self.pyBIDSInstalled = False
 
         # TODO: Dynamically load this dictionary instead
         self.task_map = {
@@ -331,11 +334,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Add the horizontal layout to our main form layout as a single row
         mainLayout.addRow(_("Cohort File:"), hLayout)
 
-        # A valid data path needs to be selected before usage
-        self.cohortGeneratorButton.setEnabled(True)
-
         # Make it accessible
         self.cohortFileSelectionButton = cohortFileSelectionButton
+
+        # Verify that PyBids is installed
+        self.pyBIDSInstalled = check_pybids_installation()
 
     def buildTaskUI(self, mainLayout: qt.QFormLayout):
         # Prior users list
@@ -500,7 +503,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # If the data path is now empty, reset to the previous path and end early
         if not current_path:
-            print("TS FAILED")
             print("Error: Base path was empty, retaining previous base path.")
             self.dataPathSelectionWidget.currentPath = str(self.logic.data_path)
             self.updateButtons()
@@ -511,14 +513,15 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # If we succeeded, update the GUI to match
         if success:
-            # Clear the cohort file, as it is no longer valid
-            self.cohortFileSelectionButton.currentPath = ""
-            self.logic.cohort_path = None
-
-            print("TS SUCCESS")
-
-            # Enable the auto-generation of cohort file
-            self.cohortGeneratorButton.setEnabled(True)
+            # Check if the data path points to a valid BIDS directory
+            if self.pyBIDSInstalled:
+                if get_bids_layout(self.logic.data_path) is not None:
+                    # Enable the auto-generation of cohort file
+                    self.cohortGeneratorButton.setEnabled(True)
+                    print(f"Valid BIDS layout found at{current_path}. Cohort generation enabled.")
+                else:
+                    self.cohortGeneratorButton.setEnabled(False)
+                    print(f"Invalid BIDS layout found at {current_path}. Cohort generation disabled.")
 
             # Exit task mode; any active task is no longer relevant.
             self._disableTaskMode()
@@ -528,6 +531,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         Handles cohort file changes from the ctkPathLineEdit widget or internal calls.
         Ensures the path is converted to a Path object before being passed to the logic.
         """
+
+        # If an existing cohort file is loaded from config, indicate edit instead of generation
+        if self.cohortFileSelectionButton.currentPath != "":
+            self.cohortGeneratorButton.setText("Edit cohort file")
+
         if new_cohort_path is None:
             new_cohort_path = self.cohortFileSelectionButton.currentPath
 
@@ -601,9 +609,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onCohortGeneratorButtonClicked(self):
 
-        # TODO: FIX TIS - Install PyBIDS if not already installed
-        # check_pybids_installation()
-
+        # Open the cohort generator window, passing in the current data path and cohort (if any)
         case_data = None
         if self.logic.data_manager and self.logic.data_manager.case_data:
             case_data = self.logic.data_manager.case_data

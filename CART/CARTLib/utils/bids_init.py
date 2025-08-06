@@ -9,29 +9,67 @@ def import_pybids():
     Install the PyBIDS package into Slicer's Python environment if not installed.
     """
     try:
-        import pybids
+        import bids
+        from bids import BIDSLayout
         print("PyBIDS is now working adequately!")
         return True
+    except ImportError as e:
+        print(f"PyBIDS not found, attempting to install: {e}")
+        try:
+            slicer.util.pip_install("pybids")
+
+            # Try importing again after installation
+            import bids
+            from bids import BIDSLayout
+            print("PyBIDS installed and imported successfully!")
+            return True
+
+        except Exception as install_error:
+            msg = qt.QMessageBox()
+            msg.setWindowTitle("Installation Failed")
+            msg.setText(f"Failed to install PyBIDS. Please restart 3D Slicer and try again.\n\nError details:\n{str(install_error)}")
+            msg.setIcon(qt.QMessageBox.Critical)
+            msg.addButton("Restart", qt.QMessageBox.AcceptRole)
+            msg.addButton("Later", qt.QMessageBox.RejectRole)
+
+            if msg.exec_() == 0:
+                slicer.util.restart()
+            return False
     except Exception as e:
-        slicer.util.pip_install("pybids")
-
-        msg = qt.QMessageBox()
-        msg.setWindowTitle("Restart Required")
-        msg.setText("Please restart 3D Slicer for PyBIDS to take effect.")
-        msg.setIcon(qt.QMessageBox.Warning)
-        msg.addButton("Restart", qt.QMessageBox.AcceptRole)
-        msg.addButton("Later", qt.QMessageBox.RejectRole)
-
-        if msg.exec_() == 0:
-            slicer.util.restart()
+        print(f"Unexpected error with PyBIDS: {e}")
         return False
 
 def check_pybids_installation():
+    """
+    Check if PyBIDS is available and install if needed.
+    """
     try:
-        import pybids
+        import bids
+        from bids import BIDSLayout
         return True
-    except ImportError or ModuleNotFoundError:
+    except ImportError:
         return import_pybids()
+
+def get_bids_layout(data_path, derivatives=False):
+    """
+    Helper function to get a BIDSLayout object.
+    """
+    try:
+        from bids import BIDSLayout
+        return BIDSLayout(data_path, derivatives=derivatives)
+    except ImportError:
+        if not import_pybids():
+            return None
+        # Try again after installation
+        try:
+            from bids import BIDSLayout
+            return BIDSLayout(data_path, derivatives=derivatives)
+        except Exception as e:
+            print(f"Failed to create BIDSLayout even after installation: {e}")
+            return None
+    except Exception as e:
+        print(f"Error creating BIDSLayout: {e}")
+        return None
 
 ### Querying ###
 def get_bids_folders(data_path, scope):
@@ -39,24 +77,35 @@ def get_bids_folders(data_path, scope):
     Gets either the derivatives or raw BIDS folders from the datapath
     """
     try:
-        layout_raw = BIDSLayout(data_path)
-        layout_derivatives = BIDSLayout(data_path, derivatives=True)
+        # Check if PyBIDS is available first
+        if not check_pybids_installation():
+            return None
 
         if scope == "raw":
-            subject_dirs = [Path(layout_raw.root) / f'sub-{subject}' for subject in layout_raw.get_subjects()]
+            layout = get_bids_layout(data_path, derivatives=False)
         else:
-            subject_dirs = [Path(layout_raw.root) / "derivatives" / f'sub-{subject}' for subject in layout_raw.get_subjects()]
+            layout = get_bids_layout(data_path, derivatives=True)
+
+        if layout is None:
+            return None
+
+        subjects = layout.get_subjects()
+
+        if scope == "raw":
+            subject_dirs = [Path(layout.root) / f'sub-{subject}' for subject in subjects]
+        else:
+            subject_dirs = [Path(layout.root) / "derivatives" / f'sub-{subject}' for subject in subjects]
 
         return subject_dirs
 
     except Exception as e:
+        print(f"Error in get_bids_folders: {e}")
         msgBox = qt.QMessageBox()
         msgBox.setIcon(qt.QMessageBox.Critical)
-        msgBox.setText(f"<b>Error</b>")
-        msgBox.setWindowTitle(f"Validation Error: {e}")
+        msgBox.setText(f"<b>BIDS Error</b>")
+        msgBox.setInformativeText(f"Failed to process BIDS data: {str(e)}")
+        msgBox.setWindowTitle("BIDS Validation Error")
         msgBox.setStandardButtons(qt.QMessageBox.Ok)
-        # Allows for selectable text in the error message
         msgBox.setTextInteractionFlags(qt.Qt.TextSelectableByMouse)
         msgBox.exec()
-
         return None

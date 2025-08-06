@@ -3,6 +3,7 @@ import csv
 from pathlib import Path
 
 from CARTLib.utils.bids_init import import_pybids, get_bids_folders
+
 class CohortGeneratorWindow(qt.QDialog):
     """
     GUI to display and configure a cohort from a data directory.
@@ -445,8 +446,6 @@ class CohortGeneratorLogic:
 
         # Sort and assign
         self.all_files_by_case = {case_id: files for case_id, files in sorted(temp_cases.items())}
-
-        print("All files by case:", self.all_files_by_case)
 
     def load_cohort_data(self, data_path, excluded_extensions=None):
         self._scan_filesystem(excluded_extensions)
