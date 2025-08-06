@@ -90,7 +90,7 @@ def fetch_layout(data_path, derivatives=False):
     from bids import BIDSLayout
 
     progressDialog = slicer.util.createProgressDialog(
-            title=_("Initializing BIDS"),
+            windowTitle=_("Initializing BIDS"),
             labelText=_("Analyzing BIDS structure..."),
             maximum=0, # Use 0 for a "busy" indicator when duration is unknown
             parent=slicer.util.mainWindow()

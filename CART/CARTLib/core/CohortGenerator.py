@@ -119,8 +119,8 @@ class CohortGeneratorWindow(qt.QDialog):
 
         layout.addRow("Target Column:", self.target_column_combo)
         layout.addRow("New Column Name:", self.new_column_name_input)
-        layout.addRow("Files MUST Contain:", self.include_input)
-        layout.addRow("Files MUST NOT Contain:", self.exclude_input)
+        layout.addRow("Filenames MUST Contain:", self.include_input)
+        layout.addRow("Filenames MUST NOT Contain:", self.exclude_input)
 
         # Tooltips
         self.new_column_name_input.setToolTip("Assigns name to the new resource column if creating")
@@ -290,6 +290,8 @@ class CohortGeneratorWindow(qt.QDialog):
 
         if reply == qt.QMessageBox.Yes:
             if self.logic.delete_column(target_col):
+                # Reset to "Create New Column"
+                self.on_target_column_changed("Create New Column")
                 self.update_ui_from_logic()
             else:
                 qt.QMessageBox.warning(self, "Delete Error", "Could not delete column.")
