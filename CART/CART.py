@@ -522,6 +522,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     self.cohortGeneratorButton.setEnabled(False)
                     print(f"Invalid BIDS layout found at {current_path}. Cohort generation disabled.")
 
+
+
             # Exit task mode; any active task is no longer relevant.
             self._disableTaskMode()
 
@@ -547,6 +549,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         success = self.logic.set_current_cohort(new_cohort)
 
         if success:
+            print(f"Successfully set cohort to {self.logic.cohort_path}")
             # Exit task mode; the new cohort likely makes it obsolete
             self._disableTaskMode()
 
@@ -608,10 +611,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onCohortGeneratorButtonClicked(self):
 
+        self.logic.load_cohort()
+
         # Open the cohort generator window, passing in the current data path and cohort (if any)
         case_data = None
-        if self.logic.data_manager and self.logic.data_manager.case_data:
-            case_data = self.logic.data_manager.case_data
+        case_data = self.logic.data_manager.case_data
 
         cohortGeneratorWindow = CohortGeneratorWindow(data_path=self.logic.data_path, cohort_data=case_data, cohort_path=self.logic.cohort_path)
         cohortGeneratorWindowResult = cohortGeneratorWindow.exec_()
@@ -1061,6 +1065,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
     def set_current_cohort(self, new_path: Path) -> bool:
         # If we don't have a data manager, create one
         if not self.data_manager:
+            print("DATA MANAGER REBUILT")
             self.rebuild_data_manager()
 
         # Confirm the file exists
