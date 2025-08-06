@@ -132,8 +132,6 @@ class Config:
         """
         Sets or updates the filter strings for a given column name.
         """
-        # This ensures the 'filters' key exists in the main dictionary.
-        # It's a bit redundant with self.filters but safer.
         if "filters" not in self._backing_dict:
             self._backing_dict["filters"] = {}
 
@@ -144,7 +142,9 @@ class Config:
         self._has_changed = True
 
     def remove_filter(self, column_name: str):
-        """Removes a filter for a given column name if it exists."""
+        """
+        Removes a filter for a given column name if it exists.
+        """
         if "filters" in self._backing_dict and column_name in self._backing_dict["filters"]:
             del self._backing_dict["filters"][column_name]
             self._has_changed = True

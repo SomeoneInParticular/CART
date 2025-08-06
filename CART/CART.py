@@ -26,7 +26,6 @@ from CARTLib.examples.MultiContrastSegmentation.MultiContrastSegmentationEvaluat
     MultiContrastSegmentationEvaluationTask,
 )
 
-
 CURRENT_DIR = Path(__file__).parent
 CONFIGURATION_FILE_NAME = CURRENT_DIR / "configuration.json"
 sample_data_path = CURRENT_DIR.parent / "sample_data"
@@ -340,8 +339,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Verify that PyBids is installed
         self.pyBIDSInstalled = check_pybids_installation()
 
-        # Initiate dict to save current cohort filters
-
     def buildTaskUI(self, mainLayout: qt.QFormLayout):
         # Prior users list
         taskOptions = qt.QComboBox()
@@ -541,9 +538,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if new_cohort_path is None:
             new_cohort_path = self.cohortFileSelectionButton.currentPath
 
-        # If the provided path is empty (e.g., user cleared the input), stop here.
+        # If the provided path is empty, stop here.
         if not new_cohort_path:
-            self.destroyCohortTable()  # Clear the table if the path is removed
+            self.destroyCohortTable()
             return
 
         new_cohort = Path(new_cohort_path)

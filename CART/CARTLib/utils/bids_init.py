@@ -92,7 +92,7 @@ def fetch_layout(data_path, derivatives=False):
     progressDialog = slicer.util.createProgressDialog(
             windowTitle=_("Initializing BIDS"),
             labelText=_("Analyzing BIDS structure..."),
-            maximum=0, # Use 0 for a "busy" indicator when duration is unknown
+            maximum=0,
             parent=slicer.util.mainWindow()
     )
 
@@ -107,8 +107,6 @@ def fetch_layout(data_path, derivatives=False):
     except:
         progressDialog.close()
         return None
-
-
 
 ### Querying ###
 def get_bids_folders(data_path, scope):
