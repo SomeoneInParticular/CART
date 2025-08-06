@@ -232,6 +232,7 @@ class CohortGeneratorWindow(qt.QDialog):
         self.rescan_button.clicked.connect(self.on_rescan)
         self.apply_filter_button.clicked.connect(self.on_apply_filter)
         self.delete_col_button.clicked.connect(self.on_delete_column)
+
         self.target_column_combo.currentTextChanged.connect(self.on_target_column_changed)
 
         self.table_widget.horizontalHeader().sectionDoubleClicked.connect(self.on_header_double_clicked)
@@ -351,6 +352,7 @@ class CohortGeneratorWindow(qt.QDialog):
 
         column_name = self.logic.get_headers()[logical_index - 1]
 
+        # Automatically triggers `self.on_target_column_changed`
         self.target_column_combo.setCurrentText(column_name)
         self.new_column_name_input.setEnabled(False)
 
