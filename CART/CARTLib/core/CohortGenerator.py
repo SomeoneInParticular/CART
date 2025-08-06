@@ -2,6 +2,7 @@ import qt
 import csv
 from pathlib import Path
 
+from CARTLib.utils.config import config
 from CARTLib.utils.bids_init import import_pybids, get_bids_folders
 
 class CohortGeneratorWindow(qt.QDialog):
@@ -66,9 +67,6 @@ class CohortGeneratorWindow(qt.QDialog):
         button_layout.addWidget(self.cancel_button)
 
         layout.addLayout(button_layout)
-
-        print("DATA PATH")
-        print(self.logic.data_path)
 
     def build_load_options_groupbox(self):
         """
@@ -235,7 +233,10 @@ class CohortGeneratorWindow(qt.QDialog):
         self.apply_filter_button.clicked.connect(self.on_apply_filter)
         self.delete_col_button.clicked.connect(self.on_delete_column)
         self.target_column_combo.currentTextChanged.connect(self.on_target_column_changed)
+
         self.table_widget.horizontalHeader().sectionDoubleClicked.connect(self.on_header_double_clicked)
+        self.table_widget.horizontalHeader().sectionClicked.connect(self.on_header_single_clicked)
+
 
     ### Callback functions ###
     def on_rescan(self):
@@ -306,15 +307,26 @@ class CohortGeneratorWindow(qt.QDialog):
         if is_new_column:
             self.apply_filter_button.setText("Create New Column from Filters")
         else:
-            self.apply_filter_button.setText(f"Apply Filters on {text} column")
+            # Populate include/exclude inputs from config if available
+            selected_column_filters = config.get_filter(text)
+            if selected_column_filters:
+                include_input  = selected_column_filters["inclusion_input"]
+                exclude_input  = selected_column_filters["exclusion_input"]
+
+                self.include_input.setText(include_input)
+                self.exclude_input.setText(exclude_input)
+
+            self.apply_filter_button.setText(f"Apply Filters on `{text}`")
 
     def on_header_double_clicked(self, logical_index):
+        """
+        Change the name of the selected column
+        """
         if logical_index <= 1:
             return
 
         old_name = self.logic.get_headers()[logical_index - 1]
 
-        # Method 1: Use the simpler overload without ok parameter
         new_name = qt.QInputDialog.getText(
             self,
             "Rename Column",
@@ -329,6 +341,18 @@ class CohortGeneratorWindow(qt.QDialog):
                 self.update_ui_from_logic()
             else:
                 qt.QMessageBox.warning(self, "Rename Error", "Column name already exists.")
+
+    def on_header_single_clicked(self, logical_index):
+        """
+        Populate the creating, filtering and editing UI with selected column metadata
+        """
+        if logical_index <= 1:
+            return
+
+        column_name = self.logic.get_headers()[logical_index - 1]
+
+        self.target_column_combo.setCurrentText(column_name)
+        self.new_column_name_input.setEnabled(False)
 
     def handle_row_toggle(self, table_row_idx, is_enabled):
         logical_row_idx = table_row_idx - 1
@@ -532,6 +556,16 @@ class CohortGeneratorLogic:
             return False
 
         self.headers.append(new_col_name)
+
+        # Save used filters to config for population later
+        config.set_filter(
+            column_name=col_name,
+            inclusion_input=','.join(include),
+            exclusion_input=','.join(exclude)
+        )
+
+        config.save()
+
         return True
 
     def delete_column(self, column_name):
@@ -558,6 +592,10 @@ class CohortGeneratorLogic:
             # Remove column data from all rows
             for row in self.cohort_data:
                 row.pop(column_name, None)
+
+            # Remove the filter from config
+            config.remove_filter(column_name)
+            config.save()
 
             return True
         except ValueError:

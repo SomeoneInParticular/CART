@@ -1,5 +1,6 @@
 {
   "users": [],
   "autosave": true,
-  "autosave_frequency": 120
+  "autosave_frequency": 120,
+  "filters": {}
 }

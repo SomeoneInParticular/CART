@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Optional
 
 # The location of the default config used by a fresh installation of CART.
 #  DO NOT TOUCH IT UNLESS YOU KNOW WHAT YOU'RE DOING.
@@ -113,6 +114,40 @@ class Config:
     @last_used_task.setter
     def last_used_task(self, new_task: str):
         self._backing_dict["last_used_task"] = new_task
+
+    ## Resource file queries ##
+    @property
+    def filters(self) -> dict:
+        """Returns the entire dictionary of filters."""
+        return self._get_or_default("filters", {})
+
+    def get_filter(self, column_name: str) -> Optional[dict]:
+        """
+        Retrieves the inclusion/exclusion filters for a specific column.
+        Returns a dict like {'inclusion_input': '...', 'exclusion_input': '...'} or None.
+        """
+        return self.filters.get(column_name)
+
+    def set_filter(self, column_name: str, inclusion_input: str = "", exclusion_input: str = ""):
+        """
+        Sets or updates the filter strings for a given column name.
+        """
+        # This ensures the 'filters' key exists in the main dictionary.
+        # It's a bit redundant with self.filters but safer.
+        if "filters" not in self._backing_dict:
+            self._backing_dict["filters"] = {}
+
+        self._backing_dict["filters"][column_name] = {
+            "inclusion_input": inclusion_input,
+            "exclusion_input": exclusion_input
+        }
+        self._has_changed = True
+
+    def remove_filter(self, column_name: str):
+        """Removes a filter for a given column name if it exists."""
+        if "filters" in self._backing_dict and column_name in self._backing_dict["filters"]:
+            del self._backing_dict["filters"][column_name]
+            self._has_changed = True
 
     ## Autosaving Management ##
     @property

@@ -340,6 +340,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Verify that PyBids is installed
         self.pyBIDSInstalled = check_pybids_installation()
 
+        # Initiate dict to save current cohort filters
+
     def buildTaskUI(self, mainLayout: qt.QFormLayout):
         # Prior users list
         taskOptions = qt.QComboBox()
