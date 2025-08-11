@@ -810,7 +810,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             #  segmentation review) will either load configurations and/or prompt the
             #  user for things required to determine whether a task is "complete" or
             #  not for a given case.
-            self.logic.load_first_unit()
+            self.logic.load_initial_unit()
 
             # Load the cohort csv data into the table, if it wasn't already
             self.updateCohortTable()
@@ -1187,12 +1187,14 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         #  properly
         self.enter()
 
-    def load_first_unit(self):
+    def load_initial_unit(self):
         """
         Attempts to load the first data unit into memory and update our task with it
         """
         # Pass our first data unit to the task
-        data_unit = self.data_manager.first_incomplete(self.current_task_instance)
+        data_unit = self.data_manager.first()
+        # TODO: Add a configuration option for skipping to first incomplete unit
+        # data_unit = self.data_manager.first_incomplete(self.current_task_instance)
         self.current_task_instance.receive(data_unit)
 
     def enter(self):

@@ -214,6 +214,11 @@ class DataManager:
         print("WARNING: All cases were completed, falling back to next")
         return self.next()
 
+    def first(self):
+        # Wrapper to jump to the very first data unit
+        self.current_case_index = 0
+        return self.current_data_unit()
+
     def first_incomplete(self, task: TaskBaseClass):
         # Wrapper function for the somewhat unintuitive "find the first" syntax
         return self.next_incomplete(task, -1)
