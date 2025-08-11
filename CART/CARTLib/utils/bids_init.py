@@ -132,10 +132,7 @@ def get_bids_folders(data_path, scope):
         if not check_pybids_installation():
             return None
 
-        if scope == "raw":
-            layout = get_bids_layout(data_path, derivatives=False)
-        else:
-            layout = get_bids_layout(data_path, derivatives=True)
+        layout = get_bids_layout(data_path, derivatives=(scope != "raw"))
 
         if layout is None:
             return None

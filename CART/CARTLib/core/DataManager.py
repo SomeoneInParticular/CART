@@ -42,7 +42,7 @@ class DataManager:
         # The cohort data, and the file from which it was pulled
         self.cohort_csv: Path = cohort_file
         self.data_source: Path = data_source
-        self.case_data: list[dict[str, str]] = case_data
+        self.case_data: List[Dict[str, str]] = case_data
 
         # Current index in the
         self.current_case_index: int = 0

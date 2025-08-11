@@ -3,8 +3,6 @@ import csv
 from pathlib import Path
 
 from CARTLib.utils.config import config
-from CARTLib.utils.bids_init import import_pybids, get_bids_folders
-
 class CohortGeneratorWindow(qt.QDialog):
     """
     GUI to display and configure a cohort from a data directory.
@@ -223,9 +221,6 @@ class CohortGeneratorWindow(qt.QDialog):
 
     ### Connection signals ###
     def connect_signals(self):
-        """
-        Connect
-        """
         self.override_selected_cohort_file_toggle_button.stateChanged.connect(self.on_toggle_override_selected_cohort_file)
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
