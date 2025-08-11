@@ -48,6 +48,10 @@ class CohortGeneratorWindow(qt.QDialog):
 
         button_layout = qt.QHBoxLayout()
 
+        # Reset button
+        self.reset_button = qt.QPushButton("Reset")
+        button_layout.addWidget(self.reset_button)
+
         # If a preious cohort file was generated, give the option to override
         self.override_selected_cohort_file_toggle_button = qt.QCheckBox("Override selected Cohort File ?")
         self.override_selected_cohort_file_toggle_button.setEnabled(self.logic.selected_cohort_path is not None)
@@ -223,9 +227,11 @@ class CohortGeneratorWindow(qt.QDialog):
 
     ### Connection signals ###
     def connect_signals(self):
+        self.reset_button.clicked.connect(self.on_reset)
         self.override_selected_cohort_file_toggle_button.stateChanged.connect(self.on_toggle_override_selected_cohort_file)
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
+
         self.rescan_button.clicked.connect(self.on_rescan)
         self.apply_filter_button.clicked.connect(self.on_apply_filter)
         self.delete_col_button.clicked.connect(self.on_delete_column)
@@ -235,8 +241,12 @@ class CohortGeneratorWindow(qt.QDialog):
         self.table_widget.horizontalHeader().sectionDoubleClicked.connect(self.on_header_double_clicked)
         self.table_widget.horizontalHeader().sectionClicked.connect(self.on_header_single_clicked)
 
-
     ### Callback functions ###
+    def on_reset(self):
+        # Clears cohort table and readjusts to current data path if necessary
+        self.logic.clear_filters()
+        self.update_ui_from_logic()
+
     def on_rescan(self):
         """
         Rebuild entire tentative cohort table while excluding paths with forbidden filetypes
@@ -486,9 +496,6 @@ class CohortGeneratorLogic:
     def toggle_column(self, col_index, is_enabled):
         if is_enabled: self.disabled_columns.discard(col_index)
         else: self.disabled_columns.add(col_index)
-
-        print("DISABLED COLUMNS")
-        print(self.disabled_columns)
 
     def is_column_enabled(self, col_index):
         return col_index not in self.disabled_columns

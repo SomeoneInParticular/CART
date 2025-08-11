@@ -534,12 +534,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if self.currentDataConvention is not None:
                 # Enable the auto-generation of cohort file
                 self.cohortGeneratorButton.setEnabled(True)
-                print(f"Valid layout found at{current_path}. Cohort generation enabled.")
+                print(f"Valid layout found at {current_path}. Cohort generation enabled.")
             else:
                 self.cohortGeneratorButton.setEnabled(False)
                 print(f"Invalid layout found at {current_path}. Cohort generation disabled.")
-
-
 
             # Exit task mode; any active task is no longer relevant.
             self._disableTaskMode()
@@ -633,7 +631,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Open the cohort generator window, passing in the current data path and cohort (if any)
         case_data = self.logic.data_manager.case_data
 
-        cohortGeneratorWindow = CohortGeneratorWindow(data_path=self.logic.data_path, cohort_data=case_data, cohort_path=self.logic.cohort_path)
+        cohortGeneratorWindow = CohortGeneratorWindow(data_path=self.logic.data_path, cohort_data=case_data, cohort_path=self.logic.cohort_path, current_data_convention=self.currentDataConvention)
         cohortGeneratorWindowResult = cohortGeneratorWindow.exec_()
 
         if cohortGeneratorWindowResult == qt.QDialog.Accepted:
