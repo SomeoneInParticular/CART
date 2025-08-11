@@ -3,6 +3,8 @@ import csv
 from pathlib import Path
 
 from CARTLib.utils.config import config
+from CARTLib.utils.data_checker import fetch_resources
+
 class CohortGeneratorWindow(qt.QDialog):
     """
     GUI to display and configure a cohort from a data directory.
@@ -406,6 +408,8 @@ class CohortGeneratorLogic:
         self.data_path = Path(data_path)
         self.all_files_by_case: dict[str, list[str]] = {}
         self.cohort_data = cohort_data if cohort_data is not None else []
+        self.current_data_convention = current_data_convention
+
         self.headers = []
 
         self.disabled_rows = set()
@@ -435,40 +439,11 @@ class CohortGeneratorLogic:
         if not root_path.is_dir():
             return
 
-        excluded_ext = [e.lower().strip() for e in excluded_extensions or []]
-        temp_cases = {}
-
-        # Helper to collect files for a subject folder
-        def collect_files_for_subject(subject_path, subject_id_prefix):
-            files = []
-            for file_path in subject_path.rglob('*'):
-                if file_path.is_file() and file_path.suffix.lower() not in excluded_ext:
-                    rel_path = file_path.relative_to(root_path)
-                    files.append(rel_path.as_posix())
-            return files
-
-        # 1. Scan raw BIDS subjects (sub-*) in root
-        for subj_dir in root_path.glob('sub-*'):
-            if subj_dir.is_dir():
-                subj_id = subj_dir.name  # e.g., sub-01
-                files = collect_files_for_subject(subj_dir, subj_id)
-                temp_cases[subj_id] = files
-
-        # 2. Scan derivatives/sub-* and merge with raw subjects
-        derivatives_path = root_path / 'derivatives' / 'labels'
-        if derivatives_path.is_dir():
-            for deriv_subj_dir in derivatives_path.glob('sub-*'):
-                if deriv_subj_dir.is_dir():
-                    subj_id = deriv_subj_dir.name  # e.g., sub-01
-                    files = collect_files_for_subject(deriv_subj_dir, subj_id)
-                    # Merge with raw subject files if present, else create new
-                    if subj_id in temp_cases:
-                        temp_cases[subj_id].extend(files)
-                    else:
-                        temp_cases[subj_id] = files
-
-        # Sort and assign
-        self.all_files_by_case = {case_id: files for case_id, files in sorted(temp_cases.items())}
+        self.all_files_by_case = fetch_resources(
+        self.current_data_convention,
+        root_path,
+        excluded_extensions=excluded_extensions
+        )
 
     def load_cohort_data(self, data_path, excluded_extensions=None):
         self._scan_filesystem(excluded_extensions)

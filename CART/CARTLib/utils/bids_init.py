@@ -1,7 +1,6 @@
 import slicer
 import qt
 from slicer.i18n import tr as _
-import time
 
 from pathlib import Path
 
