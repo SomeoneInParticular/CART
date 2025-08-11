@@ -19,9 +19,13 @@ from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 
 from CARTLib.utils.bids_init import get_bids_layout, check_pybids_installation, get_bids_folders
 
-# TODO: Remove this explicit import
-from CARTLib.examples.OrganLabellingDemo.OrganLabellingDemo import OrganLabellingDemoTask
-from CARTLib.examples.SegmentationEvaluation.SegmentationEvaluationTask import SegmentationEvaluationTask
+
+from CARTLib.examples.SegmentationEvaluation.SegmentationEvaluationTask import (
+    SegmentationEvaluationTask,
+)
+from CARTLib.examples.RegistrationReview.RegistrationReviewTask import (
+    RegistrationReviewTask,
+)
 from CARTLib.examples.MultiContrastSegmentation.MultiContrastSegmentationEvaluationTask import (
     MultiContrastSegmentationEvaluationTask,
 )
@@ -87,6 +91,7 @@ class CART(ScriptedLoadableModule):
 
         # Add CARTLib to the Python Path for ease of (re-)use
         import sys
+
         cartlib_path = (Path(__file__) / "CARTLib").resolve()
         sys.path.append(str(cartlib_path))
 
@@ -137,9 +142,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # TODO: Dynamically load this dictionary instead
         self.task_map = {
-            "Organ Labels": OrganLabellingDemoTask,
             "Segmentation": SegmentationEvaluationTask,
             "MultiContrast Segmentation": MultiContrastSegmentationEvaluationTask,
+            "Registration Review": RegistrationReviewTask,
         }
 
     def setup(self) -> None:
@@ -362,7 +367,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         previewButton = qt.QPushButton(_("Preview"))
         previewButton.setToolTip(
             _(
-            """
+                """
             Reads the contents of the cohort.csv for review, without starting the task
             """
             )
@@ -403,17 +408,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Hide this by default, only showing it when we're ready to iterate
         iteratorWidget.setVisible(False)
 
-        # Next + previous buttons in a horizontal layout
-        buttonLayout = qt.QHBoxLayout()
-        self.previousButton = qt.QPushButton(_("Previous"))
-        self.previousButton.toolTip = _("Return to the previous case.")
-
-        self.nextButton = qt.QPushButton(_("Next"))
-        self.nextButton.toolTip = _("Move onto the next case.")
-
-        # Add them to the layout "backwards" so previous is on the left
-        buttonLayout.addWidget(self.previousButton)
-        buttonLayout.addWidget(self.nextButton)
+        # Previous, Save, and Next buttons, in a horizontal layout
+        buttonLayout = self.buildIteratorButtonPanel()
         # Add the button layout to the main vertical layout
         self.taskLayout.addLayout(buttonLayout)
 
@@ -428,9 +424,34 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Make the groupbox accessible elsewhere, so it can be made visible later
         self.iteratorWidget = iteratorWidget
 
-        # Connections
-        self.nextButton.clicked.connect(self.nextCase)
-        self.previousButton.clicked.connect(self.previousCase)
+    def buildIteratorButtonPanel(self):
+        # Button should be laid out left-to-right
+        buttonLayout = qt.QHBoxLayout()
+
+        # "Previous" Button
+        previousButton = qt.QPushButton(_("Previous"))
+        previousButton.toolTip = _("Return to the previous case.")
+        previousButton.clicked.connect(self.previousCase)
+
+        # "Save" Button
+        saveButton = qt.QPushButton(_("Save"))
+        saveButton.toolTip = _("Save the task for the current case.")
+        saveButton.clicked.connect(self.saveTask)
+
+        # "Next" Button
+        nextButton = qt.QPushButton(_("Next"))
+        nextButton.toolTip = _("Move onto the next case.")
+        nextButton.clicked.connect(self.nextCase)
+
+        # Add them to the layout in our desired order
+        for b in [previousButton, saveButton, nextButton]:
+            buttonLayout.addWidget(b)
+
+        # Track them for later
+        self.previousButton = previousButton
+        self.nextButton = nextButton
+
+        return buttonLayout
 
     ## Connected Functions ##
 
@@ -915,6 +936,16 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.updateTaskGUI()
         self.updateButtons()
 
+    def saveTask(self):
+        try:
+            result = self.logic.current_task_instance.save()
+            if not result:
+                print("Saved!")
+            else:
+                print(result)
+        except Exception as e:
+            self.pythonExceptionPrompt(e)
+
     ## Management ##
     def disableGUIWhileLoading(self):
         """
@@ -1088,6 +1119,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.cohort_path = new_path
         config.last_used_cohort_file = new_path
         config.save()
+        self.rebuild_data_manager()
 
         self.rebuild_data_manager()
 
@@ -1108,6 +1140,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.data_path = new_path
         config.last_used_data_path = new_path
         config.save()
+        self.rebuild_data_manager()
         print(f"Data path set to: {self.data_path}")
 
         return True, None
