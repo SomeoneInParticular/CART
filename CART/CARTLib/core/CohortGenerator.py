@@ -9,9 +9,9 @@ class CohortGeneratorWindow(qt.QDialog):
     """
 
     ### UI ###
-    def __init__(self, data_path, cohort_data=None, cohort_path=None, parent=None):
+    def __init__(self, data_path, cohort_data=None, cohort_path=None, current_data_convention=None, parent=None):
         super().__init__(parent)
-        self.logic = CohortGeneratorLogic(data_path=data_path, cohort_data=cohort_data, cohort_path=cohort_path)
+        self.logic = CohortGeneratorLogic(data_path=data_path, cohort_data=cohort_data, cohort_path=cohort_path, current_data_convention=current_data_convention)
         self.setWindowFlags(self.windowFlags() | qt.Qt.WindowMaximizeButtonHint | qt.Qt.WindowMinimizeButtonHint | qt.Qt.Window)
 
         # Make dialog/window non-modal, to allow interaction with main window
@@ -402,7 +402,7 @@ class CohortGeneratorWindow(qt.QDialog):
 
 
 class CohortGeneratorLogic:
-    def __init__(self, data_path, cohort_data=None, cohort_path=None):
+    def __init__(self, data_path, cohort_data=None, cohort_path=None, current_data_convention=None):
         self.data_path = Path(data_path)
         self.all_files_by_case: dict[str, list[str]] = {}
         self.cohort_data = cohort_data if cohort_data is not None else []

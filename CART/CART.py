@@ -17,8 +17,7 @@ from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 
-from CARTLib.utils.bids_init import get_bids_layout, check_pybids_installation, get_bids_folders
-
+from CARTLib.utils.data_checker import check_conventions
 
 from CARTLib.examples.SegmentationEvaluation.SegmentationEvaluationTask import (
     SegmentationEvaluationTask,
@@ -137,8 +136,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Tracks whether we are in "Task Mode" (actively working on a task) or not
         self.isTaskMode = False
 
-        # Tracks whether pyBIDS is installed
-        self.pyBIDSInstalled = False
+        # Tracks the current data convention followed by data path
+        self.currentDataConvention = None
 
         # TODO: Dynamically load this dictionary instead
         self.task_map = {
@@ -341,9 +340,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Make it accessible
         self.cohortFileSelectionButton = cohortFileSelectionButton
 
-        # Verify that PyBids is installed
-        self.pyBIDSInstalled = check_pybids_installation()
-
     def buildTaskUI(self, mainLayout: qt.QFormLayout):
         # Prior users list
         taskOptions = qt.QComboBox()
@@ -534,14 +530,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If we succeeded, update the GUI to match
         if success:
             # Check if the data path points to a valid BIDS directory
-            if self.pyBIDSInstalled:
-                if get_bids_layout(self.logic.data_path) is not None:
-                    # Enable the auto-generation of cohort file
-                    self.cohortGeneratorButton.setEnabled(True)
-                    print(f"Valid BIDS layout found at{current_path}. Cohort generation enabled.")
-                else:
-                    self.cohortGeneratorButton.setEnabled(False)
-                    print(f"Invalid BIDS layout found at {current_path}. Cohort generation disabled.")
+            self.currentDataConvention = check_conventions(self.logic.data_path)
+            if self.currentDataConvention is not None:
+                # Enable the auto-generation of cohort file
+                self.cohortGeneratorButton.setEnabled(True)
+                print(f"Valid layout found at{current_path}. Cohort generation enabled.")
+            else:
+                self.cohortGeneratorButton.setEnabled(False)
+                print(f"Invalid layout found at {current_path}. Cohort generation disabled.")
 
 
 
@@ -635,7 +631,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic.load_cohort()
 
         # Open the cohort generator window, passing in the current data path and cohort (if any)
-        case_data = None
         case_data = self.logic.data_manager.case_data
 
         cohortGeneratorWindow = CohortGeneratorWindow(data_path=self.logic.data_path, cohort_data=case_data, cohort_path=self.logic.cohort_path)
