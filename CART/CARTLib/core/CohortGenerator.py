@@ -87,7 +87,7 @@ class CohortGeneratorWindow(qt.QDialog):
         layout = qt.QFormLayout(groupbox)
 
         # By default, exclude these files, as they are common
-        self.excluded_ext_input = qt.QLineEdit(".json, .py, .ssh, .csv")
+        self.excluded_ext_input = qt.QLineEdit(', '.join(self.logic.excluded_extensions))
         self.excluded_ext_input.toolTip = "Comma-separated list of file extensions to ignore."
         self.rescan_button = qt.QPushButton("Rescan Data Path")
 
@@ -477,8 +477,9 @@ class CohortGeneratorLogic:
         self.disabled_rows = set()
         self.disabled_columns = set()
 
-        # Exclude common files found in imagine datasetss
-        self._scan_filesystem(['.json', '.py', '.ssh', '.csv'])
+        # Exclude common files found in imaging datasets
+        self.excluded_extensions = ['.json', '.py', '.ssh', '.csv']
+        self._scan_filesystem()
 
         if not self.cohort_data:
             # Initiliaze the uid column and populate case identifiers
@@ -492,11 +493,9 @@ class CohortGeneratorLogic:
         self.override_selected_cohort_file: bool = False
 
     def check_data_path_changed_warning(self):
-        print('SELECTED COHORT FILE')
-        print(self.selected_cohort_path)
         return not (self.data_path in self.selected_cohort_path.parents)
 
-    def _scan_filesystem(self, excluded_extensions=None):
+    def _scan_filesystem(self):
         """
         Scan BIDS-formatted dataset: only consider subject folders (sub-*) in root and derivatives.
         Group derivatives with their corresponding raw subject, so each case (subject) includes both raw and derivatives files.
@@ -509,7 +508,7 @@ class CohortGeneratorLogic:
         self.all_files_by_case = fetch_resources(
         self.current_data_convention,
         root_path,
-        excluded_extensions=excluded_extensions
+        excluded_extensions=self.excluded_extensions
         )
 
     def load_cohort_data(self, data_path, excluded_extensions=None):
