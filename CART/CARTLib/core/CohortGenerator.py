@@ -52,6 +52,12 @@ class CohortGeneratorWindow(qt.QDialog):
         self.reset_button = qt.QPushButton("Reset")
         button_layout.addWidget(self.reset_button)
 
+        # Data path changed warning
+        self.data_path_changed_warning = qt.QLabel("Warning: Data path no longer matches cohort file location.")
+        self.data_path_changed_warning.setStyleSheet("color: goldenrod;")
+        self.data_path_changed_warning.setVisible(self.logic.check_data_path_changed_warning())
+        button_layout.addWidget(self.data_path_changed_warning)
+
         # If a preious cohort file was generated, give the option to override
         self.override_selected_cohort_file_toggle_button = qt.QCheckBox("Override selected Cohort File ?")
         self.override_selected_cohort_file_toggle_button.setEnabled(self.logic.selected_cohort_path is not None)
@@ -61,6 +67,7 @@ class CohortGeneratorWindow(qt.QDialog):
         self.cancel_button = qt.QPushButton("Cancel")
 
         # Tooltips
+        self.reset_button.setToolTip("Clears the tentative table and loads cases from the current data path.")
         self.override_selected_cohort_file_toggle_button.setToolTip("Saves your changes into the file located at " + str(self.logic.selected_cohort_path))
         self.apply_button.setToolTip("Overrides or creates new cohort file under " + str(self.logic.data_path / "cohort files"))
 
@@ -113,6 +120,8 @@ class CohortGeneratorWindow(qt.QDialog):
         column_control_hbox = qt.QHBoxLayout()
 
         self.apply_filter_button = qt.QPushButton("Create New Column from Filters")
+        self.apply_filter_button.setStyleSheet("background-color: green; color: white;")
+
         self.delete_col_button = qt.QPushButton("Delete Column")
         self.delete_col_button.setStyleSheet("background-color: red; color: white;")
 
@@ -243,9 +252,52 @@ class CohortGeneratorWindow(qt.QDialog):
 
     ### Callback functions ###
     def on_reset(self):
-        # Clears cohort table and readjusts to current data path if necessary
+        # Check if there is a mismatch
+        mismatch = self.logic.check_data_path_changed_warning()
+
+        # If no mismatch, just clear the table
+        if not mismatch:
+            reply = qt.QMessageBox.question(
+                self, "Confirm Reset",
+                "Are you sure you want to reset and clear the tentative cohort table?",
+                qt.QMessageBox.Yes | qt.QMessageBox.No,
+                qt.QMessageBox.No
+            )
+            if reply == qt.QMessageBox.Yes:
+                self.logic.clear_filters()
+                self.update_ui_from_logic()
+            return
+
+        # If mismatch, confirm reset and file creation
+        reply = qt.QMessageBox.question(
+            self, "Confirm Reset",
+            "The current cohort file does not match the data path.\n"
+            "Resetting will create a new empty cohort CSV in the correct folder.\n"
+            "You'll start editing from there.\n"
+            "Do you want to continue?",
+            qt.QMessageBox.Yes | qt.QMessageBox.No,
+            qt.QMessageBox.No
+        )
+        if reply != qt.QMessageBox.Yes:
+            return
+
+        # Clear filters and create an empty CSV in the correct folder
         self.logic.clear_filters()
+
+        cohort_dir = self.logic.data_path / "cohort files"
+        cohort_dir.mkdir(parents=True, exist_ok=True)
+
+        index = self.logic._determine_next_cohort_filename(cohort_dir)
+        cohort_name = f"cohort{index}.csv"
+        self.logic.selected_cohort_path = cohort_dir / cohort_name
+
+        self.logic._write_to_csv(cohort_dir, [])
+
+        # Update UI and hide warning
         self.update_ui_from_logic()
+        self.data_path_changed_warning.setVisible(self.logic.check_data_path_changed_warning())
+
+
 
     def on_rescan(self):
         """
@@ -276,7 +328,7 @@ class CohortGeneratorWindow(qt.QDialog):
             self.exclude_input.clear()
             self.new_column_name_input.clear()
         else:
-            qt.QMessageBox.warning(self, "Filter Error", "Could not apply filters. Your filters either contradict or no results yielded from your filters. Provide a unique 'New Column Name' if creating a new column.")
+            qt.QMessageBox.warning(self, "Filter Error", "Could not apply filters. Your filters either contradict or no results yielded from your filters. Provide a unique 'New Column Name' if creating a new column. Make sure to match cases as the filters are case-sensitive.")
 
     def on_delete_column(self):
         """
@@ -438,6 +490,11 @@ class CohortGeneratorLogic:
         # Location of the saved auto-generated cohort CSV file - also the path returned to the main widget
         self.selected_cohort_path = cohort_path
         self.override_selected_cohort_file: bool = False
+
+    def check_data_path_changed_warning(self):
+        print('SELECTED COHORT FILE')
+        print(self.selected_cohort_path)
+        return not (self.data_path in self.selected_cohort_path.parents)
 
     def _scan_filesystem(self, excluded_extensions=None):
         """
@@ -635,7 +692,6 @@ class CohortGeneratorLogic:
         with open(cohort_path, 'w', newline='') as csvfile:
             csv_writer = csv.writer(csvfile)
             csv_writer.writerows(csv_data)
-
 
     def _determine_next_cohort_filename(self, dir_path) -> int:
         return sum(
