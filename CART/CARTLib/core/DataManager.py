@@ -210,9 +210,45 @@ class DataManager:
             if not task.isTaskComplete(case):
                 return self.select_unit_at(idx)
             idx += 1
-        # Fallback; if all subsequent cases are completed, print a warning and return the next case instead
+        # Fallback; if all subsequent cases are completed, print a warning and return the
+        # next case instead
         print("WARNING: All cases were completed, falling back to next")
         return self.next()
+
+    def prior_incomplete(self, task: TaskBaseClass, from_idx: int = None):
+        """
+        Step back to the most recent prior case which hasn't been completed for the
+        provided task, and get its corresponding DataUnit.
+
+        :param task: The task to query for whether the case has been completed yet or not
+        :param from_idx: The index you want to search *from*.
+            Setting this to -1 will search all cases, starting from the last
+            If not provided, will search all cases prior to the currently selected one.
+
+        :return: The previous incomplete data unit; None if it doesn't exist/is invalid.
+            If all subsequent cases are valid, just returns the previous data unit instead.
+        """
+        # If the user didn't provide a starting index, set it to our current index
+        if not from_idx:
+            from_idx = self.current_case_index
+        # If it was -1, set it explicitly to the last index to "act" like Python's indexing
+        elif from_idx == -1:
+            from_idx = len(self.case_data)
+
+        # Step to the "previous" case
+        idx = from_idx - 1
+
+        # Iterate until we run out of cases
+        while idx > -1:
+            case = self.case_data[idx]
+            if not task.isTaskComplete(case):
+                return self.select_unit_at(idx)
+            idx -= 1
+
+        # Fallback; if all prior cases are completed, print a warning and return the
+        # previous case instead
+        print("WARNING: All cases were completed, falling back to previous!")
+        return self.previous()
 
     def first(self):
         # Wrapper to jump to the very first data unit

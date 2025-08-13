@@ -413,11 +413,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # "Prior Incomplete" Button
         priorIncompleteButton = qt.QPushButton(_("Prior Incomplete"))
         priorIncompleteButton.toolTip = _("Jump back to a previous case which has not been completed yet.")
+        priorIncompleteButton.clicked.connect(lambda: self.previousCase(True))
 
         # "Previous" Button
         previousButton = qt.QPushButton(_("Previous"))
         previousButton.toolTip = _("Return to the previous case.")
-        previousButton.clicked.connect(self.previousCase)
+        previousButton.clicked.connect(lambda: self.previousCase(False))
 
         # "Save" Button
         saveButton = qt.QPushButton(_("Save"))
@@ -738,7 +739,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Re-enable the GUI
             self.enableGUIAfterLoad()
 
-    def previousCase(self):
+    def previousCase(self, skip_complete: bool = False):
         # Disable the GUI until the previous case has loaded
         self.disableGUIWhileLoading()
 
@@ -752,8 +753,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Remove highlight from the current row
             self.unHighlightRow(self.logic.data_manager.current_case_index)
 
-            # Step into the next case
-            self.logic.previous_case()
+            # Step into the previous case
+            self.logic.previous_case(skip_complete)
 
             # Update our GUI to match the new state
             self.updateIteratorGUI()
@@ -1310,15 +1311,20 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Return it; the data manager is self-managing, no need to do any further checks
         return next_unit
 
-    def previous_case(self):
+    def previous_case(self, skip_complete: bool = False):
         """
         Try to step into the previous case managed by the cohort, pulling it
-          into memory if needed.
+        into memory if needed.
+
+        :param skip_complete: Whether completed cases should be skipped over
 
         :return: The previous valid case. 'None' if no valid case could be found.
         """
         # Get the previous valid case
-        previous_case = self.data_manager.previous()
+        if skip_complete:
+            previous_case = self.data_manager.prior_incomplete(self.current_task_instance)
+        else:
+            previous_case = self.data_manager.previous()
 
         # Pass it to the current task, so it can update anything it needs to
         self._update_task_with_new_case(previous_case)
