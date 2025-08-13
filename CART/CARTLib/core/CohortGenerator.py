@@ -60,6 +60,7 @@ class CohortGeneratorWindow(qt.QDialog):
 
         # If a preious cohort file was generated, give the option to override
         self.override_selected_cohort_file_toggle_button = qt.QCheckBox("Override selected Cohort File ?")
+        self.override_selected_cohort_file_toggle_button.setChecked(self.logic.override_selected_cohort_file)
         self.override_selected_cohort_file_toggle_button.setEnabled(self.logic.selected_cohort_path is not None)
 
         # Utility buttons
@@ -304,7 +305,11 @@ class CohortGeneratorWindow(qt.QDialog):
         target_col = self.target_column_combo.currentText
 
         # Don't allow deletion of "Create New Column" option or uid column
-        if target_col == "Create New Column" or target_col == "uid":
+        if target_col == "Create New Column":
+            qt.QMessageBox.warning(self, "Delete Error", "Please select a column.")
+            return
+
+        if target_col == "uid":
             qt.QMessageBox.warning(self, "Delete Error", "Cannot delete this column.")
             return
 
@@ -459,7 +464,7 @@ class CohortGeneratorLogic:
 
         # Location of the saved auto-generated cohort CSV file - also the path returned to the main widget
         self.selected_cohort_path = cohort_path
-        self.override_selected_cohort_file: bool = False
+        self.override_selected_cohort_file: bool = True
 
     def check_data_path_changed_warning(self):
         return not (self.data_path in self.selected_cohort_path.parents)
