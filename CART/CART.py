@@ -427,12 +427,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # "Next" Button
         nextButton = qt.QPushButton(_("Next"))
         nextButton.toolTip = _("Move onto the next case.")
-        nextButton.clicked.connect(self.nextCase)
+        nextButton.clicked.connect(lambda: self.nextCase(False))
 
         # "Next Incomplete" Button
         nextIncompleteButton = qt.QPushButton(_("Next Incomplete"))
         nextIncompleteButton.toolTip = \
             _("Jump back to the next case which has not been completed yet.")
+        nextIncompleteButton.clicked.connect(lambda: self.nextCase(True))
 
         # Add them to the layout in our desired order
         for b in [priorIncompleteButton, previousButton, saveButton, nextButton, nextIncompleteButton]:
@@ -707,9 +708,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Highlight the following (previous or next) row to indicate the current case
         self.highlightRow(self.logic.data_manager.current_case_index)
 
-    def nextCase(self):
+    def nextCase(self, skip_complete: bool = False) :
         """
-        Request the iterator step into the next case
+        Request the iterator step into the next case.
+
+        :param skip_complete: Whether to skip over already completed
+            cases wherever possible
         """
         # Disable the GUI until the next case has loaded
         self.disableGUIWhileLoading()
@@ -724,7 +728,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.unHighlightRow(self.logic.data_manager.current_case_index)
 
             # Step into the next case
-            self.logic.next_case()
+            self.logic.next_case(skip_complete)
 
             # Update our GUI to match the new state
             self.updateIteratorGUI()
@@ -1285,15 +1289,20 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Return it for further user
         return current_unit
 
-    def next_case(self) -> Optional[DataUnitBase]:
+    def next_case(self, skip_complete: bool = False) -> Optional[DataUnitBase]:
         """
         Try to step into the next case managed by the cohort, pulling it
-          into memory if needed.
+        into memory if needed.
+
+        :param skip_complete: Whether to skip over already completed cases
 
         :return: The next valid case. 'None' if no valid case could be found.
         """
-        # Get the next valid case
-        next_unit = self.data_manager.next_incomplete(self.current_task_instance)
+        # Grab the next data unit
+        if skip_complete:
+            next_unit = self.data_manager.next_incomplete(self.current_task_instance)
+        else:
+            next_unit = self.data_manager.next()
 
         # Pass it to the current task, so it can update anything it needs to
         self._update_task_with_new_case(next_unit)
