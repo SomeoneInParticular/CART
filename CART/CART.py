@@ -314,10 +314,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.cohortGeneratorButton = qt.QPushButton(_("Auto-generate cohort file"))
         self.cohortGeneratorButton.setStyleSheet("background-color: green;")
 
-        # Tooltip
-        slicer.app.setStyleSheet("QToolTip { color: #000000; background-color: #ffffff !important; border: 2px; }")
-        self.cohortGeneratorButton.setToolTip("Cohort editing and generating is only available for select dataset conventions. Currently only supported for pseudo-BIDS format.")
-
         # Directory selection button
         cohortFileSelectionButton = ctk.ctkPathLineEdit()
 

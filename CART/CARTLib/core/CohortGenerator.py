@@ -26,7 +26,8 @@ class CohortGeneratorWindow(qt.QDialog):
         self.connect_signals()
 
         # Initial table population
-        self.update_ui_from_logic()
+        self.populate_table()
+        self.update_column_combo()
 
     def build_ui(self):
         """
@@ -42,7 +43,6 @@ class CohortGeneratorWindow(qt.QDialog):
 
         # Filtering UI
         controls_layout = qt.QHBoxLayout()
-        controls_layout.addWidget(self.build_load_options_groupbox())
         controls_layout.addWidget(self.build_filtering_groupbox(), 1)
         layout.addLayout(controls_layout)
 
@@ -69,7 +69,7 @@ class CohortGeneratorWindow(qt.QDialog):
         # Tooltips
         self.reset_button.setToolTip("Clears the tentative table and loads cases from the current data path.")
         self.override_selected_cohort_file_toggle_button.setToolTip("Saves your changes into the file located at " + str(self.logic.selected_cohort_path))
-        self.apply_button.setToolTip("Overrides or creates new cohort file under " + str(self.logic.data_path / "cohort files"))
+        self.apply_button.setToolTip("Overrides or creates new cohort file under " + str(self.logic.data_path / "cohort_files"))
 
         button_layout.addStretch()
 
@@ -78,26 +78,6 @@ class CohortGeneratorWindow(qt.QDialog):
         button_layout.addWidget(self.cancel_button)
 
         layout.addLayout(button_layout)
-
-    def build_load_options_groupbox(self):
-        """
-        UI to display file extensions to exclude from cell
-        """
-        groupbox = qt.QGroupBox("Load Options")
-        layout = qt.QFormLayout(groupbox)
-
-        # By default, exclude these files, as they are common
-        self.excluded_ext_input = qt.QLineEdit(', '.join(self.logic.excluded_extensions))
-        self.excluded_ext_input.toolTip = "Comma-separated list of file extensions to ignore."
-        self.rescan_button = qt.QPushButton("Rescan Data Path")
-
-        layout.addRow("Exclude Extensions:", self.excluded_ext_input)
-        layout.addRow(self.rescan_button)
-
-        # Temporarily disable
-        groupbox.setEnabled(False)
-
-        return groupbox
 
     def build_filtering_groupbox(self):
         """
@@ -141,10 +121,6 @@ class CohortGeneratorWindow(qt.QDialog):
         layout.addRow(column_control_hbox)
 
         return groupbox
-
-    def update_ui_from_logic(self):
-        self.populate_table()
-        self.update_column_combo()
 
     def populate_table(self):
         self.table_widget.blockSignals(True)
@@ -241,7 +217,6 @@ class CohortGeneratorWindow(qt.QDialog):
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
 
-        self.rescan_button.clicked.connect(self.on_rescan)
         self.apply_filter_button.clicked.connect(self.on_apply_filter)
         self.delete_col_button.clicked.connect(self.on_delete_column)
 
@@ -265,7 +240,8 @@ class CohortGeneratorWindow(qt.QDialog):
             )
             if reply == qt.QMessageBox.Yes:
                 self.logic.clear_filters()
-                self.update_ui_from_logic()
+                self.populate_table()
+                self.update_column_combo()
             return
 
         # If mismatch, confirm reset and file creation
@@ -284,7 +260,7 @@ class CohortGeneratorWindow(qt.QDialog):
         # Clear filters and create an empty CSV in the correct folder
         self.logic.clear_filters()
 
-        cohort_dir = self.logic.data_path / "cohort files"
+        cohort_dir = self.logic.data_path / "cohort_files"
         cohort_dir.mkdir(parents=True, exist_ok=True)
 
         index = self.logic._determine_next_cohort_filename(cohort_dir)
@@ -294,19 +270,9 @@ class CohortGeneratorWindow(qt.QDialog):
         self.logic._write_to_csv(cohort_dir, [])
 
         # Update UI and hide warning
-        self.update_ui_from_logic()
+        self.populate_table()
+        self.update_column_combo()
         self.data_path_changed_warning.setVisible(self.logic.check_data_path_changed_warning())
-
-
-
-    def on_rescan(self):
-        """
-        Rebuild entire tentative cohort table while excluding paths with forbidden filetypes
-        """
-        ext_to_exclude = [e.strip() for e in self.excluded_ext_input.text.split(',') if e.strip()]
-        self.logic.load_cohort_data(self.logic.data_path, ext_to_exclude)
-        self.logic.clear_filters()
-        self.update_ui_from_logic()
 
     def on_toggle_override_selected_cohort_file(self):
         is_checked = self.override_selected_cohort_file_toggle_button.isChecked()
@@ -323,7 +289,8 @@ class CohortGeneratorWindow(qt.QDialog):
 
         # Rebuild entire tentative cohort table with new/updated column
         if self.logic.apply_filter(include_list, exclude_list, target_col, new_col):
-            self.update_ui_from_logic()
+            self.populate_table()
+            self.update_column_combo()
             self.include_input.clear()
             self.exclude_input.clear()
             self.new_column_name_input.clear()
@@ -353,7 +320,8 @@ class CohortGeneratorWindow(qt.QDialog):
             if self.logic.delete_column(target_col):
                 # Reset to "Create New Column"
                 self.on_target_column_changed("Create New Column")
-                self.update_ui_from_logic()
+                self.populate_table()
+                self.update_column_combo()
             else:
                 qt.QMessageBox.warning(self, "Delete Error", "Could not delete column.")
 
@@ -398,7 +366,8 @@ class CohortGeneratorWindow(qt.QDialog):
         # If user cancels, getText returns empty string or None
         if new_name and new_name != old_name:
             if self.logic.rename_column(old_name, new_name):
-                self.update_ui_from_logic()
+                self.populate_table()
+                self.update_column_combo()
             else:
                 qt.QMessageBox.warning(self, "Rename Error", "Column name already exists.")
 
@@ -665,7 +634,7 @@ class CohortGeneratorLogic:
         self.disabled_columns.clear()
 
         # Save to CSV
-        dir_path = Path(self.data_path / "cohort files")
+        dir_path = Path(self.data_path / "cohort_files")
         dir_path.mkdir(parents=True, exist_ok=True)
         #cohort_path = Path(dir_path / "cohort.csv")
 
