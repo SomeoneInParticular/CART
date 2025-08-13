@@ -390,7 +390,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Hide this by default, only showing it when we're ready to iterate
         iteratorWidget.setVisible(False)
 
-        # Previous, Save, and Next buttons, in a horizontal layout
+        # Iterator buttons, in a horizontal layout
         buttonLayout = self.buildIteratorButtonPanel()
         # Add the button layout to the main vertical layout
         self.taskLayout.addLayout(buttonLayout)
@@ -410,6 +410,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Button should be laid out left-to-right
         buttonLayout = qt.QHBoxLayout()
 
+        # "Prior Incomplete" Button
+        priorIncompleteButton = qt.QPushButton(_("Prior Incomplete"))
+        priorIncompleteButton.toolTip = _("Jump back to a previous case which has not been completed yet.")
+
         # "Previous" Button
         previousButton = qt.QPushButton(_("Previous"))
         previousButton.toolTip = _("Return to the previous case.")
@@ -425,13 +429,20 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         nextButton.toolTip = _("Move onto the next case.")
         nextButton.clicked.connect(self.nextCase)
 
+        # "Next Incomplete" Button
+        nextIncompleteButton = qt.QPushButton(_("Next Incomplete"))
+        nextIncompleteButton.toolTip = \
+            _("Jump back to the next case which has not been completed yet.")
+
         # Add them to the layout in our desired order
-        for b in [previousButton, saveButton, nextButton]:
+        for b in [priorIncompleteButton, previousButton, saveButton, nextButton, nextIncompleteButton]:
             buttonLayout.addWidget(b)
 
         # Track them for later
+        self.priorIncompleteButton = priorIncompleteButton
         self.previousButton = previousButton
         self.nextButton = nextButton
+        self.nextIncompleteButton = nextIncompleteButton
 
         return buttonLayout
 
@@ -661,8 +672,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Disable navigation buttons if only in preview mode
         if self.isPreviewMode and not self.isTaskMode:
-            self.previousButton.setEnabled(False)
-            self.nextButton.setEnabled(False)
+            self.enablePriorButtons(False)
+            self.enabledNextButtons(False)
 
         # Always (re)build the table if in preview or task mode
         self.buildCohortTable()
@@ -688,10 +699,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.currentCaseNameLabel.text = new_label
 
         # Check if we have a next case, and enable/disable the button accordingly
-        self.nextButton.setEnabled(self.logic.has_next_case())
+        self.enabledNextButtons(self.logic.has_next_case())
 
         # Check if we have a previous case, and enable/disable the button accordingly
-        self.previousButton.setEnabled(self.logic.has_previous_case())
+        self.enablePriorButtons(self.logic.has_previous_case())
 
         # Highlight the following (previous or next) row to indicate the current case
         self.highlightRow(self.logic.data_manager.current_case_index)
@@ -890,6 +901,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.pythonExceptionPrompt(e)
 
     ## Management ##
+    def enablePriorButtons(self, state: bool):
+        for b in [self.priorIncompleteButton, self.previousButton]:
+            b.setEnabled(state)
+
+    def enabledNextButtons(self, state: bool):
+        for b in [self.nextButton, self.nextIncompleteButton]:
+            b.setEnabled(state)
+
     def disableGUIWhileLoading(self):
         """
         Disable our entire GUI.
