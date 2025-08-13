@@ -185,7 +185,7 @@ class DataManager:
         # Return the new unit
         return new_unit
 
-    def next_incomplete(self, task: TaskBaseClass, from_idx: int = None):
+    def next_incomplete(self, task: TaskBaseClass, from_idx: int = None) -> DataUnitBase:
         """
         Advance to the next case which hasn't been completed for the provided task and get its corresponding DataUnit.
 
@@ -215,7 +215,7 @@ class DataManager:
         print("WARNING: All cases were completed, falling back to next")
         return self.next()
 
-    def prior_incomplete(self, task: TaskBaseClass, from_idx: int = None):
+    def prior_incomplete(self, task: TaskBaseClass, from_idx: int = None) -> DataUnitBase:
         """
         Step back to the most recent prior case which hasn't been completed for the
         provided task, and get its corresponding DataUnit.
@@ -250,21 +250,21 @@ class DataManager:
         print("WARNING: All cases were completed, falling back to previous!")
         return self.previous()
 
-    def first(self):
+    def first(self) -> DataUnitBase:
         # Wrapper to jump to the very first data unit
         self.current_case_index = 0
         return self.current_data_unit()
 
-    def first_incomplete(self, task: TaskBaseClass):
+    def first_incomplete(self, task: TaskBaseClass) -> DataUnitBase:
         # Wrapper function for the somewhat unintuitive "find the first" syntax
         return self.next_incomplete(task, -1)
 
-    def last(self):
+    def last(self) -> DataUnitBase:
         # Wrapper to jump to the last first data unit
         self.current_case_index = len(self.case_data) - 1
         return self.current_data_unit()
 
-    def last_incomplete(self, task: TaskBaseClass):
+    def last_incomplete(self, task: TaskBaseClass) -> DataUnitBase:
         # Wrapper function for the somewhat unintuitive "find the last" syntax
         return self.prior_incomplete(task, -1)
 
