@@ -44,7 +44,6 @@ def check_conventions(data_path: Path) -> Optional[str]:
     return None
 
 ### Paths fetching  ###
-
 def fetch_resources(current_data_convention, root_path, excluded_extensions=None):
     if current_data_convention == "check_pseudo_bids":
         return fetch_bids_resources_paths(
