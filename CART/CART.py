@@ -675,7 +675,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Disable navigation buttons if only in preview mode
         if self.isPreviewMode and not self.isTaskMode:
             self.enablePriorButtons(False)
-            self.enabledNextButtons(False)
+            self.enableNextButtons(False)
 
         # Always (re)build the table if in preview or task mode
         self.buildCohortTable()
@@ -701,7 +701,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.currentCaseNameLabel.text = new_label
 
         # Check if we have a next case, and enable/disable the button accordingly
-        self.enabledNextButtons(self.logic.has_next_case())
+        self.enableNextButtons(self.logic.has_next_case())
 
         # Check if we have a previous case, and enable/disable the button accordingly
         self.enablePriorButtons(self.logic.has_previous_case())
@@ -910,7 +910,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         for b in [self.priorIncompleteButton, self.previousButton]:
             b.setEnabled(state)
 
-    def enabledNextButtons(self, state: bool):
+    def enableNextButtons(self, state: bool):
         for b in [self.nextButton, self.nextIncompleteButton]:
             b.setEnabled(state)
 
