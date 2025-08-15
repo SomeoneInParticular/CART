@@ -15,7 +15,9 @@ from CARTLib.utils.config import config
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 
+from CARTLib.utils.data_checker import check_conventions
 
 from CARTLib.examples.SegmentationEvaluation.SegmentationEvaluationTask import (
     SegmentationEvaluationTask,
@@ -134,6 +136,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Tracks whether we are in "Task Mode" (actively working on a task) or not
         self.isTaskMode = False
 
+        # Tracks the current data convention followed by data path
+        self.currentDataConvention = None
+
         # TODO: Dynamically load this dictionary instead
         self.task_map = {
             "Segmentation": SegmentationEvaluationTask,
@@ -146,7 +151,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         ScriptedLoadableModuleWidget.setup(self)
 
         ## Setup ##
-
         # The collapsible button to contain everything in
         mainGUI = ctk.ctkCollapsibleButton()
         # Not the best translation, but it'll do...
@@ -156,14 +160,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # User selection/registration
         self.buildUserUI(mainLayout)
 
-        # Cohort Selection
-        self.buildCohortUI(mainLayout)
+        # Task UI
+        self.buildTaskUI(mainLayout)
 
         # Base Path input UI
         self.buildBasePathUI(mainLayout)
 
-        # Task UI
-        self.buildTaskUI(mainLayout)
+        # Cohort Selection
+        self.buildCohortUI(mainLayout)
 
         # Button panel
         self.buildButtonPanel(mainLayout)
@@ -285,27 +289,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Make the user selection button accessible
         self.userSelectButton = userSelectButton
 
-    def buildCohortUI(self, mainLayout: qt.QFormLayout):
-        # Directory selection button
-        cohortFileSelectionButton = ctk.ctkPathLineEdit()
-
-        # Set file filters to only show readable file types
-        cohortFileSelectionButton.filters = ctk.ctkPathLineEdit.Files
-        cohortFileSelectionButton.nameFilters = [
-            "CSV files (*.csv)",
-        ]
-
-        # When the cohort is changed, update accordingly
-        cohortFileSelectionButton.currentPathChanged.connect(self.onCohortChanged)
-
-        # TODO: Optionally set a default filter
-
-        # Add it to our layout
-        mainLayout.addRow(_("Cohort File:"), cohortFileSelectionButton)
-
-        # Make the button easy-to-access
-        self.cohortFileSelectionButton = cohortFileSelectionButton
-
     def buildBasePathUI(self, mainLayout: qt.QFormLayout):
         """
         Extends the GUI to add widgets for data directory selection
@@ -325,6 +308,37 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Make it accessible
         self.dataPathSelectionWidget = dataPathSelectionWidget
+
+    def buildCohortUI(self, mainLayout: qt.QFormLayout):
+        # Auto-generator window button
+        self.cohortGeneratorButton = qt.QPushButton(_("Auto-generate cohort file"))
+        self.cohortGeneratorButton.setStyleSheet("background-color: green;")
+
+        # Directory selection button
+        cohortFileSelectionButton = ctk.ctkPathLineEdit()
+
+        # Set file filters to only show readable file types
+        cohortFileSelectionButton.filters = ctk.ctkPathLineEdit.Files
+        cohortFileSelectionButton.nameFilters = [
+            "CSV files (*.csv)",
+        ]
+
+        # When the cohort is changed, update accordingly
+        cohortFileSelectionButton.currentPathChanged.connect(self.onCohortChanged)
+
+        # When clicked, open the auto-generator window
+        self.cohortGeneratorButton.clicked.connect(self.onCohortGeneratorButtonClicked)
+
+        # Create a horizontal layout to hold the file selection and the button
+        hLayout = qt.QHBoxLayout()
+        hLayout.addWidget(cohortFileSelectionButton)
+        hLayout.addWidget(self.cohortGeneratorButton)
+
+        # Add the horizontal layout to our main form layout as a single row
+        mainLayout.addRow(_("Cohort File:"), hLayout)
+
+        # Make it accessible
+        self.cohortFileSelectionButton = cohortFileSelectionButton
 
     def buildTaskUI(self, mainLayout: qt.QFormLayout):
         # Prior users list
@@ -528,18 +542,42 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # If we succeeded, update the GUI to match
         if success:
+            # Check if the data path points to a valid BIDS directory
+            self.currentDataConvention = check_conventions(self.logic.data_path)
+            if self.currentDataConvention is not None:
+                # Enable the auto-generation of cohort file
+                self.cohortGeneratorButton.setEnabled(True)
+                print(f"Valid layout found at {current_path}. Cohort generation enabled.")
+            else:
+                self.cohortGeneratorButton.setEnabled(False)
+                print(f"Invalid layout found at {current_path}. Cohort generation disabled.")
+
             # Exit task mode; any active task is no longer relevant.
             self._disableTaskMode()
 
-    def onCohortChanged(self):
-        # Get the currently selected cohort file from the widget
-        new_cohort = Path(self.cohortFileSelectionButton.currentPath)
+    def onCohortChanged(self, new_cohort_path=None):
+        """
+        Handles cohort file changes from the ctkPathLineEdit widget or internal calls.
+        Ensures the path is converted to a Path object before being passed to the logic.
+        """
 
-        # Attempt to update the cohort in our logic instance
+        # If an existing cohort file is loaded from config, indicate edit instead of generation
+        if self.cohortFileSelectionButton.currentPath != "":
+            self.cohortGeneratorButton.setText("Edit cohort file")
+
+        if new_cohort_path is None:
+            new_cohort_path = self.cohortFileSelectionButton.currentPath
+
+        # If the provided path is empty, stop here.
+        if not new_cohort_path:
+            self.destroyCohortTable()
+            return
+
+        new_cohort = Path(new_cohort_path)
         success = self.logic.set_current_cohort(new_cohort)
 
-        # If we succeeded, update our state to match
         if success:
+            print(f"Successfully set cohort to {self.logic.cohort_path}")
             # Exit task mode; the new cohort likely makes it obsolete
             self._disableTaskMode()
 
@@ -598,6 +636,25 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Exit task mode until the user confirms the change
         self._disableTaskMode()
+
+    def onCohortGeneratorButtonClicked(self):
+
+        self.logic.load_cohort()
+
+        # Open the cohort generator window, passing in the current data path and cohort (if any)
+        case_data = self.logic.data_manager.case_data
+
+        cohortGeneratorWindow = CohortGeneratorWindow(data_path=self.logic.data_path, cohort_data=case_data, cohort_path=self.logic.cohort_path, current_data_convention=self.currentDataConvention)
+        cohortGeneratorWindowResult = cohortGeneratorWindow.exec_()
+
+        if cohortGeneratorWindowResult == qt.QDialog.Accepted:
+            if not self.logic.data_manager:
+                self.logic.rebuild_data_manager()
+            self.logic.data_manager.case_data = cohortGeneratorWindow.logic.cohort_data
+            self.logic.cohort_path = cohortGeneratorWindow.logic.selected_cohort_path
+            self.onCohortChanged(self.logic.cohort_path)
+            self.cohortGeneratorButton.setText("Edit cohort file")
+            self.cohortFileSelectionButton.setCurrentPath(str(cohortGeneratorWindow.logic.selected_cohort_path))
 
     def buildCohortTable(self):
 
@@ -1061,6 +1118,11 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
     ## Cohort Path/Data Path Management ##
     def set_current_cohort(self, new_path: Path) -> bool:
+        # If we don't have a data manager, create one
+        if not self.data_manager:
+            print("DATA MANAGER REBUILT")
+            self.rebuild_data_manager()
+
         # Confirm the file exists
         if not new_path.exists():
             print(f"Error: Cohort file does not exist: {new_path}")
@@ -1082,6 +1144,9 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         config.last_used_cohort_file = new_path
         config.save()
         self.rebuild_data_manager()
+
+        self.rebuild_data_manager()
+
         return True
 
     def set_data_path(self, new_path: Path) -> (bool, Optional[str]):
