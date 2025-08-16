@@ -22,19 +22,12 @@ A number of features are currently in progress as well, and will be available up
 
 ### Installation
 
-Clone this repository somewhere can easily access it. You can do this one of two ways:
+Clone this repository somewhere you can easily access it. You can do this one of two ways:
 
 1. Downloading the repository from GitHub:
-   1. Open the [CART](https://github.com/SomeoneInParticular/CART) repository in your browser.
-   2. Click the green "<> Code" drop-down button on the top-right of of the page
-   <img width="948" height="144" alt="image" src="https://github.com/user-attachments/assets/9e98c9b5-7039-4e1a-bea8-a97c63ee73bd" />
-
-   3. Select "Download ZIP"
-   <img width="432" height="349" alt="image" src="https://github.com/user-attachments/assets/0a1360dd-89fe-4cbb-8e46-c5be4282e5aa" />
-
-   4. Choose where you want the resulting file to be placed in the resulting popup
-   5. Wait for the download to complete
-   6. Once complete, navigate to the `CART-main.zip` file and unzip it (on most OS systems, double-clicking on the file should tell you how to do this)
+   1. Download the ZIP folder from [here](https://github.com/SomeoneInParticular/CART/archive/refs/heads/main.zip)
+   2. Wait for the download to complete 
+   3. Once complete, navigate to the `CART-main.zip` file and unzip it (on most OS systems, double-clicking on the file should tell you how to do this)
 
 2. Cloning the repository via `git`:
    1. Open a terminal in a directory of your choice
