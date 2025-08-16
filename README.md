@@ -40,7 +40,7 @@ Clone this repository somewhere can easily access it. You can do this one of two
    1. Open a terminal in a directory of your choice
    2. Run the following command to clone the current `CART` repository:
     ~~~
-    git clone git@github.com:SomeoneInParticular/CART.git
+    git clone git@github.com:SomeoneInParticular/CART.git CART-main
     ~~~
 
 ### Registering CART in Slicer
