@@ -2,7 +2,9 @@
 
 ## What is CART?
 
-CART is a module for the 3D slicer program designed to help you manage  iterative analyses, allowing you to focus on implementing and running task you set out to do. Currently, it provides the following capabilities:
+CART is a module for 3D Slicer designed to help implement, manage, and run iterative analyses on image datasets. 
+
+Currently, it provides the following capabilities:
 
 * Managing sequential cases (be they patients, sub-studies, or other collections of data).
 * Caching and memory management.
