@@ -38,7 +38,7 @@ Clone this repository somewhere you can easily access it. You can do this one of
 
 ### Registering CART in Slicer
 
-0. Open a file browser window and navigate to the downloaded `CART-main` directory. Then, navigate to the `CART` sub-directory, which should contain a `CART.py` file.
+0. Open a file browser window and navigate to the downloaded `CART-main` directory. Then, navigate to the `CART` subdirectory, which should contain a `CART.py` file.
 1. Start up Slicer
 2. Select `Edit` (top left) > `Application Settings`
 <img width="1066" height="154" alt="image" src="https://github.com/user-attachments/assets/1f2c4d4f-ce10-46fd-8165-09c0df87a7e6" />
