@@ -5,7 +5,7 @@
 CART is a module for the 3D slicer program designed to help you manage  iterative analyses, allowing you to focus on implementing and running task you set out to do. Currently, it provides the following capabilities:
 
 * Managing sequential cases (be they patients, sub-studies, or other collections of data).
-* Cacheing and memory management.
+* Caching and memory management.
 * User profiles (to distinguish between different local users of CART analyses)
 
 A number of features are currently in progress as well, and will be available upon CART's full release:
