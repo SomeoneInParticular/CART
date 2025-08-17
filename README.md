@@ -1,5 +1,12 @@
 # Case Annotation and Review Tool (CART)
 
+## Table of Contents
+
+* [What is CART?](#what-is-cart)
+* [Setting up CART](#setting-up-cart)
+* [Getting Started](#getting-started)
+* [Starting a Task](#starting-a-task)
+
 ## What is CART?
 
 CART is a module for 3D Slicer designed to help implement, manage, and run iterative analyses on image datasets. 
