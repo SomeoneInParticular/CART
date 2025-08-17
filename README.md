@@ -8,6 +8,7 @@
   * [Getting Started](#getting-started)
   * [Starting a Task](#starting-a-task)
 * [For Developers](#for-developers)
+  * [Project Standards](#project-standards)
   * [IDE Set Up](#ide-set-up)
   * [Example Data](#example-data)
 
@@ -155,6 +156,17 @@ Once you have selected all the parameters prior, click "Confirm" to begin! How C
 ---
 
 # For Developers:
+
+## Project Standards
+
+Below is a short summary of standards and format we use in CART; for more details, please refer to the [developer wiki](https://github.com/SomeoneInParticular/CART/wiki).
+
+### Python
+
+We follow [PEP8](https://peps.python.org/pep-0008/) standards with two notable exceptions:
+
+* GUI code which directly utilizes or references C++ code (via QT) should use `lowerCamelCase` for functions, rather than the standard `lower_snake_case` used by Python, to help distinguish it from "pure" Python code.
+* Line length is capped at 88 characters per line, rather than 79; this is derived from our linter (Black), and you can read the justification [here](https://black.readthedocs.io/en/stable/the_black_code_style/current_style.html#line-length)
 
 ## IDE Set Up
 
