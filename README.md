@@ -3,11 +3,17 @@
 ## Table of Contents
 
 * [What is CART?](#what-is-cart)
-* [Setting up CART](#setting-up-cart)
-* [Getting Started](#getting-started)
-* [Starting a Task](#starting-a-task)
+* [For Users](#for-users)
+  * [Setting up CART](#setting-up-cart)
+  * [Getting Started](#getting-started)
+  * [Starting a Task](#starting-a-task)
+* [For Developers](#for-developers)
+  * [IDE Set Up](#ide-set-up)
+  * [Example Data](#example-data)
 
-## What is CART?
+---
+
+# What is CART?
 
 CART is a module for 3D Slicer designed to help implement, manage, and run iterative analyses on image datasets. You can think of CART as an assembly line for data analysis; you define how your data should be grouped ("cases"), and what process you want to apply to it ("tasks"), and CART tracks how many you've completed and ensures that each has been processed by the task sequentially.
 
@@ -22,6 +28,10 @@ A number of features are currently in progress as well, and will be available up
 * Custom task creation and registration.
 * Case pre-fetching/deferred loading.
 * Per-user + per-task configurations.
+
+---
+
+# For Users
 
 ## Setting up CART
 
@@ -69,11 +79,11 @@ Clone this repository somewhere you can easily access it. You can do this one of
 4. Select `CART` from the dropdown button labelled "Default startup module"
 <img width="506" height="760" alt="image" src="https://github.com/user-attachments/assets/66a360ff-8ad6-406e-a498-7e1ff1ae6f20" />
 
-## Getting Started
+### Getting Started
 
 Before you can begin, you need to create a user profile and identify where the files you want to use are located.
 
-### User Profile
+#### User Profile
 
 The user profile allows CART to identify who is currently using the program. As well as tracking your configuration settings, the details you provide here can be used by CART to label the result of your analyses for later reference.
 
@@ -142,11 +152,13 @@ Once you have created an appropriate cohort file for your task, you can select i
 Once you have selected all the parameters prior, click "Confirm" to begin! How CART proceeds past this point depends on the task you selected; see their respective documentation for details.
 
 
-## For Developers:
+---
 
-### IDE Set Up
+# For Developers:
 
-#### Source Directories
+## IDE Set Up
+
+### Source Directories
 
 As both Slicer and CART load libraries into Python's path post-init, most IDEs will not be able to recognize some of the import statements used by our codebase by default.
 
@@ -155,10 +167,11 @@ To fix this, please mark the following directories as "source" folders in the Pr
 * `{Slicer Installation Directory}/bin/Python`: exposes that installations versions of VTK, CTK, and QT, along with slicer's own utilities.
 * `{This Directory}/CART`; exposes CARTLib and its contents.
 
----
-# Example Data
-The example data consists of a subset (fold0) from the PI-CAI dataset, featuring prostate MRI images and their corresponding segmentations. The original data can be obtained from the [official website](https://zenodo.org/records/6624726) by downloading the `picai_public_images_fold0.zip` file. 
+## Example Data
+
+The example data consists of a subset (fold0) from the PI-CAI dataset, featuring prostate MRI images and their corresponding segmentations. The original data can be obtained from the [official website](https://zenodo.org/records/6624726) by downloading the `picai_public_images_fold0.zip` file.
+
 For this project, the first four subjects were selected and the images were converted from MHA to NRRD format.
 
-1. Example `sample_data` is adapted from this original data and will be located under `sample_data.zip`.
+1. Example `sample_data` is adapted from this original data and is located under `sample_data.zip`.
 2. Unzip the file to a folder of your choice.
