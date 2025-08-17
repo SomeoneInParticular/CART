@@ -62,14 +62,13 @@ Clone this repository somewhere you can easily access it. You can do this one of
 4. Select `CART` from the dropdown button labelled "Default startup module"
 <img width="506" height="760" alt="image" src="https://github.com/user-attachments/assets/66a360ff-8ad6-406e-a498-7e1ff1ae6f20" />
 
+## Getting Started
 
-## Using CART
+Before you can begin, you need to create a user profile and identify where the files you want to use are located.
 
-To run CART, you must specify 4 things prior to beginning:
+### User Profile
 
-### User
-
-The User is simply a profile which tracks who is currently running CART. It marks completed tasks as being done by you, so that others can repeat what you did simultaneously without overriding your work. In future releases, it will also track configuration settings specific to you, allowing you to modify CART's behaviour to your liking without disrupting others who're sharing the computer.
+The user profile allows CART to identify who is currently using the program. As well as tracking your configuration settings, the details you provide here can be used by CART to label the result of your analyses for later reference.
 
 To add a new user:
 
@@ -77,15 +76,42 @@ To add a new user:
 1. Next to the "User:" row, select the `+` button.
 2. Fill in the details prompted to you by the resulting popup, and click "OK"
 
-If you have already registered yourself, you can select your user-name from dropdown instead. 
+If you have already registered yourself, you can select your user-name from dropdown instead.
+
+### Data Selection
+
+This is a path to the directory containing the files you want to. Unless explicitly specified otherwise (via an absolute path), CART will assume all directory references are relative to this directory. Aside from this, the contents of this directory can be in any structure you like (though, in absence of a pre-existing format, we recommend the [BIDS](https://bids-specification.readthedocs.io/en/stable/) format)
+
+To select the Data Path:
+
+0. Select the `CART` module, if you have not done so already.
+1. Next to the "Data Path:" row, click the `...` button.
+2. Navigate to the desired directory in the resulting pop-up dialog.
+3. Click "Choose" to confirm your choice.
+
+
+## Starting a Task
+
+Once you've specified a user and a data folder, you can run a "task" on the data. This requires selecting the task you want to do, and defining a set of cases you want to run the task on (a "cohort").
+
+### Task
+
+Selecting a Task is simple; simply select the task you want to run from the drop-down menu labelled "Task". By default, CART provides a number of pre-defined tasks for you to use:
+
+* **[Multi-Contrast Segmentation](./CART/CARTLib/examples/MultiContrastSegmentation/README.md)**: General purpose segmentation review and correction tool. Specify a "primary" segmentation you want to evaluate, and CART will load it (and anything else you want to reference) into view for you to review, correct, or replace entirely.
+* **[Registration Review](CART/CARTLib/examples/RegistrationReview/README.md)**: Based on a set of volumes and corresponding segmentations, mark each case as properly registered or not.
+
+In the future, you will also be able to register arbitrary Tasks, either created by you or downloaded from other developers.
 
 ### Cohort
 
-A "Cohort" is a set of "cases" you want to iterate through. What a "case" entails is largely up to you; it can represent a single patient, a subset of the data, or any other collection of resources you want to want to group together to iteratively do something with/too.
+The "Cohort" is a set of "cases" you want to apply the task too iteratively. What a "case" entails is largely up to you; it can represent a single patient, a single timepoint, or any other grouping that you desire.
 
-In CART, a cohort (and the cases within it) are managed through a CSV file; one each row (barring the first) represents a single case, and each column a resource that case may need/have.
+In CART, a cohort (and the cases within it) are managed through a CSV file; one each row (barring the first, being the "header") represents a single case, and each column a resource that case can have.
 
-The only strict requirement of a cohort CSV file is that it must have a `uid` column, which contains a unique string. CART uses this string to track each case internally, so please ensure that the each case has a unique value here! Aside from this constraint, it is otherwise up to you what resources each case should include; as long as they're formatted in a way that the [Task](#task) you intend to run can interpret it, it is free game! For example, the cohort file for a segmentation review task could look something like this:
+The only strict requirement of a cohort CSV file is that it must have a `uid` column, and that each case within the dataset have a unique value in this column. CART uses this string to track each case both internally (for iteration) and externally (for output management); as such, please ensure the values for this column are distinct and meaningful to you whenever possible.
+
+Aside from this constraint, it is otherwise up to the Task you selected what resources each case should include. Most Tasks will document these requirements in a README or wiki of some kind. For example, the cohort file for a segmentation review task could look something like this:
 
 ```
 uid,volume_t2w,segmentation_deepseg
@@ -94,33 +120,19 @@ sub-amu04_T2w,sub-amu04/anat/sub-amu04_T2w.nii.gz,derivatives/labels/sub-amu04/a
 ...
 ```
 
-To select a cohort CSV, click the `...` button next to the file browser labelled "Cohort File" in the Cart module
+Once you have created an appropriate cohort file for your task, you can select it by:
+
+1. Selecting the `...` button next to the file browser labelled "Cohort File"
+2. Navigating to the cohort file in the resulting pop-up
+3. Selecting it, and clicking "Choose" to confirm your choice.
 
 
 > [!NOTE]  
-> File resources in a cohort can be absolute OR relative; the root path for relative files can be selected via the [Data Path](#data-path)..
+> File resources in a cohort can be absolute OR relative; for the latter, the root path is treated as the path you selected as the [Data Path](#data-selection) during initial CART setup.
 
+### Running the Task
 
-### Data Path
-
-This is a path to the root directory for resources your cohort require. Any files within the cohort file will treat the path designated here as their "root".
-
-To select a Data path, click the `...` button next to the file browser labelled "Data Path" in the Cart module.
-
-### Task
-
-A Task designates what you want to do for each case in the cohort. By default, CART provides a number of pre-provided tasks for you to use:
-
-* **[Multi-Contrast Segmentation](./CART/CARTLib/examples/MultiContrastSegmentation/README.md)**: General purpose segmentation review and correction tool. Simply specify a "primary" segmentation you want to review, and CART will load it into view for you to review, correct, or replace entirely.
-* **[Registration Review](CART/CARTLib/examples/RegistrationReview/README.md)**: Based on a set of volumes and corresponding segmentations, mark each case as properly registered or not.
-
-In the future, you will also be able to register arbitrary tasks, either coded by you or downloaded from other developers.
-
-To select a Task, choose it from the "Task" dropdown.
-
-### Starting CART
-
-Once you have selected all the parameters prior, click "Confirm" to begin!
+Once you have selected all the parameters prior, click "Confirm" to begin! How CART proceeds past this point depends on the task you selected; see their respective documentation for details.
 
 
 ## For Developers:
