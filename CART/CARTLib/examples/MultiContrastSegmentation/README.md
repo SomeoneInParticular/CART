@@ -10,7 +10,7 @@ This task allows for iterative review (and, if needed, correction) of image segm
 
 # Creating a Cohort File
 
-The cohort file for this can contain the following column types:
+The cohort file for this task can contain the following column types:
 
 * **UID**: A label each case with a unique name/label. 
   * Only one **UID** column can exist, and it must be named `uid`.
