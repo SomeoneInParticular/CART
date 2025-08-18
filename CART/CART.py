@@ -1,4 +1,5 @@
 import traceback
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -117,7 +118,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     MICRO_BUTTON_HEIGHT = 25
 
     ## Initialization ##
-
     def __init__(self, parent=None) -> None:
         """Called when the user opens the module the first time and the widget is initialized."""
         ScriptedLoadableModuleWidget.__init__(self, parent)
@@ -216,6 +216,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Synchronize our state with the logic
         self.sync_with_logic()
 
+    ## Core ##
     def sync_with_logic(self):
         # Update the user selection widget with the contents of the logic instance
         users = self.logic.get_users()
@@ -233,6 +234,39 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Finally, attempt to update our task from the config
         self.taskOptions.currentText = config.last_used_task
+
+    @contextmanager
+    def freeze(self):
+        """
+        Python context manager which 'freezes' the GUI while in use.
+
+        Prevents the user from modifying the GUI elements while some
+        process is running (such as a task initializing), avoiding
+        de-synchronization or race condition errors
+
+        Also ensures that the GUI is re-enabled after, regardless of
+        how the context is terminated.
+        """
+        # Disable our GUI initially
+        self.mainGUI.setEnabled(False)
+        self.taskGUI.setEnabled(False)
+
+        # Create a prompt to inform the user
+        # TODO
+        print("=" * 20)
+        print("Loading...")
+
+        # Yield, waiting for the context to be finished
+        yield
+
+        # Re-enable the GUI
+        self.mainGUI.setEnabled(True)
+        self.taskGUI.setEnabled(True)
+
+        # Close the prompt
+        # TODO
+        print("Finished Loading!")
+        print("=" * 20)
 
     ## GUI builders ##
     def buildUserUI(self, mainLayout: qt.QFormLayout):
@@ -716,53 +750,45 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         :param skip_complete: Whether to skip over already completed
             cases wherever possible
         """
-        # Disable the GUI until the next case has loaded
-        self.disableGUIWhileLoading()
 
-        try:
-            # Confirm we have a next case to step into first
-            if not self.logic.has_next_case():
-                print("You somehow requested the next case, despite there being none!")
-                return
+        with self.freeze():
+            try:
+                # Confirm we have a next case to step into first
+                if not self.logic.has_next_case():
+                    print("You somehow requested the next case, despite there being none!")
+                    return
 
-            # Remove highlight from the current row
-            self.unHighlightRow(self.logic.data_manager.current_case_index)
+                # Remove highlight from the current row
+                self.unHighlightRow(self.logic.data_manager.current_case_index)
 
-            # Step into the next case
-            self.logic.next_case(skip_complete)
+                # Step into the next case
+                self.logic.next_case(skip_complete)
 
-            # Update our GUI to match the new state
-            self.updateIteratorGUI()
-        except Exception as e:
-            self.pythonExceptionPrompt(e)
-        finally:
-            # Re-enable the GUI
-            self.enableGUIAfterLoad()
+                # Update our GUI to match the new state
+                self.updateIteratorGUI()
+            except Exception as e:
+                self.pythonExceptionPrompt(e)
 
     def previousCase(self, skip_complete: bool = False):
-        # Disable the GUI until the previous case has loaded
-        self.disableGUIWhileLoading()
+        # Freeze the GUI until we are done
+        with self.freeze():
+            try:
+                # Confirm we have a next case to step into first
+                if not self.logic.has_previous_case():
+                    print(
+                        "You somehow requested the previous case, despite there being none!"
+                    )
+                    return
+                # Remove highlight from the current row
+                self.unHighlightRow(self.logic.data_manager.current_case_index)
 
-        try:
-            # Confirm we have a next case to step into first
-            if not self.logic.has_previous_case():
-                print(
-                    "You somehow requested the previous case, despite there being none!"
-                )
-                return
-            # Remove highlight from the current row
-            self.unHighlightRow(self.logic.data_manager.current_case_index)
+                # Step into the previous case
+                self.logic.previous_case(skip_complete)
 
-            # Step into the previous case
-            self.logic.previous_case(skip_complete)
-
-            # Update our GUI to match the new state
-            self.updateIteratorGUI()
-        except Exception as e:
-            self.pythonExceptionPrompt(e)
-        finally:
-            # Re-enable the GUI
-            self.enableGUIAfterLoad()
+                # Update our GUI to match the new state
+                self.updateIteratorGUI()
+            except Exception as e:
+                self.pythonExceptionPrompt(e)
 
     ### Task Related ###
     def updateTaskGUI(self):
@@ -801,56 +827,52 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             return  # Stop execution if validation fails
 
         # Disable the GUI, as to avoid de-synchronization
-        self.disableGUIWhileLoading()
+        with self.freeze():
+            try:
+                # Set task mode to true; session started
+                self.isTaskMode = True
 
-        try:
-            # Set task mode to true; session started
-            self.isTaskMode = True
+                # Initialize the new task
+                self.logic.init_task()
 
-            # Initialize the new task
-            self.logic.init_task()
+                # Create a "dummy" widget that the task can fill
+                self.resetTaskDummyWidget()
+                # Build the Task GUI, using the prior widget as a foundation
+                self.logic.current_task_instance.setup(self.dummyTaskWidget)
+                # Add the widget to our layout
+                self.taskGUI.layout().addWidget(self.dummyTaskWidget)
 
-            # Create a "dummy" widget that the task can fill
-            self.resetTaskDummyWidget()
-            # Build the Task GUI, using the prior widget as a foundation
-            self.logic.current_task_instance.setup(self.dummyTaskWidget)
-            # Add the widget to our layout
-            self.taskGUI.layout().addWidget(self.dummyTaskWidget)
+                # Expand the task GUI and enable it, if it wasn't already
+                self.taskGUI.collapsed = False
+                self.taskGUI.setEnabled(True)
 
-            # Expand the task GUI and enable it, if it wasn't already
-            self.taskGUI.collapsed = False
-            self.taskGUI.setEnabled(True)
+                # Attempt to read a data unit
+                # KO: This needs to be done after GUI init, as many task's (including our
+                #  segmentation review) will either load configurations and/or prompt the
+                #  user for things required to determine whether a task is "complete" or
+                #  not for a given case.
+                self.logic.load_initial_unit()
 
-            # Attempt to read a data unit
-            # KO: This needs to be done after GUI init, as many task's (including our
-            #  segmentation review) will either load configurations and/or prompt the
-            #  user for things required to determine whether a task is "complete" or
-            #  not for a given case.
-            self.logic.load_initial_unit()
+                # Load the cohort csv data into the table, if it wasn't already
+                self.updateCohortTable()
 
-            # Load the cohort csv data into the table, if it wasn't already
-            self.updateCohortTable()
+                # Reveal the iterator GUI, if it wasn't already
+                self.iteratorWidget.setVisible(True)
 
-            # Reveal the iterator GUI, if it wasn't already
-            self.iteratorWidget.setVisible(True)
+                # Update the current UID in the iterator
+                self.updateIteratorGUI()
 
-            # Update the current UID in the iterator
-            self.updateIteratorGUI()
+                # Collapse the main (setup) GUI, if it wasn't already
+                self.mainGUI.collapsed = True
 
-            # Collapse the main (setup) GUI, if it wasn't already
-            self.mainGUI.collapsed = True
+                # Disable preview and confirm buttons, as task has started
+                self.updateButtons()
 
-            # Disable preview and confirm buttons, as task has started
-            self.updateButtons()
-
-        except Exception as e:
-            # Notify the user of the exception
-            self.pythonExceptionPrompt(e)
-            # Exit task mode; we failed to initialize the task, and can't proceed
-            self._disableTaskMode()
-        finally:
-            # Re-enable the GUI
-            self.enableGUIAfterLoad()
+            except Exception as e:
+                # Notify the user of the exception
+                self.pythonExceptionPrompt(e)
+                # Exit task mode; we failed to initialize the task, and can't proceed
+                self._disableTaskMode()
 
     def resetTaskDummyWidget(self):
         if self.dummyTaskWidget:
@@ -913,36 +935,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def enableNextButtons(self, state: bool):
         for b in [self.nextButton, self.nextIncompleteButton]:
             b.setEnabled(state)
-
-    def disableGUIWhileLoading(self):
-        """
-        Disable our entire GUI.
-
-        Usually only needed when a new DataUnit is in the process of being
-          loaded, to ensure the GUI doesn't de-synchronize from the Logic.
-        """
-        # Disable everything immediately
-        self.mainGUI.setEnabled(False)
-        self.taskGUI.setEnabled(False)
-
-        # Create a "Loading..." dialog to let the user know something is being run
-        # TODO: Replace this with a proper prompt
-        print("Loading...")
-
-    def enableGUIAfterLoad(self):
-        """
-        Enable our entire GUI.
-
-        Usually used to restore user access to the GUI state after a DataUnit
-          finishes loading.
-        """
-
-        self.mainGUI.setEnabled(True)
-        self.taskGUI.setEnabled(self.isTaskMode)
-
-        # Terminate the "Loading..." dialog, if it exists
-        # TODO: Replace this with a proper prompt
-        print("Finished Loading!")
 
     def cleanup(self) -> None:
         """Called when the application closes and the module widget is destroyed."""
