@@ -759,7 +759,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             try:
                 # Confirm we have a next case to step into first
                 if not self.logic.has_next_case():
-                    print("You somehow requested the next case, despite there being none!")
+                    self.showErrorPopup(
+                        "No Prior Case",
+                        "You somehow requested the next case, despite there being none!"
+                    )
                     return
 
                 # Create a loading prompt
@@ -790,9 +793,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             try:
                 # Confirm we have a next case to step into first
                 if not self.logic.has_previous_case():
-                    print(
-                        "You somehow requested the previous case, despite there being none!"
-                    )
+                    self.showErrorPopup(
+                        "No Prior Case",
+                        "You somehow requested the previous case, despite there being none!")
                     return
                 # Create a loading prompt
                 loadingPrompt = self._loadingCasePrompt()
