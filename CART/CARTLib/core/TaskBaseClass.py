@@ -5,7 +5,8 @@ from typing import Generic, Optional, TypeVar, Protocol
 
 import qt
 import slicer
-from .DataUnitBase import DataUnitBase
+
+from CARTLib.core.DataUnitBase import DataUnitBase
 
 # Generic type hint class for anything which is a subclass of DataUnitBase
 D = TypeVar("D", bound=DataUnitBase)
