@@ -494,8 +494,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Check if we're ready to proceed
             self.updateButtons()
         else:
-            # TODO: Add a user prompt
-            print(f"Failed to add user '{new_name}'.")
+            # Display an error prompt
+            self.showErrorPopup(
+                "Error",
+                f"Failed to add user '{new_name}'; "
+                f"it is likely a user with that name already exists."
+            )
 
     def userSelected(self):
         # Update the logic with this newly selected user
