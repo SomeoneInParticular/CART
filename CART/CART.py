@@ -251,22 +251,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.mainGUI.setEnabled(False)
         self.taskGUI.setEnabled(False)
 
-        # Create a prompt to inform the user
-        # TODO
-        print("=" * 20)
-        print("Loading...")
-
         # Yield, waiting for the context to be finished
         yield
 
         # Re-enable the GUI
         self.mainGUI.setEnabled(True)
         self.taskGUI.setEnabled(True)
-
-        # Close the prompt
-        # TODO
-        print("Finished Loading!")
-        print("=" * 20)
 
     ## GUI builders ##
     def buildUserUI(self, mainLayout: qt.QFormLayout):
@@ -743,6 +733,20 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Highlight the following (previous or next) row to indicate the current case
         self.highlightRow(self.logic.data_manager.current_case_index)
 
+    def _loadingCasePrompt(self):
+        prompt = qt.QDialog()
+        prompt.setWindowTitle("Loading...")
+
+        layout = qt.QVBoxLayout()
+        prompt.setLayout(layout)
+
+        description = qt.QLabel(
+            "Reading the contents of a new case into memory; please wait."
+        )
+        layout.addWidget(description)
+
+        return prompt
+
     def nextCase(self, skip_complete: bool = False) :
         """
         Request the iterator step into the next case.
@@ -750,13 +754,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         :param skip_complete: Whether to skip over already completed
             cases wherever possible
         """
-
+        # Freeze the GUI while running to avoid desync
         with self.freeze():
             try:
                 # Confirm we have a next case to step into first
                 if not self.logic.has_next_case():
                     print("You somehow requested the next case, despite there being none!")
                     return
+
+                # Create a loading prompt
+                loadingPrompt = self._loadingCasePrompt()
+                loadingPrompt.show()
 
                 # Remove highlight from the current row
                 self.unHighlightRow(self.logic.data_manager.current_case_index)
@@ -766,7 +774,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
                 # Update our GUI to match the new state
                 self.updateIteratorGUI()
+
+                # Close the loading prompt
+                loadingPrompt.done(qt.QDialog.Accepted)
             except Exception as e:
+                # Close the loading prompt, if it was created
+                if loadingPrompt:
+                    loadingPrompt.done(qt.QDialog.Rejected)
+                # Create a new error prompt in its place
                 self.pythonExceptionPrompt(e)
 
     def previousCase(self, skip_complete: bool = False):
@@ -779,6 +794,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         "You somehow requested the previous case, despite there being none!"
                     )
                     return
+                # Create a loading prompt
+                loadingPrompt = self._loadingCasePrompt()
+                loadingPrompt.show()
+
                 # Remove highlight from the current row
                 self.unHighlightRow(self.logic.data_manager.current_case_index)
 
@@ -787,7 +806,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
                 # Update our GUI to match the new state
                 self.updateIteratorGUI()
+
+                # Close the loading prompt
+                loadingPrompt.done(qt.QDialog.Accepted)
             except Exception as e:
+                # Close the loading prompt, if it was created
+                if loadingPrompt:
+                    loadingPrompt.done(qt.QDialog.Rejected)
+                # Create a new error prompt in its place
                 self.pythonExceptionPrompt(e)
 
     ### Task Related ###
@@ -815,6 +841,20 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if self.logic.is_ready():
             self.confirmButton.setEnabled(True)
 
+    def _loadingTaskPrompt(self):
+        prompt = qt.QDialog()
+        prompt.setWindowTitle("Loading...")
+
+        layout = qt.QVBoxLayout()
+        prompt.setLayout(layout)
+
+        description = qt.QLabel(
+            "Initializing the selected task; please be patient."
+        )
+        layout.addWidget(description)
+
+        return prompt
+
     def loadTaskWhenReady(self):
         # If we're not ready to load a task, leave everything untouched
         if not self.logic.is_ready():
@@ -829,6 +869,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Disable the GUI, as to avoid de-synchronization
         with self.freeze():
             try:
+                # Create a loading prompt
+                loadingPrompt = self._loadingTaskPrompt()
+                loadingPrompt.show()
+
                 # Set task mode to true; session started
                 self.isTaskMode = True
 
@@ -842,9 +886,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 # Add the widget to our layout
                 self.taskGUI.layout().addWidget(self.dummyTaskWidget)
 
-                # Expand the task GUI and enable it, if it wasn't already
+                # Expand the task GUI, if it wasn't already
                 self.taskGUI.collapsed = False
-                self.taskGUI.setEnabled(True)
 
                 # Attempt to read a data unit
                 # KO: This needs to be done after GUI init, as many task's (including our
@@ -868,7 +911,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 # Disable preview and confirm buttons, as task has started
                 self.updateButtons()
 
+                # Close the loading prompt
+                loadingPrompt.done(qt.QDialog.Accepted)
+
             except Exception as e:
+                # Close the loading prompt, if it was created
+                if loadingPrompt:
+                    loadingPrompt.done(qt.QDialog.Rejected)
                 # Notify the user of the exception
                 self.pythonExceptionPrompt(e)
                 # Exit task mode; we failed to initialize the task, and can't proceed
