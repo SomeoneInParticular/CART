@@ -125,9 +125,8 @@ class TaskBaseClass(ABC, Generic[D]):
         output exists).
 
         This is used for a number of functions, namely:
-          * TODO: Starting at the first case the user has yet to complete
-          * TODO: Skipping over already completed cases
-          * TODO: Deciding whether to cache a case the user just moved past
+          * Starting at the first case the user has yet to complete
+          * Skipping over already completed cases
         """
         return False
 
