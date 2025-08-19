@@ -5,6 +5,47 @@ from slicer.i18n import tr as _
 from pathlib import Path
 from typing import Dict, List, Optional
 
+### Accepted filetypes for conventions
+bids_extensions = [
+    # Core imaging
+    ".nii", ".nii.gz",
+
+    # Metadata / tabular / text
+    ".json", ".tsv", ".txt", ".md",
+
+    # Diffusion MRI
+    ".bvec", ".bval",
+
+    # Surfaces / Morphometry
+    ".gii", ".surf.gii", ".label.gii", ".shape.gii",
+
+    # Tractography / Streamlines (BEPs)
+    ".trk", ".tck", ".vtk",
+
+    # Microscopy
+    ".ome.tif", ".ome.tiff",
+
+    # EEG
+    ".edf", ".bdf", ".set", ".fdt",
+    ".vhdr", ".vmrk", ".eeg",
+    ".mef3", ".nwb",
+
+    # iEEG (same as EEG + clinical formats)
+    # (not adding duplicates here, but same as above)
+
+    # MEG
+    ".fif",   # Elekta/Neuromag
+    ".ds",    # CTF (directory)
+    ".con",   # KIT/Yokogawa
+    ".m4d", ".pdf", ".xyz",  # BTi/4D
+
+    # Eye Tracking
+    ".edf",  # (already included, but for eye tracking too)
+
+    # Genetics (referenced, not always stored inside BIDS)
+    ".vcf",
+]
+
 ### Convention checking ###
 # Add any custom convention checker here
 

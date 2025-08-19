@@ -349,6 +349,7 @@ class CohortGeneratorWindow(qt.QDialog):
                 self.include_input.setText(include_input)
                 self.exclude_input.setText(exclude_input)
 
+            self.new_column_name_input.setText("Selected Column Name")
             self.apply_filter_button.setText(f"Apply Filters on `{text}`")
 
     def on_header_double_clicked(self, logical_index):
