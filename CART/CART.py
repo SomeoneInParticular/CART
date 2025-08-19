@@ -58,7 +58,7 @@ class CART(ScriptedLoadableModule):
         ]
         self.parent.helpText = _(
             """
-                CART (Collaborative Annotation and Review Tool) provides a set
+                CART (Case Annotation and Review Tool) provides a set
                 of abstract base classes for creating streamlined annotation
                 workflows in 3D Slicer. The framework enables efficient
                 iteration through medical imaging cohorts with customizable
