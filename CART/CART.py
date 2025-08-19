@@ -385,6 +385,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Disable the button by default; we need a valid cohort first!
         previewButton.setEnabled(False)
 
+        # A button to open the Configuration dialog, which changes how CART operates
+        configButton = qt.QPushButton(_("Configure"))
+        configButton.toolTip = _("Change how CART is configured to iterate through your data.")
+
         # A button which confirms the current settings and attempts to start
         #  task iteration!
         confirmButton = qt.QPushButton(_("Confirm"))
@@ -396,11 +400,15 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Attempt to load the task, assuming everything is ready
         confirmButton.clicked.connect(self.loadTaskWhenReady)
 
-        # Add them to our layout
-        mainLayout.addRow(previewButton, confirmButton)
+        # Place them equally spaced in a single row
+        buttonLayout = qt.QHBoxLayout()
+        for b in [previewButton, configButton, confirmButton]:
+            buttonLayout.addWidget(b)
+        mainLayout.addRow(buttonLayout)
 
         # Make them accessible
         self.previewButton = previewButton
+        self.configButton = configButton
         self.confirmButton = confirmButton
 
     def buildCaseIteratorUI(self, mainLayout: qt.QFormLayout):
