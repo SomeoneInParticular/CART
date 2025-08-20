@@ -39,7 +39,7 @@ class ConfigGUI(qt.QDialog):
         )
 
         # Ensure it is synchronized with the configuration settings
-        iterSaveCheck.setCheckState(self.bound_config.autosave)
+        iterSaveCheck.setChecked(self.bound_config.autosave)
         def setAutosave(new_state: bool):
             self.bound_config.autosave = bool(new_state)
         iterSaveCheck.stateChanged.connect(
