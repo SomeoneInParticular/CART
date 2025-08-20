@@ -23,7 +23,6 @@ class ConfigGUI(qt.QDialog):
         # Built the GUI contents
         self.build_ui()
 
-
     def build_ui(self):
         # General window properties
         self.setWindowTitle("CART Configuration")
@@ -47,6 +46,19 @@ class ConfigGUI(qt.QDialog):
             lambda x: setAutosave(x)
         )
         layout.addRow(iterSaveLabel, iterSaveCheck)
+
+        buttonBox = self.addButtons()
+        layout.addRow(buttonBox)
+
+    def addButtons(self):
+        buttonBox = qt.QDialogButtonBox()
+        buttonBox.setStandardButtons(
+            qt.QDialogButtonBox.Reset | qt.QDialogButtonBox.Cancel | qt.QDialogButtonBox.Ok
+        )
+        buttonBox.clicked.connect(
+            lambda b: print(buttonBox.buttonRole(b))
+        )
+        return buttonBox
 
 
 class Config:
