@@ -389,6 +389,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         configButton = qt.QPushButton(_("Configure"))
         configButton.toolTip = _("Change how CART is configured to iterate through your data.")
 
+        # Clicking the config button shows the Config prompt
+        configButton.clicked.connect(config.show_gui)
+
         # A button which confirms the current settings and attempts to start
         #  task iteration!
         confirmButton = qt.QPushButton(_("Confirm"))
@@ -899,7 +902,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 # Build the Task GUI, using the prior widget as a foundation
                 self.logic.current_task_instance.setup(self.dummyTaskWidget)
                 # Add the widget to our layout
-                self.taskGUI.layout().addWidget(self.dummyTaskWidget)
+                self.taskGUI._layout().addWidget(self.dummyTaskWidget)
 
                 # Expand the task GUI, if it wasn't already
                 self.taskGUI.collapsed = False

@@ -1,9 +1,52 @@
 import json
 from pathlib import Path
 
+import qt
+
 # The location of the default config used by a fresh installation of CART.
 #  DO NOT TOUCH IT UNLESS YOU KNOW WHAT YOU'RE DOING.
 DEFAULT_FILE = Path(__file__).parent / "default_config.json"
+
+
+class ConfigGUI(qt.QDialog):
+    """
+    Configuration dialog which allows the user to configure CART.
+    """
+
+    def __init__(self, bound_config: "Config"):
+        # Initialize the QDialog base itself
+        super().__init__()
+
+        # Track the bound configuration to ourselves
+        self.bound_config = bound_config
+
+        # Built the GUI contents
+        self.build_ui()
+
+
+    def build_ui(self):
+        # General window properties
+        self.setWindowTitle("CART Configuration")
+
+        # Create a form layout to hold everything in
+        layout = qt.QFormLayout()
+        self.setLayout(layout)
+
+        # Add a checkbox for the state of autosaving
+        iterSaveCheck = qt.QCheckBox()
+        iterSaveLabel = qt.QLabel("Save on Iteration:")
+        iterSaveLabel.setToolTip(
+            "If checked, the Task will try to save when you change cases automatically."
+        )
+
+        # Ensure it is synchronized with the configuration settings
+        iterSaveCheck.setCheckState(self.bound_config.autosave)
+        def setAutosave(new_state: bool):
+            self.bound_config.autosave = bool(new_state)
+        iterSaveCheck.stateChanged.connect(
+            lambda x: setAutosave(x)
+        )
+        layout.addRow(iterSaveLabel, iterSaveCheck)
 
 
 class Config:
@@ -139,6 +182,12 @@ class Config:
             self._has_changed = True
 
         return val
+
+    def show_gui(self):
+        # Build the Config prompt
+        prompt = ConfigGUI(bound_config=self)
+        # Show it, blocking other interactions until its resolved
+        prompt.exec()
 
 
 # The location of the config file for this installation of CART.
