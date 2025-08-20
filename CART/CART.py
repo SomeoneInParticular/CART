@@ -902,7 +902,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 # Build the Task GUI, using the prior widget as a foundation
                 self.logic.current_task_instance.setup(self.dummyTaskWidget)
                 # Add the widget to our layout
-                self.taskGUI._layout().addWidget(self.dummyTaskWidget)
+                self.taskGUI.layout().addWidget(self.dummyTaskWidget)
 
                 # Expand the task GUI, if it wasn't already
                 self.taskGUI.collapsed = False
