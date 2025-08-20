@@ -114,6 +114,9 @@ class CohortGeneratorWindow(qt.QDialog):
         layout.addRow("Filenames MUST Contain:", self.include_input)
         layout.addRow("Filenames MUST NOT Contain:", self.exclude_input)
 
+        # Make the label for the column name field accessible
+        self.column_name_label = layout.labelForField(self.new_column_name_input)
+
         # Tooltips
         self.new_column_name_input.setToolTip("Assigns name to the new resource column if creating")
         self.include_input.setToolTip("All files inserted into the target column must ALL include filters typed here. If left blank, selects all matches.")
@@ -310,7 +313,7 @@ class CohortGeneratorWindow(qt.QDialog):
             return
 
         if target_col == "uid":
-            qt.QMessageBox.warning(self, "Delete Error", "Cannot delete this column.")
+            qt.QMessageBox.warning(self, "Delete Error", "Cannot delete `uid` column.")
             return
 
         # Confirm deletion
@@ -338,6 +341,7 @@ class CohortGeneratorWindow(qt.QDialog):
         self.new_column_name_input.setEnabled(is_new_column)
 
         if is_new_column:
+            self.column_name_label.setText("New Column Name:")
             self.apply_filter_button.setText("Create New Column from Filters")
         else:
             # Populate include/exclude inputs from config if available
@@ -349,7 +353,8 @@ class CohortGeneratorWindow(qt.QDialog):
                 self.include_input.setText(include_input)
                 self.exclude_input.setText(exclude_input)
 
-            self.new_column_name_input.setText("Selected Column Name")
+            self.column_name_label.setText("Selected Column Name:")
+            self.new_column_name_input.setText(text)
             self.apply_filter_button.setText(f"Apply Filters on `{text}`")
 
     def on_header_double_clicked(self, logical_index):
