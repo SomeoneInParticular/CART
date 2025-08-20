@@ -105,18 +105,22 @@ class TaskBaseClass(ABC, Generic[D]):
 
         raise NotImplementedError("save must be implemented in subclasses")
 
-    def autosave(self) -> Optional[str]:
+    def save_on_iter(self) -> Optional[str]:
         """
-        Called when the task is asked to auto-save, either due to the case being
-        changed or through periodic auto-saving. By default, just saves as normal;
-        overwrite if you want some custom functionality to be run in this context.
+        Called when the task is asked to save due to the case being changed.
+
+        By default, just saves as normal; overwrite if you want some custom
+        functionality to be run in this context.
 
         Returns None on a successful save; otherwise, return an error message
         describing what went wrong.
         """
-        print("Autosaving...")
-        self.save()
-        print("Auto-save was successful!")
+        print("Saving...")
+        save_result = self.save()
+        if not save_result:
+            print("Iteration save was successful!")
+        else:
+            raise ValueError(f"An error occurred during saving: {save_result}")
 
     def isTaskComplete(self, case_data: dict[str: str]) -> bool:
         """

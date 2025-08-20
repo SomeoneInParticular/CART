@@ -1398,8 +1398,8 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             return
 
         # If autosaving is on, have the task save its current case before proceeding
-        if config.autosave:
-            task.autosave()
+        if config.save_on_iter:
+            task.save_on_iter()
 
         # Have the task receive the new case
         task.receive(new_case)

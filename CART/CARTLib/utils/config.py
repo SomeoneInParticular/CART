@@ -39,11 +39,11 @@ class ConfigGUI(qt.QDialog):
         )
 
         # Ensure it is synchronized with the configuration settings
-        iterSaveCheck.setChecked(self.bound_config.autosave)
-        def setAutosave(new_state: bool):
-            self.bound_config.autosave = bool(new_state)
+        iterSaveCheck.setChecked(self.bound_config.save_on_iter)
+        def setSaveOnIter(new_state: bool):
+            self.bound_config.save_on_iter = bool(new_state)
         iterSaveCheck.stateChanged.connect(
-            lambda x: setAutosave(x)
+            lambda x: setSaveOnIter(x)
         )
         layout.addRow(iterSaveLabel, iterSaveCheck)
 
@@ -170,15 +170,17 @@ class Config:
         self._backing_dict["last_used_task"] = new_task
 
     ## Autosaving Management ##
-    @property
-    def autosave(self) -> bool:
-        return self._get_or_default("autosave", True)
+    SAVE_ON_ITER_KEY = "save_on_iter"
 
-    @autosave.setter
-    def autosave(self, new_val: bool):
+    @property
+    def save_on_iter(self) -> bool:
+        return self._get_or_default(self.SAVE_ON_ITER_KEY, True)
+
+    @save_on_iter.setter
+    def save_on_iter(self, new_val: bool):
         # Validate that the value is a boolean, to avoid weird jank later
-        assert isinstance(new_val, bool), "Autosave must be a boolean value."
-        self._backing_dict["autosave"] = new_val
+        assert isinstance(new_val, bool), f"'{self.SAVE_ON_ITER_KEY}' must be a boolean value."
+        self._backing_dict[self.SAVE_ON_ITER_KEY] = new_val
         self._has_changed = True
 
     ## Utils ##
