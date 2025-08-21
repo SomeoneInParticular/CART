@@ -12,7 +12,7 @@ from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
 
-from CARTLib.utils.config import config
+from CARTLib.utils.config import config, UserConfig
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
@@ -134,13 +134,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Tracks whether we are in "Task Mode" (actively working on a task) or not
         self.isTaskMode = False
 
-        # TODO: Dynamically load this dictionary instead
-        self.task_map = {
-            "Segmentation": SegmentationEvaluationTask,
-            "MultiContrast Segmentation": MultiContrastSegmentationEvaluationTask,
-            "Registration Review": RegistrationReviewTask,
-        }
-
     def setup(self) -> None:
         """Called when the user opens the module the first time and the widget is initialized."""
         ScriptedLoadableModuleWidget.setup(self)
@@ -219,12 +212,16 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     ## Core ##
     def sync_with_logic(self):
         # Update the user selection widget with the contents of the logic instance
-        users = self.logic.get_users()
+        users = self.logic.get_usernames()
         self.userSelectButton.addItems(users)
 
-        # If there were users, use the first (most recent) as the default
-        if users:
-            self.userSelectButton.currentIndex = 0
+        # Select the user currently selected by the logic
+        try:
+            user_idx = users.index(self.logic.current_username)
+            self.userSelectButton.currentIndex = user_idx
+        except ValueError:
+            # Value error indicates the user was not in the list, which is fine
+            pass
 
         # Pull the currently selected cohort file next
         self.cohortFileSelectionButton.currentPath = self.logic.cohort_path
@@ -233,7 +230,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.dataPathSelectionWidget.currentPath = self.logic.data_path
 
         # Finally, attempt to update our task from the config
-        self.taskOptions.currentText = config.last_used_task
+        self.taskOptions.currentText = self.logic.task_id
 
     @contextmanager
     def freeze(self):
@@ -356,7 +353,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         taskOptions.placeholderText = _("[Not Selected]")
 
         # TODO: Have this pull from configuration instead
-        taskOptions.addItems(list(self.task_map.keys()))
+        taskOptions.addItems(list(self.logic.task_map.keys()))
         mainLayout.addRow(_("Task"), taskOptions)
 
         # Make it accessible
@@ -390,7 +387,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         configButton.toolTip = _("Change how CART is configured to iterate through your data.")
 
         # Clicking the config button shows the Config prompt
-        configButton.clicked.connect(config.show_gui)
+        configButton.clicked.connect(self.logic.config.show_gui)
 
         # A button which confirms the current settings and attempts to start
         #  task iteration!
@@ -521,7 +518,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self._disableTaskMode()
 
         # Rebuild the GUI to match
-        self._refreshUserList()
+        self.sync_with_logic()
 
         # Update the button states to match our current state
         self.updateButtons()
@@ -539,7 +536,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.userSelectButton.clear()
 
         # Rebuild its contents from scratch
-        self.userSelectButton.addItems(self.logic.get_users())
+        self.userSelectButton.addItems(self.logic.get_usernames())
 
         # Select the first (most recent) entry in the list
         self.userSelectButton.currentIndex = 0
@@ -558,16 +555,18 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If the data path is now empty, reset to the previous path and end early
         if not current_path:
             print("Error: Base path was empty, retaining previous base path.")
-            self.dataPathSelectionWidget.currentPath = str(self.logic.data_path)
+            self.dataPathSelectionWidget.currentPath = str(self.logic._data_path)
             self.updateButtons()
             return
 
-        # Otherwise, try to update the data path in the logic
-        success, reason = self.logic.set_data_path(Path(current_path))
-
-        # If we succeeded, update the GUI to match
-        if success:
-            # Exit task mode; any active task is no longer relevant.
+        try:
+            # Try to update the logic's path to match
+            self.logic.data_path = Path(current_path)
+        except Exception as exc:
+            # Show the user an error
+            self.pythonExceptionPrompt(exc)
+        finally:
+            # In either case, disable any active tasks as they are no longer relevant
             self._disableTaskMode()
 
     def onCohortChanged(self):
@@ -575,10 +574,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         new_cohort = Path(self.cohortFileSelectionButton.currentPath)
 
         # Attempt to update the cohort in our logic instance
-        success = self.logic.set_current_cohort(new_cohort)
-
-        # If we succeeded, update our state to match
-        if success:
+        try:
+            self.logic.cohort_path = new_cohort
+        except Exception as exc:
             # Exit task mode; the new cohort likely makes it obsolete
             self._disableTaskMode()
 
@@ -590,6 +588,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             # Update relevant GUI elements
             self.updateCohortTable()
+
+            # Show the error to the user
+            self.pythonExceptionPrompt(exc)
 
     def onPreviewCohortClicked(self):
         """
@@ -617,18 +618,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.updateCohortTable()
 
     def onTaskChanged(self):
-        # Update the currently selected task
-        task_name = self.taskOptions.currentText
-        new_task = self.task_map.get(task_name, None)
+        # Update the currently selected task in our logic
+        task_id = self.taskOptions.currentText
+        self.logic.task_id = task_id
 
-        # If the task is valid, update the config to match
-        if new_task:
-            config.last_used_task = task_name
-            config.save()
-
-        self.logic.set_task_type(new_task)
-
-        # Purge the current task widget
+        # Purge the current task widget, as it is no longer valid
         if self.dummyTaskWidget:
             # Disconnect the widget, and all of its children, from the GUI
             self.dummyTaskWidget.setParent(None)
@@ -852,7 +846,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             return
 
         # If we have a cohort file, it can be previewed
-        if self.logic.cohort_path:
+        if self.logic._cohort_path:
             self.previewButton.setEnabled(True)
 
         # If the logic says we're ready to start, we can start
@@ -1057,17 +1051,31 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         """Called when the logic class is instantiated. Can be used for initializing member variables."""
         ScriptedLoadableModuleLogic.__init__(self)
 
+        # Current username
+        self.current_username: str = None
+
+        # Current configuration
+        self.config: UserConfig = None
+
         # Path to the cohort file currently in use
-        self.cohort_path: Path = config.last_used_cohort_file
+        self._cohort_path: Path = None
 
         # Path to where the user specified their data is located
-        self.data_path: Path = config.last_used_data_path
+        self._data_path: Path = None
 
         # The data manager currently managing case iteration
         self.data_manager: Optional[DataManager] = None
 
-        # The currently selected task type
-        self.current_task_type: type(TaskBaseClass) = None
+        # The currently selected task Label
+        self._task_id: str = None
+
+        # A map of task IDs to their corresponding task type
+        # TODO: Load this from our global config
+        self.task_map = {
+            "Segmentation": SegmentationEvaluationTask,
+            "MultiContrast Segmentation": MultiContrastSegmentationEvaluationTask,
+            "Registration Review": RegistrationReviewTask,
+        }
 
         # The current task instance
         self.current_task_instance: Optional[TaskBaseClass] = None
@@ -1075,16 +1083,45 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Current data unit factory
         self.data_unit_factory: Optional[DataUnitFactory] = None
 
+        # Load our last state from the config file
+        self._load_last_state()
+
     ## User Management ##
-    def get_users(self) -> list[str]:
+    def _load_last_state(self):
+        """
+        Attempt to load our last state from the configuration file
+        """
+        # If they haven't chosen a previous user yet, return early
+        last_user = config.last_user
+
+        # If a previous user doesn't exist, leave as-is
+        if not last_user:
+            print("No previous user found, ending here.")
+            return
+
+        # Try to load that user's configuration
+        self.config = config.get_user_config(last_user)
+
+        # If that config is empty, terminate here
+        if not self.config:
+            print("No config for last user found, ending here.")
+            return
+
+        # Try to synchronize the config's state with our own
+        self.current_username = last_user
+        self._data_path = self.config.last_used_data_path
+        self._cohort_path = self.config.last_used_cohort_file
+        self._task_id = self.config.last_used_task
+
+    def get_usernames(self) -> list[str]:
         # Simple wrapper for our config
-        return config.users
+        return [str(x) for x in config.profiles.keys()]
 
     def get_current_user(self) -> str:
         """
         Gets the currently selected user, if there is one
         """
-        users = self.get_users()
+        users = self.get_usernames()
         if users:
             return users[0]
         else:
@@ -1094,7 +1131,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         """
         Change the most recent user to the one specified
         """
-        users = self.get_users()
+        users = self.get_usernames()
 
         # If the index is out of bounds, exit early with a failure
         if len(users) <= idx or idx < 0:
@@ -1118,50 +1155,117 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Tell the config to add the new username
         return config.add_user(user_name)
 
-    ## Cohort Path/Data Path Management ##
-    def set_current_cohort(self, new_path: Path) -> bool:
+    ## Cohort File Management ##
+    @property
+    def cohort_path(self) -> Path:
+        return self._cohort_path
+
+    @cohort_path.setter
+    def cohort_path(self, new_path: Path):
         # Confirm the file exists
         if not new_path.exists():
-            print(f"Error: Cohort file does not exist: {new_path}")
-            return False
+            raise ValueError(f"Cohort file '{new_path}' does not exist!")
 
         # Confirm it is a CSV
         if new_path.suffix.lower() != ".csv":
-            print(f"Error: Selected file is not a CSV: {new_path}")
-            return False
+            raise ValueError(f"Selected file '{new_path}' is not a `.csv` file!")
 
         # Warn the user if they're reloading the same file
-        if self.cohort_path is not None and str(new_path.resolve()) == str(
-            self.cohort_path.resolve()
+        if self._cohort_path is not None and str(new_path.resolve()) == str(
+                self._cohort_path.resolve()
         ):
             print("Warning: Reloaded the same cohort file!")
 
         # If all checks pass, update our state
-        self.cohort_path = new_path
-        config.last_used_cohort_file = new_path
-        config.save()
-        self.rebuild_data_manager()
-        return True
+        self._cohort_path = new_path
+        self.clear_task()
 
-    def set_data_path(self, new_path: Path) -> (bool, Optional[str]):
+        # Update the config to match
+        config.last_used_cohort_file = new_path
+
+    def load_cohort(self):
+        """
+        Load the contents of the currently selected cohort file into memory
+        """
+        # If we don't have a data manager yet, create one
+        if self.data_manager is None:
+            self.rebuild_data_manager()
+
+        # Load the cases from the CSV into memory
+        self.data_manager.load_cases()
+
+    ## Data Path Management ##
+    @property
+    def data_path(self) -> Path:
+        return self._data_path
+
+    @data_path.setter
+    def data_path(self, new_path: Path):
         # Confirm the directory exists
         if not new_path.exists():
-            err = f"Error: Data path does not exist: {new_path}"
-            return False, err
+            raise ValueError(f"Data path '{new_path}' does not exist!")
 
         # Confirm that it is a directory
         if not new_path.is_dir():
-            err = f"Error: Data path was not a directory: {new_path}"
-            return False, err
+            raise ValueError(f"Data path '{new_path}' was not a directory!")
 
-        # If that all ran, update everything to match
-        self.data_path = new_path
-        config.last_used_data_path = new_path
-        config.save()
+        # Warn the user if they're reloading the same file
+        if self._data_path is not None and str(new_path.resolve()) == str(
+                self._data_path.resolve()
+        ):
+            print("Warning: Selected the same data path!")
+
+        # If that all ran, update our state
+        self._data_path = new_path
         self.rebuild_data_manager()
-        print(f"Data path set to: {self.data_path}")
 
-        return True, None
+        # Update the config to match
+        config.last_used_data_path = new_path
+
+    ## Task Management ##
+    @property
+    def task_id(self):
+        return self._task_id
+
+    @task_id.setter
+    def task_id(self, new_id: str):
+        # Confirm that the ID isn't blank
+        if not new_id:
+            raise ValueError("Cannot assign to a blank task!")
+
+        # Confirm that the task ID is in our task map
+        task_type = self.task_map.get(new_id, None)
+        if not task_type:
+            raise ValueError(f"Task '{new_id}' hasn't been registered!")
+
+        # Update our state
+        self._task_id = new_id
+
+        # Get this task's preferred DataUnitFactory method
+        # TODO: Allow the user to select the specific method, rather than always
+        #  using the first in the map
+        data_factory_method_map = task_type.getDataUnitFactories()
+        duf = list(data_factory_method_map.values())[0]
+
+        # Update the data manager to use this task's preferred DataUnitFactory
+        self.data_unit_factory = duf
+
+        # New task selected means the old manager + task is no longer relevant
+        self.rebuild_data_manager()
+        self.clear_task()
+
+        # Update the config state as well
+        self.config.last_used_task = new_id
+
+    def clear_task(self):
+        """
+        Clears the current task instance, ensuring its cleaned itself up before
+        its removed from memory
+        """
+        if self.current_task_instance:
+            self.current_task_instance.exit()
+            self.current_task_instance.cleanup()
+            self.current_task_instance = None
 
     def validate_cohort_and_data_path_match(self) -> Optional[str]:
         """
@@ -1175,44 +1279,6 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         if validation_result:
             return validation_result
         return None
-
-    def load_cohort(self):
-        """
-        Load the contents of the currently selected cohort file into memory
-        """
-        # If we don't have a data manager yet, create one
-        if self.data_manager is None:
-            self.rebuild_data_manager()
-
-        # Load the cases from the CSV into memory
-        self.data_manager.load_cases()
-
-    ## Task Management ##
-    def clear_task(self):
-        """
-        Clears the current task instance, ensuring its cleaned itself up before
-        its removed from memory
-        """
-        if self.current_task_instance:
-            self.current_task_instance.exit()
-            self.current_task_instance.cleanup()
-            self.current_task_instance = None
-
-    def set_task_type(self, task_type: type(TaskBaseClass)):
-        # Set the task type
-        self.current_task_type = task_type
-
-        # If we have a task built already, delete it
-        self.clear_task()
-
-        # Get this task's preferred DataUnitFactory method
-        data_factory_method_map = self.current_task_type.getDataUnitFactories()
-        # TODO: Allow the user to select the specific method, rather than always
-        #  using the first in the map
-        duf = list(data_factory_method_map.values())[0]
-
-        # Update the data manager to use this task's preferred DataUnitFactory
-        self.data_unit_factory = duf
 
     def is_ready(self) -> bool:
         """
@@ -1232,14 +1298,14 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             print("Missing a valid cohort path!")
             return False
         # We can't proceed if we don't have a selected task type
-        elif not self.current_task_type:
+        elif not self.task_id:
             print("No task has been selected!")
             return False
         elif not self.data_unit_factory:
             print("No data unit factory has been selected!")
             return False
 
-        # If all checks passed, we can proceed!
+        # If all checks passed, we can proceed!a
         return True
 
     def init_task(self):
@@ -1264,7 +1330,8 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.clear_task()
 
         # Create the new task instance
-        self.current_task_instance = self.current_task_type(self.get_current_user())
+        task_constructor = self.task_map.get(self.task_id)
+        self.current_task_instance = task_constructor(self.get_current_user())
 
         # Act as though CART has just been reloaded so the task can initialize
         #  properly
@@ -1308,8 +1375,8 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Build a new data manager with the current state
         self.data_manager = DataManager(
-            cohort_file=self.cohort_path,
-            data_source=self.data_path,
+            cohort_file=self._cohort_path,
+            data_source=self._data_path,
             data_unit_factory=self.data_unit_factory,
         )
 
@@ -1398,7 +1465,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             return
 
         # If autosaving is on, have the task save its current case before proceeding
-        if config.save_on_iter:
+        if self.config.save_on_iter:
             task.save_on_iter()
 
         # Have the task receive the new case

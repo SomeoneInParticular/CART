@@ -13,7 +13,7 @@ class ConfigGUI(qt.QDialog):
     Configuration dialog which allows the user to configure CART.
     """
 
-    def __init__(self, bound_config: "Config"):
+    def __init__(self, bound_config: "UserConfig"):
         # Initialize the QDialog base itself
         super().__init__()
 
@@ -61,80 +61,21 @@ class ConfigGUI(qt.QDialog):
         return buttonBox
 
 
-class Config:
+class UserConfig:
     """
-    Configuration manager for CART.
+    Configuration manager for a CART user profile.
+
+    Tracks the user's settings, allowing for them to be
+    swapped on the fly.
     """
 
-    def __init__(self, config_path: Path):
-        # Attributes
-        self.config_path = config_path
+    def __init__(self, config_dict: dict[str, dict], cart_config: "CARTConfig"):
+        # Cross-reference attributes
+        self._backing_dict = config_dict
+        self._cart_config = cart_config
 
-        # Hidden attributes
-        self._backing_dict = {}
+        # Track whether something has changed, so other processes can reference it
         self._has_changed = False
-
-    ## I/O ##
-    def load(self):
-        """
-        (Re-)Load the configuration from the file.
-
-        Does NOT check whether the user has unsaved changes; that should be
-        handled by the logic requesting the configuration be loaded!
-        """
-        # If our specified configuration file doesn't exist, copy the default to make one
-        if not MAIN_CONFIG.exists():
-            print("No configuration file found, creating a new one!")
-            with open(DEFAULT_FILE) as cf:
-                # Load the data
-                self._backing_dict = json.load(cf)
-                # And immediately save it, creating a copy
-                self.save()
-        # Otherwise, load the configuration as-is
-        else:
-            with open(self.config_path) as cf:
-                self._backing_dict = json.load(cf)
-
-        # Mark that there are no longer any changes between the config and file
-        self._has_changed = False
-
-    def save(self):
-        """
-        Save the in-memory contents of the configuration back to our JSON file
-        """
-        with open(MAIN_CONFIG, "w") as cf:
-            json.dump(self._backing_dict, cf, indent=2)
-
-        # Mark that there are no longer any changes between the config and file
-        self._has_changed = False
-
-    ## User Management ##
-    @property
-    def users(self) -> list[str]:
-        return self._get_or_default("users", [])
-
-    def add_user(self, new_user: str):
-        # Strip leading and trailing whitespace in the username
-        new_user = new_user.strip()
-
-        # TODO: Make these checks raise an error which can be capture
-
-        # Confirm they actually provided a (non-whitespace only) string
-        if not new_user:
-            print("Something must be entered as a name!")
-            return False
-
-        # Check if the user already exists
-        if new_user in self.users:
-            print("User name already exists!")
-            return False
-
-        # Add the username to our list, in the first position (most recent)
-        self.users.insert(0, new_user)
-
-        # Save the configuration automatically, as it's a "core" attribute
-        self.save()
-        return True
 
     ## Last Used Settings ##
     @property
@@ -202,9 +143,110 @@ class Config:
         prompt = ConfigGUI(bound_config=self)
         # Show it, blocking other interactions until its resolved
         prompt.exec()
+        
+    def save_to_file(self):
+        self._cart_config.save()
+
+class CARTConfig:
+    """
+    Global configuration for CART itself.
+
+    Manages user profiles, as well as tracking some simple metrics
+    itself to allow for restoring the previous user
+    """
+
+    DEFAULT_USERNAME = "Default"
+
+    def __init__(self, config_path: Path):
+        # Path to the file the config should be saved to
+        self.config_path = config_path
+
+        # The dictionary containing the configuration's contents
+        self._backing_dict: dict = None
+
+    ## User Management ##
+    PROFILE_KEY = "user_profiles"
+
+    @property
+    def profiles(self) -> dict[str, dict]:
+        return self._get_or_default(self.PROFILE_KEY, {})
+
+    def new_user(self, username: str):
+        # Strip leading and trailing whitespace in the username
+        username = username.strip()
+
+        # Confirm they actually provided a (non-whitespace only) string
+        if not username:
+            raise ValueError("The username cannot be blank!")
+
+        # Check if the user already exists
+        if username in self.profiles.keys():
+            raise ValueError(f"The username '{username}' already exists!")
+
+        # Create a new user profile for this user
+        self.profiles[username] = {}
+
+        # Save the configuration automatically, as it's a "core" attribute
+        self.save()
+
+    def get_user_config(self, username: str):
+        user_dict = self.profiles.get(username, {})
+        if user_dict:
+            return UserConfig(user_dict, self)
+        else:
+            return None
+
+    LAST_USER_KEY = "last_user"
+
+    @property
+    def last_user(self):
+        return self._get_or_default(
+            self.LAST_USER_KEY, self.DEFAULT_USERNAME
+        )
+
+    ## I/O ##
+    def load(self):
+        """
+        (Re-)Load the configuration from the file.
+
+        Does NOT check whether the user has unsaved changes; that should be
+        handled by whatever is requesting the configuration be loaded!
+        """
+        # If our specified configuration file doesn't exist, copy the default to make one
+        if not MAIN_CONFIG.exists():
+            print("No configuration file found, creating a new one!")
+            with open(DEFAULT_FILE) as cf:
+                # Load the data
+                self._backing_dict = json.load(cf)
+                # And immediately save it, creating a copy
+                self.save()
+        # Otherwise, load the configuration as-is
+        else:
+            with open(self.config_path) as cf:
+                self._backing_dict = json.load(cf)
+
+    def save(self):
+        """
+        Save the in-memory contents of the configuration back to our JSON file
+        """
+        with open(MAIN_CONFIG, "w") as cf:
+            json.dump(self._backing_dict, cf, indent=2)
+
+    def _get_or_default(self, key, default):
+        # Try to get the specified value
+        val = self._backing_dict.get(key, None)
+
+        # If it didn't exist, set it to our default and make a logged note
+        if val is None:
+            print(f"No '{key}' entry existed, setting it to {default}.")
+            val = default
+            self._backing_dict[key] = val
+            self._has_changed = True
+
+        return val
 
 
 # The location of the config file for this installation of CART.
 MAIN_CONFIG = Path(__file__).parent.parent.parent / "configuration.json"
 
-config = Config(MAIN_CONFIG)
+config = CARTConfig(MAIN_CONFIG)

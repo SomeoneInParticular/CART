@@ -1,4 +1,8 @@
 {
-  "users": [],
-  "save_on_iter": true
+  "last_user": "Default",
+  "user_profiles": {
+    "Default": {
+      "save_on_iter": true
+    }
+  }
 }
