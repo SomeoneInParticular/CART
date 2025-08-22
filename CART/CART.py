@@ -212,12 +212,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     ## Core ##
     def sync_with_logic(self):
         # Update the user selection widget with the contents of the logic instance
-        users = self.logic.get_usernames()
+        users = self.logic.get_available_usernames()
+        self.userSelectButton.clear()
         self.userSelectButton.addItems(users)
 
         # Select the user currently selected by the logic
         try:
-            user_idx = users.index(self.logic.current_username)
+            user_idx = users.index(self.logic.active_username)
             self.userSelectButton.currentIndex = user_idx
         except ValueError:
             # Value error indicates the user was not in the list, which is fine
@@ -494,25 +495,16 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         )
 
         # Attempt to add the new user to the Logic
-        success = self.logic.add_new_user(new_name)
-
-        # If we succeeded, update the GUI to match
-        if success:
-            self._refreshUserList()
-            # Check if we're ready to proceed
-            self.updateButtons()
-        else:
-            # Display an error prompt
-            self.showErrorPopup(
-                "Error",
-                f"Failed to add user '{new_name}'; "
-                f"it is likely a user with that name already exists."
-            )
+        try:
+            self.logic.new_user_profile(new_name)
+            self.sync_with_logic()
+        except Exception as exc:
+            self.pythonExceptionPrompt(exc)
 
     def userSelected(self):
         # Update the logic with this newly selected user
-        idx = self.userSelectButton.currentIndex
-        self.logic.set_most_recent_user(idx)
+        new_username = self.userSelectButton.currentText
+        self.logic.active_username = new_username
 
         # Exit task mode until we begin a new task
         self._disableTaskMode()
@@ -536,7 +528,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.userSelectButton.clear()
 
         # Rebuild its contents from scratch
-        self.userSelectButton.addItems(self.logic.get_usernames())
+        self.userSelectButton.addItems(self.logic.get_available_usernames())
 
         # Select the first (most recent) entry in the list
         self.userSelectButton.currentIndex = 0
@@ -1053,7 +1045,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         ScriptedLoadableModuleLogic.__init__(self)
 
         # Current username
-        self.current_username: str = None
+        self._active_username: str = None
 
         # Current configuration
         self.config: UserConfig = None
@@ -1085,76 +1077,72 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.data_unit_factory: Optional[DataUnitFactory] = None
 
         # Load our last state from the config file
-        self._load_last_state()
+        self._load_user_state(config.last_user)
 
     ## User Management ##
-    def _load_last_state(self):
+    @property
+    def active_username(self) -> str:
+        return self._active_username
+
+    @active_username.setter
+    def active_username(self, new_name: str):
+        # Validate the specified user is valid first
+        stripped_name = new_name.strip()
+
+        if not stripped_name:
+            raise ValueError("Cannot set the active user to blank!")
+
+        if not stripped_name in config.profiles.keys():
+            raise ValueError(f"Cannot select user '{stripped_name}'; they don't have a profile!")
+
+        # Set the user's profile as our own
+        self._active_username = stripped_name
+
+        # Sync ourselves with this new user
+        self._load_user_state(self._active_username)
+
+        # Clear any active task, as its no longer relevant
+        self.clear_task()
+
+        # Update the config to designate that this user is now the most recent
+        config.last_user = stripped_name
+
+    def _load_user_state(self, username: str):
         """
         Attempt to load our last state from the configuration file
         """
-        # If they haven't chosen a previous user yet, return early
-        last_user = config.last_user
-
         # If a previous user doesn't exist, leave as-is
-        if not last_user:
-            print("No previous user found, ending here.")
-            return
+        if not username:
+            raise ValueError("Cannot load a blank user!")
 
         # Try to load that user's configuration
-        self.config = config.get_user_config(last_user)
+        self.config = config.get_user_config(username)
 
         # If that config is empty, terminate here
         if not self.config:
-            print("No config for last user found, ending here.")
-            return
+            raise ValueError(f"No profile exists for username '{username}'")
 
         # Try to synchronize the config's state with our own
-        self.current_username = last_user
+        self._active_username = username
         self._data_path = self.config.last_used_data_path
         self._cohort_path = self.config.last_used_cohort_file
         self._task_id = self.config.last_used_task
 
-    def get_usernames(self) -> list[str]:
+    def get_available_usernames(self) -> list[str]:
         # Simple wrapper for our config
         return [str(x) for x in config.profiles.keys()]
 
-    def get_current_user(self) -> str:
+    def new_user_profile(self, username: str) -> UserConfig:
         """
-        Gets the currently selected user, if there is one
+        Attempts to create a new user w/ the provided username,
+        using the previously active user's profile as reference.
+
+        We also immediately change to this new profile to give the
+        user some feedback
         """
-        users = self.get_usernames()
-        if users:
-            return users[0]
-        else:
-            return None
-
-    def set_most_recent_user(self, idx: int) -> bool:
-        """
-        Change the most recent user to the one specified
-        """
-        users = self.get_usernames()
-
-        # If the index is out of bounds, exit early with a failure
-        if len(users) <= idx or idx < 0:
-            return False
-
-        # Otherwise, move the user to the front of the list
-        selected_user = users[idx]
-        users.pop(idx)
-        users.insert(0, selected_user)
-
-        # Immediately save the Config and return
-        config.save()
-        return True
-
-    def add_new_user(self, user_name: str) -> bool:
-        """
-        Attempt to add a new user to the list.
-
-        Returns True if this was successful, False otherwise
-        """
-        # Tell the config to add the new username
-        return config.add_user(user_name)
+        new_profile = config.new_user_profile(username, self.config)
+        self._load_user_state(username)
+        return new_profile
 
     ## Cohort File Management ##
     @property
@@ -1292,7 +1280,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         :return: True if so, False otherwise.
         """
         # We can't proceed if we don't have a selected user
-        if not self.get_current_user():
+        if not self.active_username:
             print("Missing a valid user!")
             return False
         # We can't proceed if a data path has not been specified
@@ -1337,7 +1325,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Create the new task instance
         task_constructor = self.task_map.get(self.task_id)
-        self.current_task_instance = task_constructor(self.get_current_user())
+        self.current_task_instance = task_constructor(self.active_username)
 
         # Save any changes made to the configuration
         # (Usually saves the user and

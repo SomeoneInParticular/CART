@@ -173,23 +173,27 @@ class CARTConfig:
     def profiles(self) -> dict[str, dict]:
         return self._get_or_default(self.PROFILE_KEY, {})
 
-    def new_user(self, username: str):
-        # Strip leading and trailing whitespace in the username
-        username = username.strip()
+    def new_user_profile(self, username: str, reference_profile: UserConfig = None) -> UserConfig:
+        # Confirm that the provided username is available and valid
+        stripped_name = username.strip()
+        if not stripped_name:
+            raise ValueError("Cannot create a user without a username!")
 
-        # Confirm they actually provided a (non-whitespace only) string
-        if not username:
-            raise ValueError("The username cannot be blank!")
+        if stripped_name in config.profiles.keys():
+            raise ValueError(f"User with username '{stripped_name}' already exists!")
 
-        # Check if the user already exists
-        if username in self.profiles.keys():
-            raise ValueError(f"The username '{username}' already exists!")
+        # If we don't have a reference profile, create a blank profile
+        if not reference_profile:
+            new_profile = {}
+        # Otherwise, clone the previous profile to create the new one
+        else:
+            new_profile = reference_profile._backing_dict.copy()
 
-        # Create a new user profile for this user
-        self.profiles[username] = {}
+        # Assign it into our profile dictionary
+        self.profiles[username] = new_profile
 
-        # Save the configuration automatically, as it's a "core" attribute
-        self.save()
+        # Return the result, wrapped in our UserConfig
+        return UserConfig(new_profile, self)
 
     def get_user_config(self, username: str):
         user_dict = self.profiles.get(username, {})
@@ -205,6 +209,10 @@ class CARTConfig:
         return self._get_or_default(
             self.LAST_USER_KEY, self.DEFAULT_USERNAME
         )
+
+    @last_user.setter
+    def last_user(self, new_user: str):
+        self._backing_dict[self.LAST_USER_KEY] = new_user
 
     ## I/O ##
     def load(self):
