@@ -145,7 +145,9 @@ class UserConfig:
         prompt.exec()
         
     def save_to_file(self):
-        self._cart_config.save()
+        # Only do the (relatively) expensive I/O when we have changes
+        if self._has_changed:
+            self._cart_config.save()
 
 class CARTConfig:
     """

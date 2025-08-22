@@ -696,17 +696,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def updateCohortTable(self):
         # Remove any existing table if not in preview or task mode, e.g. when the cohort csv is changed
-        if not self.isPreviewMode and not self.isTaskMode:
+        if not self.isPreviewMode and not self.logic.has_active_task:
             self.destroyCohortTable()
             return
 
         # Disable buttons if in task mode
-        if self.isTaskMode:
+        if self.logic.has_active_task:
             self.previewButton.setEnabled(False)
             self.confirmButton.setEnabled(False)
 
         # Disable navigation buttons if only in preview mode
-        if self.isPreviewMode and not self.isTaskMode:
+        if self.isPreviewMode and not self.logic.has_active_task:
             self.enablePriorButtons(False)
             self.enableNextButtons(False)
 
@@ -831,25 +831,29 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     ### Task Related ###
     def updateTaskGUI(self):
         """
-        Updates the Task GUI to align with our current task mode
+        Show/hide the Task GUI depending on whether our logic
+        has an actively running task or not.
         """
-        self.taskGUI.setEnabled(self.isTaskMode)
-        self.taskGUI.collapsed = not self.isTaskMode
+        new_state = self.logic.has_active_task
+        self.taskGUI.setEnabled(new_state)
+        self.taskGUI.collapsed = not new_state
 
     def updateButtons(self):
-        # If in task mode (confirm clicked), disable preview and confirm buttons
-        if self.isTaskMode:
-            # If we're in task mode, disable the preview button
+        """
+        Updates the state of our buttons to reflect the state of our bound logic
+        """
+        # If our logic is running a task,
+        # disable the "confirm" and "preview" buttons and end here
+        if self.logic.has_active_task:
             self.previewButton.setEnabled(False)
             self.confirmButton.setEnabled(False)
-
             return
 
         # If we have a cohort file, it can be previewed
-        if self.logic._cohort_path:
+        if self.logic.cohort_path:
             self.previewButton.setEnabled(True)
 
-        # If the logic says we're ready to start, we can start
+        # If the logic says we're ready to start, enable the "confirm" button
         if self.logic.is_ready():
             self.confirmButton.setEnabled(True)
 
@@ -885,10 +889,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 loadingPrompt = self._loadingTaskPrompt()
                 loadingPrompt.show()
 
-                # Set task mode to true; session started
-                self.isTaskMode = True
-
-                # Initialize the new task
+                # Try to initialize the new task
                 self.logic.init_task()
 
                 # Create a "dummy" widget that the task can fill
@@ -1181,7 +1182,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.clear_task()
 
         # Update the config to match
-        config.last_used_cohort_file = new_path
+        self.config.last_used_cohort_file = new_path
 
     def load_cohort(self):
         """
@@ -1220,11 +1221,11 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.rebuild_data_manager()
 
         # Update the config to match
-        config.last_used_data_path = new_path
+        self.config.last_used_data_path = new_path
 
     ## Task Management ##
     @property
-    def task_id(self):
+    def task_id(self) -> str:
         return self._task_id
 
     @task_id.setter
@@ -1256,6 +1257,11 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Update the config state as well
         self.config.last_used_task = new_id
+
+    @property
+    def has_active_task(self) -> bool:
+        # Wrapper property to avoid the need for syncing a bool
+        return self.current_task_instance is not None
 
     def clear_task(self):
         """
@@ -1332,6 +1338,10 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Create the new task instance
         task_constructor = self.task_map.get(self.task_id)
         self.current_task_instance = task_constructor(self.get_current_user())
+
+        # Save any changes made to the configuration
+        # (Usually saves the user and
+        self.config.save_to_file()
 
         # Act as though CART has just been reloaded so the task can initialize
         #  properly
