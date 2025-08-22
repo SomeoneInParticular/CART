@@ -131,9 +131,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # A "dummy" widget, which holds the TaskGUI. Allows us to swap tasks on the fly.
         self.dummyTaskWidget: qt.QWidget = None
 
-        # Tracks whether we are in "Task Mode" (actively working on a task) or not
-        self.isTaskMode = False
-
     def setup(self) -> None:
         """Called when the user opens the module the first time and the widget is initialized."""
         ScriptedLoadableModuleWidget.setup(self)
@@ -232,6 +229,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Finally, attempt to update our task from the config
         self.taskOptions.currentText = self.logic.task_id
+
+        # Update our button state to match the new setup
+        self.updateButtons()
+        self.updateTaskGUI()
 
     @contextmanager
     def freeze(self):
@@ -506,9 +507,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         new_username = self.userSelectButton.currentText
         self.logic.active_username = new_username
 
-        # Exit task mode until we begin a new task
-        self._disableTaskMode()
-
         # Rebuild the GUI to match
         self.sync_with_logic()
 
@@ -558,8 +556,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Show the user an error
             self.pythonExceptionPrompt(exc)
         finally:
-            # In either case, disable any active tasks as they are no longer relevant
-            self._disableTaskMode()
+            # In both cases, synchronize with our logic after
+            self.sync_with_logic()
 
     def onCohortChanged(self):
         # Get the currently selected cohort file from the widget
@@ -568,9 +566,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Attempt to update the cohort in our logic instance
         try:
             self.logic.cohort_path = new_cohort
-        except Exception as exc:
-            # Exit task mode; the new cohort likely makes it obsolete
-            self._disableTaskMode()
 
             # Disable cohort preview until the user wants it again
             self.isPreviewMode = False
@@ -580,9 +575,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             # Update relevant GUI elements
             self.updateCohortTable()
-
+        except Exception as exc:
             # Show the error to the user
             self.pythonExceptionPrompt(exc)
+        finally:
+            # Always sync to the logic after
+            self.sync_with_logic()
 
     def onPreviewCohortClicked(self):
         """
@@ -610,19 +608,23 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.updateCohortTable()
 
     def onTaskChanged(self):
-        # Update the currently selected task in our logic
-        task_id = self.taskOptions.currentText
-        self.logic.task_id = task_id
+        try:
+            # Update the currently selected task in our logic
+            task_id = self.taskOptions.currentText
+            self.logic.task_id = task_id
 
-        # Purge the current task widget, as it is no longer valid
-        if self.dummyTaskWidget:
-            # Disconnect the widget, and all of its children, from the GUI
-            self.dummyTaskWidget.setParent(None)
-            # Delete our reference to it as well
-            self.dummyTaskWidget = None
-
-        # Exit task mode until the user confirms the change
-        self._disableTaskMode()
+            # Purge the current task widget, as it is no longer valid
+            if self.dummyTaskWidget:
+                # Disconnect the widget, and all of its children, from the GUI
+                self.dummyTaskWidget.setParent(None)
+                # Delete our reference to it as well
+                self.dummyTaskWidget = None
+        except Exception as exc:
+            # If an error occurs, show it to the user
+            self.pythonExceptionPrompt(exc)
+        finally:
+            # Regardless of what happens, ensure we are synced to our logic
+            self.sync_with_logic()
 
     def buildCohortTable(self):
 
@@ -918,15 +920,15 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
                 # Close the loading prompt
                 loadingPrompt.done(qt.QDialog.Accepted)
-
-            except Exception as e:
+            except Exception as exc:
                 # Close the loading prompt, if it was created
                 if loadingPrompt:
                     loadingPrompt.done(qt.QDialog.Rejected)
                 # Notify the user of the exception
-                self.pythonExceptionPrompt(e)
-                # Exit task mode; we failed to initialize the task, and can't proceed
-                self._disableTaskMode()
+                self.pythonExceptionPrompt(exc)
+            finally:
+                # Synchronize with our logic
+                self.sync_with_logic()
 
     def resetTaskDummyWidget(self):
         if self.dummyTaskWidget:
@@ -959,17 +961,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Disable the confirm button, as the current setup didn't work
         self.confirmButton.setEnabled(False)
-
-    def _disableTaskMode(self):
-        """
-        Flags that we are no longer in task mode, disabling the task GUI in the process
-        """
-        # Change the task mode state to false
-        self.isTaskMode = False
-
-        # Update relevant GUI elements
-        self.updateTaskGUI()
-        self.updateButtons()
 
     def saveTask(self):
         try:
