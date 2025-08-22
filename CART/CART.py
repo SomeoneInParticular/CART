@@ -1048,7 +1048,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self._data_path: Path = None
 
         # The data manager currently managing case iteration
-        self.data_manager: Optional[DataManager] = None
+        self._data_manager: Optional[DataManager] = None
 
         # The currently selected task Label
         self._task_id: str = None
@@ -1360,13 +1360,17 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             self.current_task_instance.exit()
 
     ## DataUnit Management ##
+    @property
+    def data_manager(self):
+        return self._data_manager
+
     def rebuild_data_manager(self):
         # If we had a prior data manager, clean it up first
         if self.data_manager:
             self.data_manager.clean()
 
         # Build a new data manager with the current state
-        self.data_manager = DataManager(
+        self._data_manager = DataManager(
             cohort_file=self._cohort_path,
             data_source=self._data_path,
             data_unit_factory=self.data_unit_factory,
