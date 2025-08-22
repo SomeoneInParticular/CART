@@ -183,7 +183,7 @@ class CARTConfig:
         if not stripped_name:
             raise ValueError("Cannot create a user without a username!")
 
-        if stripped_name in config.profiles.keys():
+        if stripped_name in GLOBAL_CONFIG.profiles.keys():
             raise ValueError(f"User with username '{stripped_name}' already exists!")
 
         # If we don't have a reference profile, create a blank profile
@@ -263,4 +263,4 @@ class CARTConfig:
 # The location of the config file for this installation of CART.
 MAIN_CONFIG = Path(__file__).parent.parent.parent / "configuration.json"
 
-config = CARTConfig(MAIN_CONFIG)
+GLOBAL_CONFIG = CARTConfig(MAIN_CONFIG)

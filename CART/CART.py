@@ -12,7 +12,7 @@ from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
 
-from CARTLib.utils.config import config, UserConfig
+from CARTLib.utils.config import GLOBAL_CONFIG, UserConfig
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
@@ -85,7 +85,7 @@ class CART(ScriptedLoadableModule):
         )
 
         # Load our configuration
-        config.load()
+        GLOBAL_CONFIG.load()
 
         # Add CARTLib to the Python Path for ease of (re-)use
         import sys
@@ -1077,7 +1077,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.data_unit_factory: Optional[DataUnitFactory] = None
 
         # Load our last state from the config file
-        self._load_user_state(config.last_user)
+        self._load_user_state(GLOBAL_CONFIG.last_user)
 
     ## User Management ##
     @property
@@ -1092,7 +1092,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         if not stripped_name:
             raise ValueError("Cannot set the active user to blank!")
 
-        if not stripped_name in config.profiles.keys():
+        if not stripped_name in GLOBAL_CONFIG.profiles.keys():
             raise ValueError(f"Cannot select user '{stripped_name}'; they don't have a profile!")
 
         # Set the user's profile as our own
@@ -1105,7 +1105,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.clear_task()
 
         # Update the config to designate that this user is now the most recent
-        config.last_user = stripped_name
+        GLOBAL_CONFIG.last_user = stripped_name
 
     def _load_user_state(self, username: str):
         """
@@ -1116,7 +1116,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             raise ValueError("Cannot load a blank user!")
 
         # Try to load that user's configuration
-        self.config = config.get_user_config(username)
+        self.config = GLOBAL_CONFIG.get_user_config(username)
 
         # If that config is empty, terminate here
         if not self.config:
@@ -1130,7 +1130,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
     def get_available_usernames(self) -> list[str]:
         # Simple wrapper for our config
-        return [str(x) for x in config.profiles.keys()]
+        return [str(x) for x in GLOBAL_CONFIG.profiles.keys()]
 
     def new_user_profile(self, username: str) -> UserConfig:
         """
@@ -1140,7 +1140,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         We also immediately change to this new profile to give the
         user some feedback
         """
-        new_profile = config.new_user_profile(username, self.config)
+        new_profile = GLOBAL_CONFIG.new_user_profile(username, self.config)
         self._load_user_state(username)
         return new_profile
 
