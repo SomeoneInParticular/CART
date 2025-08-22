@@ -1197,6 +1197,9 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # If that all ran, update our state
         self._data_path = new_path
+
+        # Reset our state, as the task + data manager is likely no longer valid
+        self.clear_task()
         self.rebuild_data_manager()
 
         # Update the config to match
