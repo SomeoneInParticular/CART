@@ -78,37 +78,40 @@ class UserConfig:
         self._has_changed = False
 
     ## Last Used Settings ##
+    LAST_USED_COHORT_KEY = "last_used_cohort_file"
+
     @property
     def last_used_cohort_file(self) -> Path:
-        key = "last_used_cohort_file"
-        val = Path(self._backing_dict.get(key, ""))
+        val = Path(self._backing_dict.get(self.LAST_USED_COHORT_KEY, ""))
         return val
 
     @last_used_cohort_file.setter
     def last_used_cohort_file(self, new_path: Path):
-        self._backing_dict["last_used_cohort_file"] = str(new_path)
+        self._backing_dict[self.LAST_USED_COHORT_KEY] = str(new_path)
         self._has_changed = True
+
+    LAST_USED_DATA_KEY = "last_used_data_path"
 
     @property
     def last_used_data_path(self) -> Path:
-        key = "last_used_data_path"
-        val = Path(self._backing_dict.get(key, ""))
+        val = Path(self._backing_dict.get(self.LAST_USED_DATA_KEY, ""))
         return val
 
     @last_used_data_path.setter
     def last_used_data_path(self, new_path: Path):
-        self._backing_dict["last_used_data_path"] = str(new_path)
+        self._backing_dict[self.LAST_USED_DATA_KEY] = str(new_path)
         self._has_changed = True
+
+    LAST_USED_TASK_KEY = "last_used_task"
 
     @property
     def last_used_task(self) -> str:
-        key = "last_used_task"
-        val = self._backing_dict.get(key, "")
+        val = self._backing_dict.get(self.LAST_USED_TASK_KEY, "")
         return val
 
     @last_used_task.setter
     def last_used_task(self, new_task: str):
-        self._backing_dict["last_used_task"] = new_task
+        self._backing_dict[self.LAST_USED_TASK_KEY] = new_task
 
     ## Autosaving Management ##
     SAVE_ON_ITER_KEY = "save_on_iter"
@@ -148,6 +151,7 @@ class UserConfig:
         # Only do the (relatively) expensive I/O when we have changes
         if self._has_changed:
             self._cart_config.save()
+
 
 class CARTConfig:
     """
