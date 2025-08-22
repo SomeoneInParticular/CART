@@ -69,7 +69,7 @@ class UserConfig:
     swapped on the fly.
     """
 
-    def __init__(self, config_dict: dict[str, dict], cart_config: "CARTConfig"):
+    def __init__(self, config_dict: dict, cart_config: "CARTConfig"):
         # Cross-reference attributes
         self._backing_dict = config_dict
         self._cart_config = cart_config
