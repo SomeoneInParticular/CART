@@ -20,6 +20,9 @@ class ConfigGUI(qt.QDialog):
         # Track the bound configuration to ourselves
         self.bound_config = bound_config
 
+        # Track the button box so we can react to them being pressed
+        self.buttonBox: qt.QDialogButtonBox = None
+
         # Built the GUI contents
         self.build_ui()
 
@@ -42,23 +45,36 @@ class ConfigGUI(qt.QDialog):
         iterSaveCheck.setChecked(self.bound_config.save_on_iter)
         def setSaveOnIter(new_state: bool):
             self.bound_config.save_on_iter = bool(new_state)
-        iterSaveCheck.stateChanged.connect(
-            lambda x: setSaveOnIter(x)
-        )
+        iterSaveCheck.stateChanged.connect(setSaveOnIter)
+
+        # Add it to our layout
         layout.addRow(iterSaveLabel, iterSaveCheck)
 
-        buttonBox = self.addButtons()
-        layout.addRow(buttonBox)
+        # Add our button array to the bottom of the GUI
+        self.buttonBox = self.addButtons()
+        layout.addRow(self.buttonBox)
 
     def addButtons(self):
         buttonBox = qt.QDialogButtonBox()
         buttonBox.setStandardButtons(
             qt.QDialogButtonBox.Reset | qt.QDialogButtonBox.Cancel | qt.QDialogButtonBox.Ok
         )
-        buttonBox.clicked.connect(
-            lambda b: print(buttonBox.buttonRole(b))
-        )
+        buttonBox.clicked.connect(self.onButtonPressed)
         return buttonBox
+
+    def onButtonPressed(self, button: qt.QPushButton):
+        # Get the role of the button
+        button_role = self.buttonBox.buttonRole(button)
+        # Match it to our corresponding function
+        # TODO: Replace this with a `match` statement when porting to Slicer 5.9
+        if button_role == qt.QDialogButtonBox.AcceptRole:
+            print("Accepted!")
+        elif button_role == qt.QDialogButtonBox.RejectRole:
+            print("Rejected...")
+        elif button_role == qt.QDialogButtonBox.ResetRole:
+            print("Reset?")
+        else:
+            raise ValueError("Pressed a button with an invalid role somehow...")
 
 
 class UserConfig:
