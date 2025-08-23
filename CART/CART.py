@@ -1269,11 +1269,12 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Get this task's preferred DataUnitFactory method
         # TODO: Allow the user to select the specific method, rather than always
         #  using the first in the map
-        data_factory_method_map = task_type.getDataUnitFactories()
-        duf = list(data_factory_method_map.values())[0]
+        if task_type:
+            data_factory_method_map = task_type.getDataUnitFactories()
+            duf = list(data_factory_method_map.values())[0]
 
-        # Update the data manager to use this task's preferred DataUnitFactory
-        self.data_unit_factory = duf
+            # Update the data manager to use this task's preferred DataUnitFactory
+            self.data_unit_factory = duf
 
     @property
     def has_active_task(self) -> bool:
