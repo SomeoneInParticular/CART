@@ -19,6 +19,11 @@ class ConfigGUI(qt.QDialog):
         # Track the bound configuration to ourselves
         self.bound_config = bound_config
 
+        # Track the backing dict of the config at this state to restore
+        # if the user backs out; we're not copying here because the
+        # config's 'backing_dict' config does that for us already.
+        self._reserve_state = bound_config.backing_dict
+
         # Track the button box so we can react to them being pressed
         self.buttonBox: qt.QDialogButtonBox = None
 
@@ -67,13 +72,46 @@ class ConfigGUI(qt.QDialog):
         # Match it to our corresponding function
         # TODO: Replace this with a `match` statement when porting to Slicer 5.9
         if button_role == qt.QDialogButtonBox.AcceptRole:
-            print("Accepted!")
+            self.bound_config.save_to_file()
+            self.accept()
         elif button_role == qt.QDialogButtonBox.RejectRole:
-            print("Rejected...")
+            self.preCloseCheck()
+            self.reject()
         elif button_role == qt.QDialogButtonBox.ResetRole:
-            print("Reset?")
+            self.bound_config.backing_dict = self._reserve_state
+            self.reject()
         else:
             raise ValueError("Pressed a button with an invalid role somehow...")
+
+    def preCloseCheck(self):
+        """
+        Before the prompt closes, check to confirm no changes were made
+        that the user might want to save beforehand!
+
+        :return: Whether the save request was accepted.
+        """
+        if self.bound_config.has_changed:
+            reply = qt.QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                "You have not saved your changes; would you like to now?",
+                qt.QMessageBox.Yes, qt.QMessageBox.No
+            )
+            # Save to file only if the user confirms it
+            if reply == qt.QMessageBox.Yes:
+                self.bound_config.save_to_file()
+                return True
+            else:
+                self.bound_config.backing_dict = self._reserve_state
+                return False
+
+    def closeEvent(self, event):
+        """
+        Intercepts when the user closes the window outside by clicking the 'x'
+        in the top right; ensures any modifications don't get discarded by mistake.
+        """
+        self.preCloseCheck()
+        event.accept()
 
 
 class UserConfig:
@@ -108,6 +146,9 @@ class UserConfig:
         self._backing_dict.clear()
         for k, v in new_dict.items():
             self._backing_dict[k] = v
+        # We presume direct assignment = not changed;
+        # the dev can explicitly specify otherwise if need be
+        self._has_changed = False
 
     ## Last Used Settings ##
     LAST_USED_COHORT_KEY = "last_used_cohort_file"
