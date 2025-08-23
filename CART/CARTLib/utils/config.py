@@ -114,6 +114,7 @@ class ConfigGUI(qt.QDialog):
         event.accept()
 
 
+## Backing Config Managers ##
 class UserConfig:
     """
     Configuration manager for a CART user profile.
@@ -121,13 +122,20 @@ class UserConfig:
     Tracks the user's settings, allowing for them to be
     swapped on the fly.
     """
-    def __init__(self, config_dict: dict, cart_config: "CARTConfig"):
+    def __init__(self, username: str, config_dict: dict, cart_config: "CARTConfig"):
+        # The username for this profile
+        self._username = username
+
         # Cross-reference attributes
         self._backing_dict = config_dict
         self._cart_config = cart_config
 
         # Track whether something has changed, so other processes can reference it
         self._has_changed = False
+
+    @property
+    def username(self):
+        return self._username
 
     @property
     def has_changed(self):
@@ -270,12 +278,12 @@ class CARTConfig:
         self.profiles[username] = new_profile
 
         # Return the result, wrapped in our UserConfig
-        return UserConfig(new_profile, self)
+        return UserConfig(username, new_profile, self)
 
     def get_user_config(self, username: str):
         user_dict = self.profiles.get(username, {})
         if user_dict:
-            return UserConfig(user_dict, self)
+            return UserConfig(username, user_dict, self)
         else:
             return None
 
