@@ -207,32 +207,56 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.sync_with_logic()
 
     ## Core ##
+    @contextmanager
+    def block_signals(self):
+        """
+        Python context manager which disables signals from being emitted
+        while active. Primarily used when we're synchronizing with the
+        logic instance to avoid feedback loops.
+        """
+        affected_widgets = [
+            self.userSelectButton,
+            self.cohortFileSelectionButton,
+            self.dataPathSelectionWidget,
+            self.taskOptions
+        ]
+
+        for w in affected_widgets:
+            w.blockSignals(True)
+
+        yield
+
+        for w in affected_widgets:
+            w.blockSignals(False)
+
     def sync_with_logic(self):
-        # Update the user selection widget with the contents of the logic instance
-        users = self.logic.get_available_usernames()
-        self.userSelectButton.clear()
-        self.userSelectButton.addItems(users)
+        # Block our widgets from emitting signals while we run
+        with self.block_signals():
+            # Update the user selection widget with the contents of the logic instance
+            users = self.logic.get_available_usernames()
+            self.userSelectButton.clear()
+            self.userSelectButton.addItems(users)
 
-        # Select the user currently selected by the logic
-        try:
-            user_idx = users.index(self.logic.active_username)
-            self.userSelectButton.currentIndex = user_idx
-        except ValueError:
-            # Value error indicates the user was not in the list, which is fine
-            pass
+            # Select the user currently selected by the logic
+            try:
+                user_idx = users.index(self.logic.active_username)
+                self.userSelectButton.currentIndex = user_idx
+            except ValueError:
+                # Value error indicates the user was not in the list, which is fine
+                pass
 
-        # Pull the currently selected cohort file next
-        self.cohortFileSelectionButton.currentPath = self.logic.cohort_path
+            # Pull the currently selected cohort file next
+            self.cohortFileSelectionButton.currentPath = self.logic.cohort_path
 
-        # Pull the currently selected data path next
-        self.dataPathSelectionWidget.currentPath = self.logic.data_path
+            # Pull the currently selected data path next
+            self.dataPathSelectionWidget.currentPath = self.logic.data_path
 
-        # Finally, attempt to update our task from the config
-        self.taskOptions.currentText = self.logic.task_id
+            # Finally, attempt to update our task from the config
+            self.taskOptions.currentText = self.logic.task_id
 
-        # Update our button state to match the new setup
-        self.updateButtons()
-        self.updateTaskGUI()
+            # Update our button state to match the new setup
+            self.updateButtons()
+            self.updateTaskGUI()
 
     @contextmanager
     def freeze(self):
@@ -1118,6 +1142,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self._data_path = self.config.last_used_data_path
         self._cohort_path = self.config.last_used_cohort_file
         self._task_id = self.config.last_used_task
+        self.select_default_data_factory()
 
     def get_available_usernames(self) -> list[str]:
         # Simple wrapper for our config
@@ -1217,12 +1242,22 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             raise ValueError("Cannot assign to a blank task!")
 
         # Confirm that the task ID is in our task map
-        task_type = self.task_map.get(new_id, None)
-        if not task_type:
+        if not self.task_map.get(new_id, False):
             raise ValueError(f"Task '{new_id}' hasn't been registered!")
 
-        # Update our state
+        # Update our task state
         self._task_id = new_id
+        self.select_default_data_factory()
+
+        # New task selected means the old manager + task is no longer relevant
+        self.rebuild_data_manager()
+        self.clear_task()
+
+        # Update the config state as well
+        self.config.last_used_task = new_id
+
+    def select_default_data_factory(self):
+        task_type = self.task_map.get(self.task_id, None)
 
         # Get this task's preferred DataUnitFactory method
         # TODO: Allow the user to select the specific method, rather than always
@@ -1232,13 +1267,6 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Update the data manager to use this task's preferred DataUnitFactory
         self.data_unit_factory = duf
-
-        # New task selected means the old manager + task is no longer relevant
-        self.rebuild_data_manager()
-        self.clear_task()
-
-        # Update the config state as well
-        self.config.last_used_task = new_id
 
     @property
     def has_active_task(self) -> bool:

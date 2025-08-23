@@ -93,6 +93,10 @@ class UserConfig:
         # Track whether something has changed, so other processes can reference it
         self._has_changed = False
 
+    @property
+    def has_changed(self):
+        return self._has_changed
+
     ## Last Used Settings ##
     LAST_USED_COHORT_KEY = "last_used_cohort_file"
 
