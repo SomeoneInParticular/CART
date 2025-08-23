@@ -235,6 +235,9 @@ class UserConfig:
     Tracks the user's settings, allowing for them to be
     swapped on the fly.
     """
+
+    DEFAULT_ROLE = "N/A"
+
     def __init__(self, username: str, config_dict: dict, cart_config: "CARTConfig"):
         # The username for this profile
         self._username = username
@@ -307,6 +310,13 @@ class UserConfig:
     def last_used_task(self, new_task: str):
         self._backing_dict[self.LAST_USED_TASK_KEY] = new_task
 
+    ## User Role ##
+    ROLE_KEY = "role"
+
+    @property
+    def role(self) -> str:
+        return self._get_or_default(self.ROLE_KEY, self.DEFAULT_ROLE)
+
     ## Autosaving Management ##
     SAVE_ON_ITER_KEY = "save_on_iter"
 
@@ -366,6 +376,7 @@ class CARTConfig:
 
     ## User Management ##
     PROFILE_KEY = "user_profiles"
+    DEFAULT_ROLES = [UserConfig.DEFAULT_ROLE]
 
     @property
     def profiles(self) -> dict[str, dict]:
@@ -446,6 +457,18 @@ class CARTConfig:
     @last_user.setter
     def last_user(self, new_user: str):
         self._backing_dict[self.LAST_USER_KEY] = new_user
+
+    USER_ROLES_KEY = "user_roles"
+
+    @property
+    def user_roles(self) -> list[str]:
+        return self._get_or_default(self.USER_ROLES_KEY, self.DEFAULT_ROLES)
+
+    def new_user_role(self, new_role: str):
+        if new_role in self.user_roles:
+            raise ValueError(f"Role '{new_role}' already exists!")
+
+        self.user_roles.append(new_role)
 
     ## I/O ##
     def load(self):
