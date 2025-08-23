@@ -120,6 +120,7 @@ class NewUserDialog(qt.QDialog):
                 self.reference_profile
             )
 
+
 class ConfigGUI(qt.QDialog):
     """
     Configuration dialog which allows the user to configure CART.
