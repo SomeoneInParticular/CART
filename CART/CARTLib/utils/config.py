@@ -27,6 +27,10 @@ class NewUserDialog(qt.QDialog):
         # The text field widget for the username
         self.usernameEdit: qt.QLineEdit = None
 
+        # Toggle box which make the profile a blank slate if checked
+        # (instead of copying the active profile's state, the default)
+        self.blankSlateBox: qt.QCheckBox = None
+
         # Track the button box so we can react to them being pressed
         self.buttonBox: qt.QDialogButtonBox = None
 
@@ -62,6 +66,17 @@ class NewUserDialog(qt.QDialog):
         # Add them to our layout
         layout.addRow(usernameLabel, usernameEdit)
 
+        # Add the blank-state checkbox
+        blankStateBox = qt.QCheckBox()
+        blankStateLabel = qt.QLabel("Reset to Default?")
+        blankStateLabel.setToolTip("""
+            If selected, the new user profile will have no configuration settings, 
+            being a "blank slate". If unchecked, the configuration settings of the 
+            current profile (including the last-used settings) are copied over instead.
+        """)
+        self.blankSlateBox = blankStateBox
+        layout.addRow(blankStateLabel, blankStateBox)
+
         # Add our button array to the bottom of the GUI
         self.buttonBox = self.addButtons()
         layout.addRow(self.buttonBox)
@@ -87,12 +102,23 @@ class NewUserDialog(qt.QDialog):
     def username(self) -> str:
         return self.usernameEdit.text
 
+    @property
+    def shouldBlankState(self) -> bool:
+        return self.blankSlateBox.isChecked()
+
+    ## Utils
     def saveNewProfile(self):
-        self.master_config.new_user_profile(
-            self.username,
-            self.profile_dict,
-            self.reference_profile
-        )
+        if self.shouldBlankState:
+            self.master_config.new_user_profile(
+                self.username,
+                self.profile_dict
+            )
+        else:
+            self.master_config.new_user_profile(
+                self.username,
+                self.profile_dict,
+                self.reference_profile
+            )
 
 class ConfigGUI(qt.QDialog):
     """
