@@ -12,7 +12,6 @@ class ConfigGUI(qt.QDialog):
     """
     Configuration dialog which allows the user to configure CART.
     """
-
     def __init__(self, bound_config: "UserConfig"):
         # Initialize the QDialog base itself
         super().__init__()
@@ -84,7 +83,6 @@ class UserConfig:
     Tracks the user's settings, allowing for them to be
     swapped on the fly.
     """
-
     def __init__(self, config_dict: dict, cart_config: "CARTConfig"):
         # Cross-reference attributes
         self._backing_dict = config_dict
@@ -96,6 +94,20 @@ class UserConfig:
     @property
     def has_changed(self):
         return self._has_changed
+
+    @property
+    def backing_dict(self):
+        # KO: We really don't want direct access to the dict itself,
+        #  so we return a copy instead
+        return self._backing_dict.copy()
+
+    @backing_dict.setter
+    def backing_dict(self, new_dict: dict):
+        # KO: we can't just assign, otherwise it would
+        #  de-sync with the global config
+        self._backing_dict.clear()
+        for k, v in new_dict.items():
+            self._backing_dict[k] = v
 
     ## Last Used Settings ##
     LAST_USED_COHORT_KEY = "last_used_cohort_file"
@@ -166,10 +178,10 @@ class UserConfig:
         prompt = ConfigGUI(bound_config=self)
         # Show it, blocking other interactions until its resolved
         prompt.exec()
-        
+
     def save_to_file(self):
         # Only do the (relatively) expensive I/O when we have changes
-        if self._has_changed:
+        if self.has_changed:
             self._cart_config.save()
 
 
