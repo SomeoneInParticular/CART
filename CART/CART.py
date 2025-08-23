@@ -511,18 +511,22 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     ### Setup Widgets ###
     def promptNewUser(self):
         """
-        Creates a pop-up, prompting the user to enter their name into a
-        text box to register themselves as a new user.
-        """
-        # Create a new widget
-        new_name = qt.QInputDialog().getText(
-            self.mainGUI, _("Add New User"), _("New User Name:")
-        )
+        Prompt the user to fill out details for a new user profile.
 
-        # Attempt to add the new user to the Logic
+        If successful, also updates the logic to match
+        """
         try:
-            self.logic.new_user_profile(new_name)
-            self.sync_with_logic()
+            # Get the username for the new user profile; None if no
+            # user was created.
+            new_username = GLOBAL_CONFIG.promptNewUser(
+                self.logic.config
+            )
+            # If a valid username was returned, update our logic to match
+            if new_username:
+                self.logic.active_username = new_username
+                self.sync_with_logic()
+                # Save the config to entrench this new state
+                GLOBAL_CONFIG.save()
         except Exception as exc:
             self.pythonExceptionPrompt(exc)
 
@@ -1156,7 +1160,10 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         We also immediately change to this new profile to give the
         user some feedback
         """
-        new_profile = GLOBAL_CONFIG.new_user_profile(username, self.config)
+        # We always copy from the current profile by default
+        new_profile = GLOBAL_CONFIG.new_user_profile(
+            username, reference_profile=self.config
+        )
         self._load_user_state(username)
         return new_profile
 

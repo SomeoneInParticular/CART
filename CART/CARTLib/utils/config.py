@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Optional
 
 import qt
 
@@ -7,6 +8,91 @@ import qt
 #  DO NOT TOUCH IT UNLESS YOU KNOW WHAT YOU'RE DOING.
 DEFAULT_FILE = Path(__file__).parent / "default_config.json"
 
+
+## GUI elements ##
+class NewUserDialog(qt.QDialog):
+    def __init__(self, reference_profile: "UserConfig", master_config: "CARTConfig"):
+        # Initialize the QDialog base itself
+        super().__init__()
+
+        # The dictionary actually containing what we'll be saving
+        self.profile_dict: dict = {}
+
+        # A reference config to copy from if the user requests it
+        self.reference_profile = reference_profile
+
+        # The master config we want to save the profile too
+        self.master_config = master_config
+
+        # The text field widget for the username
+        self.usernameEdit: qt.QLineEdit = None
+
+        # Track the button box so we can react to them being pressed
+        self.buttonBox: qt.QDialogButtonBox = None
+
+        # Built the GUI contents
+        self.buildUI()
+
+    ## GUI components ##
+
+    def addButtons(self):
+        buttonBox = qt.QDialogButtonBox()
+        buttonBox.setStandardButtons(
+            qt.QDialogButtonBox.Cancel | qt.QDialogButtonBox.Ok
+        )
+        buttonBox.clicked.connect(self.onButtonPressed)
+        return buttonBox
+
+    def buildUI(self):
+        # General window properties
+        self.setWindowTitle("New User")
+
+        # Create a form layout to hold everything in
+        layout = qt.QFormLayout()
+        self.setLayout(layout)
+
+        # Add a field for submitting the username
+        usernameEdit = qt.QLineEdit()
+        usernameLabel = qt.QLabel("Username:")
+        usernameLabel.setToolTip(
+            "The ID for this profile. Cannot match an existing username!"
+        )
+        self.usernameEdit = usernameEdit
+
+        # Add them to our layout
+        layout.addRow(usernameLabel, usernameEdit)
+
+        # Add our button array to the bottom of the GUI
+        self.buttonBox = self.addButtons()
+        layout.addRow(self.buttonBox)
+
+        # Connect everything together
+        # TODO
+
+    def onButtonPressed(self, button: qt.QPushButton):
+        # Get the role of the button
+        button_role = self.buttonBox.buttonRole(button)
+        # Match it to our corresponding function
+        # TODO: Replace this with a `match` statement when porting to Slicer 5.9
+        if button_role == qt.QDialogButtonBox.AcceptRole:
+            self.saveNewProfile()
+            self.accept()
+        elif button_role == qt.QDialogButtonBox.RejectRole:
+            self.reject()
+        else:
+            raise ValueError("Pressed a button with an invalid role somehow...")
+
+    ## Utils
+    @property
+    def username(self) -> str:
+        return self.usernameEdit.text
+
+    def saveNewProfile(self):
+        self.master_config.new_user_profile(
+            self.username,
+            self.profile_dict,
+            self.reference_profile
+        )
 
 class ConfigGUI(qt.QDialog):
     """
@@ -258,7 +344,16 @@ class CARTConfig:
     def profiles(self) -> dict[str, dict]:
         return self._get_or_default(self.PROFILE_KEY, {})
 
-    def new_user_profile(self, username: str, reference_profile: UserConfig = None) -> UserConfig:
+    def new_user_profile(
+            self,
+            username: str,
+            user_settings: dict = None,
+            reference_profile: UserConfig = None
+    ) -> UserConfig:
+        """
+        Create a new user profile, copying config entries from a
+        reference profile if provided.
+        """
         # Confirm that the provided username is available and valid
         stripped_name = username.strip()
         if not stripped_name:
@@ -267,12 +362,18 @@ class CARTConfig:
         if stripped_name in GLOBAL_CONFIG.profiles.keys():
             raise ValueError(f"User with username '{stripped_name}' already exists!")
 
-        # If we don't have a reference profile, create a blank profile
-        if not reference_profile:
-            new_profile = {}
-        # Otherwise, clone the previous profile to create the new one
+        # If a reference profile was provided, use its settings as our base
+        if reference_profile:
+            # Note; this is implicitly copied via the profile's setter property
+            new_profile = reference_profile.backing_dict
+        # Otherwise, start with a blank slate
         else:
-            new_profile = reference_profile._backing_dict.copy()
+            new_profile = {}
+
+        # We can have a set of settings to override as well, if provided
+        if user_settings:
+            for k, v in user_settings.items():
+                new_profile[k] = v
 
         # Assign it into our profile dictionary
         self.profiles[username] = new_profile
@@ -284,6 +385,26 @@ class CARTConfig:
         user_dict = self.profiles.get(username, {})
         if user_dict:
             return UserConfig(username, user_dict, self)
+        else:
+            return None
+
+    def promptNewUser(self, reference_profile: UserConfig = None) -> Optional[str]:
+        """
+        Generate a QT prompt for the user to create a new profile entry.
+
+        :param reference_profile: The profile to copy configuration settings from (if any)
+
+        :return: The username of the new user; None if the user backed out.
+        """
+        # Try to generate a new user from the settings
+        prompt = NewUserDialog(reference_profile, GLOBAL_CONFIG)
+        user_added_successfully = prompt.exec()
+
+        # If successful, return the username for easy reference
+        if user_added_successfully:
+            # Return the new username for reference elsewhere
+            return prompt.username
+        # Otherwise, return nothing
         else:
             return None
 
