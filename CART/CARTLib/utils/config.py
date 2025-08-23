@@ -82,7 +82,7 @@ class NewUserDialog(qt.QDialog):
         else:
             raise ValueError("Pressed a button with an invalid role somehow...")
 
-    ## Utils
+    ## Access Management ##s
     @property
     def username(self) -> str:
         return self.usernameEdit.text
@@ -381,9 +381,9 @@ class CARTConfig:
         # Return the result, wrapped in our UserConfig
         return UserConfig(username, new_profile, self)
 
-    def get_user_config(self, username: str):
-        user_dict = self.profiles.get(username, {})
-        if user_dict:
+    def get_user_config(self, username: str) -> Optional[UserConfig]:
+        user_dict = self.profiles.get(username, None)
+        if user_dict is not None:
             return UserConfig(username, user_dict, self)
         else:
             return None

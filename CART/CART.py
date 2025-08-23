@@ -1137,8 +1137,8 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Try to load that user's configuration
         self.config = GLOBAL_CONFIG.get_user_config(username)
 
-        # If that config is empty, terminate here
-        if not self.config:
+        # If there is not corresponding config, terminate here
+        if self.config is None:
             raise ValueError(f"No profile exists for username '{username}'")
 
         # Try to synchronize the config's state with our own
