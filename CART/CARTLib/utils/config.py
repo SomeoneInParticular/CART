@@ -96,8 +96,22 @@ class NewUserDialog(qt.QDialog):
         self.buttonBox = self.addButtons()
         layout.addRow(self.buttonBox)
 
-        # Connect everything together
-        # TODO
+        # Only enable the "confirm" button when a valid username is present
+        okButton = self.buttonBox.button(qt.QDialogButtonBox.Ok)
+        def syncOkButtonState(username: str):
+            stripped_name = username.strip()
+            if not stripped_name:
+                okButton.setEnabled(False)
+                okButton.setToolTip("Users must have a non-blank username")
+            elif stripped_name in self.master_config.profiles.keys():
+                okButton.setEnabled(False)
+                okButton.setToolTip("The provided username already exists!")
+            else:
+                okButton.setEnabled(True)
+                okButton.setToolTip("")
+        self.usernameEdit.textChanged.connect(syncOkButtonState)
+        # Sync the OK button's state immediately
+        syncOkButtonState(usernameEdit.text)
 
     def onButtonPressed(self, button: qt.QPushButton):
         # Get the role of the button
