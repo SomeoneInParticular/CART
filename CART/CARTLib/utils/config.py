@@ -15,9 +15,6 @@ class NewUserDialog(qt.QDialog):
         # Initialize the QDialog base itself
         super().__init__()
 
-        # The dictionary actually containing what we'll be saving
-        self.profile_dict: dict = {}
-
         # A reference config to copy from if the user requests it
         self.reference_profile = reference_profile
 
@@ -26,6 +23,9 @@ class NewUserDialog(qt.QDialog):
 
         # The text field widget for the username
         self.usernameEdit: qt.QLineEdit = None
+
+        # Selection field for the role
+        self.roleComboBox: qt.QComboBox = None
 
         # Toggle box which make the profile a blank slate if checked
         # (instead of copying the active profile's state, the default)
@@ -38,7 +38,6 @@ class NewUserDialog(qt.QDialog):
         self.buildUI()
 
     ## GUI components ##
-
     def addButtons(self):
         buttonBox = qt.QDialogButtonBox()
         buttonBox.setStandardButtons(
@@ -66,6 +65,22 @@ class NewUserDialog(qt.QDialog):
         # Add them to our layout
         layout.addRow(usernameLabel, usernameEdit)
 
+        # Add a combobox that lets the user select their role
+        roleComboBox = qt.QComboBox()
+        roleLabel = qt.QLabel("Role:")
+        roleLabel.setToolTip("What role the user should be marked as having.")
+
+        # Add the roles already available to the combobox
+        roleComboBox.addItems(self.master_config.user_roles)
+
+        # Make the combo-box editable
+        roleComboBox.setEditable(True)
+
+        self.roleComboBox = roleComboBox
+
+        # Add it to our GUI layout
+        layout.addRow(roleLabel, roleComboBox)
+
         # Add the blank-state checkbox
         blankStateBox = qt.QCheckBox()
         blankStateLabel = qt.QLabel("Reset to Default?")
@@ -90,7 +105,7 @@ class NewUserDialog(qt.QDialog):
         # Match it to our corresponding function
         # TODO: Replace this with a `match` statement when porting to Slicer 5.9
         if button_role == qt.QDialogButtonBox.AcceptRole:
-            self.saveNewProfile()
+            self.createNewProfile()
             self.accept()
         elif button_role == qt.QDialogButtonBox.RejectRole:
             self.reject()
@@ -103,22 +118,36 @@ class NewUserDialog(qt.QDialog):
         return self.usernameEdit.text
 
     @property
+    def selected_role(self) -> str:
+        return self.roleComboBox.currentText.strip()
+
+    @property
     def shouldBlankState(self) -> bool:
         return self.blankSlateBox.isChecked()
 
     ## Utils
-    def saveNewProfile(self):
+    def createNewProfile(self):
+        # Build the profile config dict from our GUI
+        profile_dict = {
+            UserConfig.ROLE_KEY: self.selected_role
+        }
+
+        # Add a new entry into the config file
         if self.shouldBlankState:
             self.master_config.new_user_profile(
                 self.username,
-                self.profile_dict
+                profile_dict
             )
         else:
             self.master_config.new_user_profile(
                 self.username,
-                self.profile_dict,
+                profile_dict,
                 self.reference_profile
             )
+
+        # If the role is new, add it to the master config list
+        if self.selected_role not in self.master_config.user_roles:
+            self.master_config.user_roles.append(self.selected_role)
 
 
 class ConfigGUI(qt.QDialog):
@@ -166,6 +195,28 @@ class ConfigGUI(qt.QDialog):
 
         # Add it to our layout
         layout.addRow(iterSaveLabel, iterSaveCheck)
+
+        # Add a combobox that lets the user select their role
+        roleComboBox = qt.QComboBox()
+        roleLabel = qt.QLabel("Role:")
+        roleLabel.setToolTip("What role the user should be marked as having.")
+
+        # Add the roles already available to the combobox
+        roleComboBox.addItems(self.bound_config.valid_roles)
+
+        # Se the starting text to match our bound config
+        roleComboBox.currentText = self.bound_config.role
+
+        # Make the combo-box editable
+        roleComboBox.setEditable(True)
+
+        # When a new role is selected, update our backing dict
+        def changeRole(new_role: str):
+            self.bound_config.role = new_role
+        roleComboBox.currentTextChanged.connect(changeRole)
+
+        # Add it to our layout
+        layout.addRow(roleLabel, roleComboBox)
 
         # Add our button array to the bottom of the GUI
         self.buttonBox = self.addButtons()
@@ -317,6 +368,15 @@ class UserConfig:
     def role(self) -> str:
         return self._get_or_default(self.ROLE_KEY, self.DEFAULT_ROLE)
 
+    @role.setter
+    def role(self, new_role: str):
+        self._backing_dict[self.ROLE_KEY] = new_role
+        self._has_changed = True
+
+    @property
+    def valid_roles(self) -> list[str]:
+        return self._cart_config.user_roles
+
     ## Autosaving Management ##
     SAVE_ON_ITER_KEY = "save_on_iter"
 
@@ -354,6 +414,11 @@ class UserConfig:
     def save_to_file(self):
         # Only do the (relatively) expensive I/O when we have changes
         if self.has_changed:
+            # If the selected role is new, add it to the config first
+            if self.role not in self._cart_config.user_roles:
+                self._cart_config.user_roles.append(self.role)
+
+            # Save the configuration
             self._cart_config.save()
 
 
