@@ -372,12 +372,12 @@ class CohortGeneratorWindow(qt.QDialog):
         if is_new_column:
             self.column_name_label.setText("New Column Name:")
             self.apply_filter_button.setText("Create New Column from Filters")
-
-            self.clear_fields()
         else:
             # Populate include/exclude inputs from config if available
+            print(f"GETTING FILTERS FROM {text}...")
             selected_column_filters = config.get_filter(text)
             if selected_column_filters:
+                print("GOT ALL FILTERS!")
                 include_input  = selected_column_filters["inclusion_input"]
                 exclude_input  = selected_column_filters["exclusion_input"]
 
@@ -524,7 +524,7 @@ class CohortGeneratorLogic:
         )
 
     def load_cohort_data(self, data_path, excluded_extensions=None):
-        self._scan_filesystem(excluded_extensions)
+        self._scan_filesystem()
         self.clear_filters()
 
     def clear_filters(self):
