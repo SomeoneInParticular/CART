@@ -36,6 +36,9 @@ class MultiContrastSegmentationEvaluationGUI:
         # Initialize the layout we'll insert everything into
         formLayout = qt.QFormLayout()
 
+        # 1). Configuration button
+        self._addConfigButton(formLayout)
+
         # 2) Orientation buttons
         self._addOrientationButtons(formLayout)
 
@@ -50,6 +53,17 @@ class MultiContrastSegmentationEvaluationGUI:
         self.promptSelectOutputMode()
 
         return formLayout
+
+    def _addConfigButton(self, layout: qt.QFormLayout):
+        # A button to open the Configuration dialog, which changes how CART operates
+        configButton = qt.QPushButton(_("Configure"))
+        configButton.toolTip = _("Change how CART is configured to iterate through your data.")
+
+        # Clicking the config button shows the Config prompt
+        configButton.clicked.connect(self.bound_task.config.show_gui)
+
+        # Add it to our layout
+        layout.addRow(configButton)
 
     def _addOrientationButtons(self, layout: qt.QFormLayout) -> None:
         """
