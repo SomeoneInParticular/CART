@@ -11,15 +11,22 @@ class CohortGeneratorWindow(qt.QDialog):
     """
 
     ### UI ###
-    def __init__(self, data_path, cohort_data=None, cohort_path=None, current_data_convention=None, parent=None):
-        super().__init__(parent)
+    def __init__(self, parent, data_path, cohort_data=None, cohort_path=None, current_data_convention=None):
+        super().__init__()
+
+        # Create logic class
         self.logic = CohortGeneratorLogic(data_path=data_path, cohort_data=cohort_data, cohort_path=cohort_path, current_data_convention=current_data_convention)
+
+        # Set window parameters
         self.setWindowFlags(self.windowFlags() | qt.Qt.WindowMaximizeButtonHint | qt.Qt.WindowMinimizeButtonHint | qt.Qt.Window)
 
         # Make dialog/window non-modal, to allow interaction with main window
         self.setModal(False)
 
-        # Build the UI
+        # Create reference to parent widget
+        self.parent_widget = parent
+
+        # Build UI
         self.build_ui()
 
         # Connect all buttons to callback functions
@@ -277,6 +284,9 @@ class CohortGeneratorWindow(qt.QDialog):
         self.populate_table()
         self.update_column_combo()
         self.data_path_changed_warning.setVisible(self.logic.check_data_path_changed_warning())
+
+        # Update cohort filepath in the parent widget
+        self.parent_widget.cohortFileSelectionButton.setCurrentPath(self.logic.selected_cohort_path)
 
     def on_toggle_override_selected_cohort_file(self):
         is_checked = self.override_selected_cohort_file_toggle_button.isChecked()
