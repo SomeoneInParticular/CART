@@ -126,6 +126,7 @@ class Config:
         Retrieves the inclusion/exclusion filters for a specific column.
         Returns a dict like {'inclusion_input': '...', 'exclusion_input': '...'} or None.
         """
+        print("FETCHING...")
         return self.filters.get(column_name)
 
     def set_filter(self, column_name: str, inclusion_input: str = "", exclusion_input: str = ""):

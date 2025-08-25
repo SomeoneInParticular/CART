@@ -230,8 +230,6 @@ class CohortGeneratorWindow(qt.QDialog):
         self.exclude_input.setText("")
         self.new_column_name_input.setText("")
 
-        self.target_column_combo.setCurrentText("Create New Column")
-
     ### Connection signals ###
     def connect_signals(self):
 
@@ -320,9 +318,14 @@ class CohortGeneratorWindow(qt.QDialog):
         if self.logic.apply_filter(include_list, exclude_list, target_col, new_col):
             self.populate_table()
             self.update_column_combo()
-            self.include_input.clear()
-            self.exclude_input.clear()
-            self.new_column_name_input.clear()
+
+            # After creation, keep the created column options displayed
+            if target_col == "Create New Column":
+                self.target_column_combo.setCurrentText(new_col)
+
+            # self.include_input.clear()
+            # self.exclude_input.clear()
+            # self.new_column_name_input.clear()
         else:
             qt.QMessageBox.warning(self, "Filter Error", "Could not apply filters. Your filters either contradict or no results yielded from your filters. Provide a unique 'New Column Name' if creating a new column. Make sure to match cases as the filters are case-sensitive.")
 
@@ -355,8 +358,8 @@ class CohortGeneratorWindow(qt.QDialog):
                 self.clear_fields()
 
                 # Reset to "Create New Column"
-                self.new_column_name_input.setText("Create New Column")
-                #self.on_target_column_changed("Create New Column")
+                self.new_column_name_input.setText("")
+                self.on_target_column_changed("Create New Column")
                 self.populate_table()
                 self.update_column_combo()
             else:
@@ -372,6 +375,8 @@ class CohortGeneratorWindow(qt.QDialog):
         if is_new_column:
             self.column_name_label.setText("New Column Name:")
             self.apply_filter_button.setText("Create New Column from Filters")
+
+            self.clear_fields()
         else:
             # Populate include/exclude inputs from config if available
             print(f"GETTING FILTERS FROM {text}...")
@@ -386,7 +391,6 @@ class CohortGeneratorWindow(qt.QDialog):
 
             self.column_name_label.setText("Selected Column Name:")
             self.new_column_name_input.setText(text)
-            self.new_column_name_input.setEnabled(False)
             self.apply_filter_button.setText(f"Apply Filters on `{text}`")
 
     def on_header_double_clicked(self, logical_index):
