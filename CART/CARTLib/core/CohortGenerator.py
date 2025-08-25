@@ -262,6 +262,10 @@ class CohortGeneratorWindow(qt.QDialog):
                 qt.QMessageBox.No
             )
             if reply == qt.QMessageBox.Yes:
+                # Clear options and select column creation option
+                self.target_column_combo.setCurrentText("Create New Column")
+                self.clear_fields()
+
                 self.logic.clear_filters()
                 self.populate_table()
                 self.update_column_combo()
@@ -279,6 +283,10 @@ class CohortGeneratorWindow(qt.QDialog):
         )
         if reply != qt.QMessageBox.Yes:
             return
+
+        # Clear options and select column creation option
+        self.target_column_combo.setCurrentText("Create New Column")
+        self.clear_fields()
 
         # Clear filename filters
         self.logic.clear_filters()
@@ -379,10 +387,8 @@ class CohortGeneratorWindow(qt.QDialog):
             self.clear_fields()
         else:
             # Populate include/exclude inputs from config if available
-            print(f"GETTING FILTERS FROM {text}...")
             selected_column_filters = config.get_filter(text)
             if selected_column_filters:
-                print("GOT ALL FILTERS!")
                 include_input  = selected_column_filters["inclusion_input"]
                 exclude_input  = selected_column_filters["exclusion_input"]
 
