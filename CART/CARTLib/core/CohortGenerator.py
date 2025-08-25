@@ -211,7 +211,7 @@ class CohortGeneratorWindow(qt.QDialog):
         self.target_column_combo.addItems(self.logic.get_headers()[1:])
         self.target_column_combo.blockSignals(False)
 
-    # UI enhancement
+    # UI utils
     def highlight_uid_col(self):
         """
         Highlight the uid column in purple for visibility
@@ -220,6 +220,17 @@ class CohortGeneratorWindow(qt.QDialog):
             item = self.table_widget.item(row + 1, 1)
             if item and self.logic.is_row_enabled(row):
                 item.setBackground(qt.QColor("#8f6ae7"))
+
+    def clear_fields(self):
+        """
+        Clear column name, include and exclude fields.
+        Set current column to "Create New Column" option
+        """
+        self.include_input.setText("")
+        self.exclude_input.setText("")
+        self.new_column_name_input.setText("")
+
+        self.target_column_combo.setCurrentText("Create New Column")
 
     ### Connection signals ###
     def connect_signals(self):
@@ -340,6 +351,9 @@ class CohortGeneratorWindow(qt.QDialog):
 
         if reply == qt.QMessageBox.Yes:
             if self.logic.delete_column(target_col):
+                # Clear all fields
+                self.clear_fields()
+
                 # Reset to "Create New Column"
                 self.new_column_name_input.setText("Create New Column")
                 #self.on_target_column_changed("Create New Column")
@@ -359,10 +373,7 @@ class CohortGeneratorWindow(qt.QDialog):
             self.column_name_label.setText("New Column Name:")
             self.apply_filter_button.setText("Create New Column from Filters")
 
-            # Clear all fields
-            self.include_input.setText("")
-            self.exclude_input.setText("")
-            self.new_column_name_input.setText("")
+            self.clear_fields()
         else:
             # Populate include/exclude inputs from config if available
             selected_column_filters = config.get_filter(text)
@@ -564,7 +575,7 @@ class CohortGeneratorLogic:
 
     def apply_filter(self, include, exclude, target_col, new_col_name):
 
-        # Note: new_col_name can be identical to target_col if user uses filter section to update column filtering
+        # Note: new_col_name can be identical to target_col if user uses filter section to update column options
         is_new = (target_col == "Create New Column")
         if is_new:
             if not new_col_name or new_col_name in self.headers: return False
