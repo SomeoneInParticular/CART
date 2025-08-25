@@ -405,6 +405,22 @@ class UserConfig:
         self._backing_dict[self.SAVE_ON_ITER_KEY] = new_val
         self._has_changed = True
 
+    ## Sub-Configurations ##
+    SUB_CONFIGS_KEY = "sub_config"
+
+    @property
+    def sub_configs(self) -> dict:
+        return self._get_or_default(self.SUB_CONFIGS_KEY, {})
+
+    def get_sub_config(self, key: str):
+        sub_entry = self.sub_configs.get(key, False)
+        if not sub_entry:
+            new_entry = {}
+            self.sub_configs[key] = new_entry
+            return new_entry
+        else:
+            return sub_entry
+
     ## Utils ##
     def _get_or_default(self, key, default):
         # Try to get the specified value
