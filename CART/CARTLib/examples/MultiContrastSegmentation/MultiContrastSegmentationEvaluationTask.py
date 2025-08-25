@@ -14,6 +14,7 @@ from .MultiContrastSegmentationEvaluationDataUnit import (
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.utils.widgets import CARTSegmentationEditorWidget
 from CARTLib.utils.layout import Orientation
+from CARTLib.utils.config import UserConfig
 
 
 class MultiContrastSegmentationEvaluationGUI:
@@ -272,8 +273,10 @@ class MultiContrastSegmentationEvaluationGUI:
 
         # Set default filename if none exists
         if not self.csvLogEdit.currentPath.strip():
-            # Generate default filename based on user and current date
-            default_name = f"segmentation_review_log_{self.bound_task.user}_{datetime.now().strftime('%Y%m%d')}.csv"
+            # Generate default filename based on username and current date
+            username = self.bound_task.username
+            current_datetime = datetime.now().strftime('%Y%m%d')
+            default_name = f"segmentation_review_log_{username}_{current_datetime}.csv"
             dialog.selectFile(default_name)
         else:
             # Use existing path as starting point
@@ -409,7 +412,7 @@ class MultiContrastSegmentationEvaluationGUI:
 class MultiContrastSegmentationEvaluationTask(
     TaskBaseClass[MultiContrastSegmentationEvaluationDataUnit]
 ):
-    def __init__(self, user: str):
+    def __init__(self, user: UserConfig):
         super().__init__(user)
         self.gui: Optional[MultiContrastSegmentationEvaluationGUI] = None
         self.output_mode: OutputMode = OutputMode.PARALLEL_DIRECTORY

@@ -7,6 +7,7 @@ import qt
 import slicer
 
 from CARTLib.core.DataUnitBase import DataUnitBase
+from CARTLib.utils.config import UserConfig
 
 # Generic type hint class for anything which is a subclass of DataUnitBase
 D = TypeVar("D", bound=DataUnitBase)
@@ -37,7 +38,7 @@ class TaskBaseClass(ABC, Generic[D]):
     itself.!
     """
 
-    def __init__(self, user: str):
+    def __init__(self, user: UserConfig):
         """
         Basic constructor.
 
@@ -49,10 +50,19 @@ class TaskBaseClass(ABC, Generic[D]):
         """
         # Track the user for later; we often want to stratify our task by which
         #  user is running it
-        self.user = user
+        self.user: UserConfig = user
 
         # Create a logger to track the goings-on of this task.
         self.logger = logging.getLogger(f"{__class__.__name__}")
+
+    # Aliases for commonly accessed attributes
+    @property
+    def username(self) -> str:
+        return self.user.username
+
+    @property
+    def user_role(self) -> str:
+        return self.user.role
 
     @abstractmethod
     def setup(self, container: qt.QWidget):

@@ -1355,7 +1355,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Create the new task instance
         task_constructor = self.task_map.get(self.task_id)
-        self.current_task_instance = task_constructor(self.active_username)
+        self.current_task_instance = task_constructor(self.config)
 
         # Save any changes made to the configuration
         # (Usually saves the user and
