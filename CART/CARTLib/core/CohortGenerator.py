@@ -268,9 +268,10 @@ class CohortGeneratorWindow(qt.QDialog):
         if reply != qt.QMessageBox.Yes:
             return
 
-        # Clear filters and create an empty CSV in the correct folder
+        # Clear filename filters
         self.logic.clear_filters()
 
+        # Create an empty CSV in the correct folder
         cohort_dir = self.logic.data_path / "cohort_files"
         cohort_dir.mkdir(parents=True, exist_ok=True)
 
@@ -278,7 +279,7 @@ class CohortGeneratorWindow(qt.QDialog):
         cohort_name = f"cohort{index}.csv"
         self.logic.selected_cohort_path = cohort_dir / cohort_name
 
-        self.logic._write_to_csv(cohort_dir, [])
+        self.logic._write_to_csv(cohort_dir, self.logic.get_headers())
 
         # Update UI and hide warning
         self.populate_table()
@@ -337,7 +338,8 @@ class CohortGeneratorWindow(qt.QDialog):
         if reply == qt.QMessageBox.Yes:
             if self.logic.delete_column(target_col):
                 # Reset to "Create New Column"
-                self.on_target_column_changed("Create New Column")
+                self.new_column_name_input.setText("Create New Column")
+                #self.on_target_column_changed("Create New Column")
                 self.populate_table()
                 self.update_column_combo()
             else:
@@ -353,6 +355,11 @@ class CohortGeneratorWindow(qt.QDialog):
         if is_new_column:
             self.column_name_label.setText("New Column Name:")
             self.apply_filter_button.setText("Create New Column from Filters")
+
+            # Clear all fields
+            self.include_input.setText("")
+            self.exclude_input.setText("")
+            self.new_column_name_input.setText("")
         else:
             # Populate include/exclude inputs from config if available
             selected_column_filters = config.get_filter(text)
