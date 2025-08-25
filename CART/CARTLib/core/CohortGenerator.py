@@ -223,16 +223,19 @@ class CohortGeneratorWindow(qt.QDialog):
 
     ### Connection signals ###
     def connect_signals(self):
+
+        # Process signals
         self.reset_button.clicked.connect(self.on_reset)
         self.override_selected_cohort_file_toggle_button.stateChanged.connect(self.on_toggle_override_selected_cohort_file)
         self.apply_button.clicked.connect(self.on_apply)
         self.cancel_button.clicked.connect(self.on_cancel)
 
+        # Filter signals
         self.apply_filter_button.clicked.connect(self.on_apply_filter)
         self.delete_col_button.clicked.connect(self.on_delete_column)
-
         self.target_column_combo.currentTextChanged.connect(self.on_target_column_changed)
 
+        # Table click signals
         self.table_widget.horizontalHeader().sectionDoubleClicked.connect(self.on_header_double_clicked)
         self.table_widget.horizontalHeader().sectionClicked.connect(self.on_header_single_clicked)
 
@@ -372,6 +375,7 @@ class CohortGeneratorWindow(qt.QDialog):
 
             self.column_name_label.setText("Selected Column Name:")
             self.new_column_name_input.setText(text)
+            self.new_column_name_input.setEnabled(False)
             self.apply_filter_button.setText(f"Apply Filters on `{text}`")
 
     def on_header_double_clicked(self, logical_index):
@@ -559,6 +563,8 @@ class CohortGeneratorLogic:
         return col_index not in self.disabled_columns
 
     def apply_filter(self, include, exclude, target_col, new_col_name):
+
+        # Note: new_col_name can be identical to target_col if user uses filter section to update column filtering
         is_new = (target_col == "Create New Column")
         if is_new:
             if not new_col_name or new_col_name in self.headers: return False
@@ -589,12 +595,15 @@ class CohortGeneratorLogic:
                  self.cohort_data[i][col_name] = ''
 
         # This means that the set filters are either contradicting or yield nothing
+        # TODO: better error message
         if not found_match_in_root:
             return False
 
-        self.headers.append(new_col_name)
+        # Only create a new column if that option is selected
+        if is_new:
+            self.headers.append(new_col_name)
 
-        # Save used filters to config for population later
+        # Save or update used filters to config for population later
         config.set_filter(
             column_name=col_name,
             inclusion_input=','.join(include),
