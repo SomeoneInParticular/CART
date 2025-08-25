@@ -11,6 +11,7 @@ from .MultiContrastOutputManager import OutputMode, MultiContrastOutputManager
 from .MultiContrastSegmentationEvaluationDataUnit import (
     MultiContrastSegmentationEvaluationDataUnit,
 )
+from .MultiContrastSegmentationConfig import MultiContrastSegmentationConfig
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.utils.widgets import CARTSegmentationEditorWidget
 from CARTLib.utils.layout import Orientation
@@ -412,14 +413,27 @@ class MultiContrastSegmentationEvaluationGUI:
 class MultiContrastSegmentationEvaluationTask(
     TaskBaseClass[MultiContrastSegmentationEvaluationDataUnit]
 ):
+
+    CONFIG_ID = "multi_contrast_segmentation"
+
     def __init__(self, user: UserConfig):
         super().__init__(user)
+
+        # Local Attributes
         self.gui: Optional[MultiContrastSegmentationEvaluationGUI] = None
         self.output_mode: OutputMode = OutputMode.PARALLEL_DIRECTORY
         self.output_dir: Optional[Path] = None
         self.output_manager: Optional[MultiContrastOutputManager] = None
         self.data_unit: Optional[MultiContrastSegmentationEvaluationDataUnit] = None
         self.csv_log_path: Optional[Path] = None  # Optional custom CSV log path
+
+        # Configuration
+        self.config: MultiContrastSegmentationConfig = (
+            MultiContrastSegmentationConfig(
+                backing_dict=self.user.get_sub_config(self.CONFIG_ID),
+                parent_config=self.user
+            )
+        )
 
     def setup(self, container: qt.QWidget) -> None:
         print(f"Running {self.__class__.__name__} setup!")
@@ -454,6 +468,12 @@ class MultiContrastSegmentationEvaluationTask(
             foreground=data_unit.primary_segmentation_node,
             fit=True,
         )
+        # Hide the segmentation node if requested by the user's config
+        if not self.config.show_on_load:
+            # TODO
+            print("=" * 100)
+            print("Hiding initial segmentation")
+            print("=" * 100)
         # If we have GUI, update it as well
         if self.gui:
             self.gui.update(data_unit)
