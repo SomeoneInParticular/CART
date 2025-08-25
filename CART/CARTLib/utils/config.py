@@ -149,6 +149,15 @@ class Config:
             del self._backing_dict["filters"][column_name]
             self._has_changed = True
 
+    def update_column_name(self, old_column_name: str, new_column_name: str):
+        """
+        Updates column name in the configuration file.
+        Called when a column header gets double clicked in the tentative cohort table.
+        """
+        if "filters" in self._backing_dict and old_column_name in self._backing_dict["filters"]:
+            self._backing_dict["filters"][new_column_name] = self._backing_dict["filters"].pop(old_column_name)
+            self._has_changed = True
+
     ## Autosaving Management ##
     @property
     def autosave(self) -> bool:

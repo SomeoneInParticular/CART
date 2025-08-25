@@ -535,6 +535,11 @@ class CohortGeneratorLogic:
             for row in self.cohort_data:
                 if old_name in row:
                     row[new_name] = row.pop(old_name)
+
+            # Update column name in configuration file
+            config.update_column_name(old_name, new_name)
+            config.save()
+
             return True
         except ValueError:
             return False
