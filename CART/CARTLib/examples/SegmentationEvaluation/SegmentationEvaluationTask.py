@@ -265,8 +265,9 @@ class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
         gui_layout = self.gui.setup()
         container.setLayout(gui_layout)
 
-        # Update this new GUI with our current data unit
-        self.gui.update(self.data_unit)
+        if self.data_unit:
+            # Update this new GUI with our current data unit
+            self.gui.update(self.data_unit)
 
         # "Enter" the gui to ensure it is loaded correctly
         self.gui.enter()
