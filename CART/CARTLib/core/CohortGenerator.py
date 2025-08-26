@@ -588,7 +588,7 @@ class CohortGeneratorLogic:
         self._scan_filesystem()
 
         if not self.cohort_data:
-            # Initiliaze the uid column and populate case identifiers
+            # Initialize the uid column and populate case identifiers
             self.clear_filters()
         else:
             if self.cohort_data:
@@ -612,9 +612,9 @@ class CohortGeneratorLogic:
             return
 
         self.all_files_by_case = fetch_resources(
-        self.current_data_convention,
-        root_path,
-        excluded_extensions=self.excluded_extensions
+            self.current_data_convention,
+            root_path,
+            excluded_extensions=self.excluded_extensions
         )
 
     def load_cohort_data(self, data_path, excluded_extensions=None):
@@ -668,7 +668,6 @@ class CohortGeneratorLogic:
         return col_index not in self.disabled_columns
 
     def apply_filter(self, include, exclude, target_col, new_col_name):
-
         # Note: new_col_name can be identical to target_col if user uses filter section to update column options
         is_new = (target_col == "Create New Column")
         if is_new:
