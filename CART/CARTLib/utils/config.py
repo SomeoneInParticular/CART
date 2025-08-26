@@ -1,7 +1,8 @@
 import json
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, ABCMeta
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Generic, Optional, TypeVar
 
 import qt
 
@@ -116,284 +117,166 @@ class DictBackedConfig(ABC):
             self.save_without_parent()
 
 
-## GUI elements ##
-class NewUserDialog(qt.QDialog):
-    def __init__(self, reference_profile: "UserConfig", master_config: "CARTConfig"):
-        # Initialize the QDialog base itself
+# I love Metaclass conflicts! Wooo!
+class _ABCQDialog(type(qt.QDialog), ABCMeta):
+    ...
+
+
+# Generic type for DictBackedConfig subclasses
+DICT_CONFIG_TYPE = TypeVar("DICT_CONFIG_TYPE", bound=DictBackedConfig)
+
+
+class ConfigDialog(qt.QDialog, ABC, Generic[DICT_CONFIG_TYPE], metaclass=_ABCQDialog):
+    """
+    QT Dialog built to be paired with a DictBackConfig.
+
+    Provides some shared utilities to streamline the creation of a
+    Config GUI, including:
+      * Resetting the bound Config when the user backs out
+      * Allow the user to reset the Config state explicitly
+      * Asking the user if they want to save if they close the GUI
+       after making changes
+    """
+    def __init__(self, bound_config: DICT_CONFIG_TYPE):
+        # Initialize the QT Dialogue first
         super().__init__()
 
-        # A reference config to copy from if the user requests it
-        self.reference_profile = reference_profile
+        # Track the bound config so we can modify it later
+        self.bound_config: DICT_CONFIG_TYPE = bound_config
 
-        # The master config we want to save the profile too
-        self.master_config = master_config
+        # Track a copy of that config's backing dict as a backup
+        self._restore_dict = bound_config.backing_dict.copy()
 
-        # The text field widget for the username
-        self.usernameEdit: qt.QLineEdit = None
-
-        # Selection field for the role
-        self.roleComboBox: qt.QComboBox = None
-
-        # Toggle box which make the profile a blank slate if checked
-        # (instead of copying the active profile's state, the default)
-        self.blankSlateBox: qt.QCheckBox = None
-
-        # Track the button box so we can react to them being pressed
-        self.buttonBox: qt.QDialogButtonBox = None
-
-        # Built the GUI contents
-        self.buildUI()
-
-    ## GUI components ##
-    def addButtons(self):
-        buttonBox = qt.QDialogButtonBox()
-        buttonBox.setStandardButtons(
-            qt.QDialogButtonBox.Cancel | qt.QDialogButtonBox.Ok
-        )
-        buttonBox.clicked.connect(self.onButtonPressed)
-        return buttonBox
-
-    def buildUI(self):
-        # General window properties
-        self.setWindowTitle("New User")
-
-        # Create a form layout to hold everything in
+        # The layout which the user should place their widgets within
         layout = qt.QFormLayout()
         self.setLayout(layout)
 
-        # Add a field for submitting the username
-        usernameEdit = qt.QLineEdit()
-        usernameLabel = qt.QLabel("Username:")
-        usernameLabel.setToolTip(
-            "The ID for this profile. Cannot match an existing username!"
-        )
-        self.usernameEdit = usernameEdit
+        # Build the GUI
+        self.buildGUI(layout)
 
-        # Add them to our layout
-        layout.addRow(usernameLabel, usernameEdit)
+        # Add a suite of buttons w/ standardized functionality
+        self._addButtons(layout)
 
-        # Add a combobox that lets the user select their role
-        roleComboBox = qt.QComboBox()
-        roleLabel = qt.QLabel("Role:")
-        roleLabel.setToolTip("What role the user should be marked as having.")
+        # Sync the GUI to match the config
+        self._sync()
 
-        # Add the roles already available to the combobox
-        roleComboBox.addItems(self.master_config.user_roles)
+    ## GUI Elements ##
+    @abstractmethod
+    def buildGUI(self, layout: qt.QFormLayout):
+        """
+        Add any QT widgets to the GUI here; ensures that they are placed
+        appropriately within the dialogue (namely, above the button panel)
+        """
+        ...
 
-        # Make the combo-box editable
-        roleComboBox.setEditable(True)
-
-        self.roleComboBox = roleComboBox
-
-        # Add it to our GUI layout
-        layout.addRow(roleLabel, roleComboBox)
-
-        # Add the blank-state checkbox
-        blankStateBox = qt.QCheckBox()
-        blankStateLabel = qt.QLabel("Reset to Default?")
-        blankStateLabel.setToolTip("""
-            If selected, the new user profile will have no configuration settings, 
-            being a "blank slate". If unchecked, the configuration settings of the 
-            current profile (including the last-used settings) are copied over instead.
-        """)
-        self.blankSlateBox = blankStateBox
-        layout.addRow(blankStateLabel, blankStateBox)
-
-        # Add our button array to the bottom of the GUI
-        self.buttonBox = self.addButtons()
-        layout.addRow(self.buttonBox)
-
-        # Only enable the "confirm" button when a valid username is present
-        okButton = self.buttonBox.button(qt.QDialogButtonBox.Ok)
-        def syncOkButtonState(username: str):
-            stripped_name = username.strip()
-            if not stripped_name:
-                okButton.setEnabled(False)
-                okButton.setToolTip("Users must have a non-blank username")
-            elif stripped_name in self.master_config.profiles.keys():
-                okButton.setEnabled(False)
-                okButton.setToolTip("The provided username already exists!")
-            else:
-                okButton.setEnabled(True)
-                okButton.setToolTip("")
-        self.usernameEdit.textChanged.connect(syncOkButtonState)
-        # Sync the OK button's state immediately
-        syncOkButtonState(usernameEdit.text)
-
-    def onButtonPressed(self, button: qt.QPushButton):
-        # Get the role of the button
-        button_role = self.buttonBox.buttonRole(button)
-        # Match it to our corresponding function
-        # TODO: Replace this with a `match` statement when porting to Slicer 5.9
-        if button_role == qt.QDialogButtonBox.AcceptRole:
-            self.createNewProfile()
-            self.accept()
-        elif button_role == qt.QDialogButtonBox.RejectRole:
-            self.reject()
-        else:
-            raise ValueError("Pressed a button with an invalid role somehow...")
-
-    ## Access Management ##s
-    @property
-    def username(self) -> str:
-        return self.usernameEdit.text
-
-    @property
-    def selected_role(self) -> str:
-        return self.roleComboBox.currentText.strip()
-
-    @property
-    def shouldBlankState(self) -> bool:
-        return self.blankSlateBox.isChecked()
-
-    ## Utils
-    def createNewProfile(self):
-        # Build the profile config dict from our GUI
-        profile_dict = {
-            UserConfig.ROLE_KEY: self.selected_role
-        }
-
-        # Add a new entry into the config file
-        if self.shouldBlankState:
-            self.master_config.new_user_profile(
-                self.username,
-                profile_dict
-            )
-        else:
-            self.master_config.new_user_profile(
-                self.username,
-                profile_dict,
-                self.reference_profile
-            )
-
-        # If the role is new, add it to the master config list
-        if self.selected_role not in self.master_config.user_roles:
-            self.master_config.user_roles.append(self.selected_role)
-
-
-class ConfigGUI(qt.QDialog):
-    """
-    Configuration dialog which allows the user to configure CART.
-    """
-    def __init__(self, bound_config: "UserConfig"):
-        # Initialize the QDialog base itself
-        super().__init__()
-
-        # Track the bound configuration to ourselves
-        self.bound_config = bound_config
-
-        # Track a copy of the backing dict to restore if the user backs out
-        self._reserve_state = bound_config.backing_dict.copy()
-
-        # Track the button box so we can react to them being pressed
-        self.buttonBox: qt.QDialogButtonBox = None
-
-        # Built the GUI contents
-        self.build_ui()
-
-    def build_ui(self):
-        # General window properties
-        self.setWindowTitle("CART Configuration")
-
-        # Create a form layout to hold everything in
-        layout = qt.QFormLayout()
-        self.setLayout(layout)
-
-        # Add a checkbox for the state of autosaving
-        iterSaveCheck = qt.QCheckBox()
-        iterSaveLabel = qt.QLabel("Save on Iteration:")
-        iterSaveLabel.setToolTip(
-            "If checked, the Task will try to save when you change cases automatically."
-        )
-
-        # Ensure it is synchronized with the configuration settings
-        iterSaveCheck.setChecked(self.bound_config.save_on_iter)
-        def setSaveOnIter(new_state: bool):
-            self.bound_config.save_on_iter = bool(new_state)
-        iterSaveCheck.stateChanged.connect(setSaveOnIter)
-
-        # Add it to our layout
-        layout.addRow(iterSaveLabel, iterSaveCheck)
-
-        # Add a combobox that lets the user select their role
-        roleComboBox = qt.QComboBox()
-        roleLabel = qt.QLabel("Role:")
-        roleLabel.setToolTip("What role the user should be marked as having.")
-
-        # Add the roles already available to the combobox
-        roleComboBox.addItems(self.bound_config.valid_roles)
-
-        # Se the starting text to match our bound config
-        roleComboBox.currentText = self.bound_config.role
-
-        # Make the combo-box editable
-        roleComboBox.setEditable(True)
-
-        # When a new role is selected, update our backing dict
-        def changeRole(new_role: str):
-            self.bound_config.role = new_role
-        roleComboBox.currentTextChanged.connect(changeRole)
-
-        # Add it to our layout
-        layout.addRow(roleLabel, roleComboBox)
-
-        # Add our button array to the bottom of the GUI
-        self.buttonBox = self.addButtons()
-        layout.addRow(self.buttonBox)
-
-    def addButtons(self):
+    def _addButtons(self, layout: qt.QFormLayout):
+        # The button box itself
         buttonBox = qt.QDialogButtonBox()
         buttonBox.setStandardButtons(
             qt.QDialogButtonBox.Reset | qt.QDialogButtonBox.Cancel | qt.QDialogButtonBox.Ok
         )
-        buttonBox.clicked.connect(self.onButtonPressed)
-        return buttonBox
 
-    def onButtonPressed(self, button: qt.QPushButton):
-        # Get the role of the button
-        button_role = self.buttonBox.buttonRole(button)
-        # Match it to our corresponding function
-        # TODO: Replace this with a `match` statement when porting to Slicer 5.9
-        if button_role == qt.QDialogButtonBox.AcceptRole:
+        # Function to map the button press to our functionality
+        def onButtonPressed(button: qt.QPushButton):
+            # Get the role of the button
+            button_role = buttonBox.buttonRole(button)
+            # Match it to our corresponding function
+            # TODO: Replace this with a `match` statement when porting to Slicer 5.9
+            if button_role == qt.QDialogButtonBox.AcceptRole:
+                self.onConfirm()
+            elif button_role == qt.QDialogButtonBox.RejectRole:
+                self.onCancel()
+            elif button_role == qt.QDialogButtonBox.ResetRole:
+                self.onReset()
+            else:
+                raise ValueError("Pressed a button with an invalid role somehow...")
+
+        buttonBox.clicked.connect(onButtonPressed)
+
+        layout.addRow(buttonBox)
+
+    ## Config Synchronization ##
+    @contextmanager
+    def block_signals(self):
+        layout = self.layout()
+        widgets = [layout.itemAt(i).widget() for i in range(layout.count())]
+        for w in widgets:
+            w.blockSignals(True)
+
+        yield
+
+        for w in widgets:
+            w.blockSignals(False)
+
+    def _sync(self):
+        """
+        Runs `sync` below, but blocks signals from widgets within the dialogue to
+        prevent the widget's from emitting signals while they're being changed
+        """
+        with self.block_signals():
+            self.sync()
+
+    @abstractmethod
+    def sync(self):
+        """
+        Synchronize the GUI with its bound config; this is done it two places:
+
+        * When the GUI is initially created (after all widgets are added)
+        * When the user clicks the "reset" button (after the Config's state is reset)
+
+        If you override either of these actions
+        """
+        ...
+
+    ## User Interactions ##
+    def onConfirm(self):
+        """
+        Called when the user confirms the changes they made (if any).
+        """
+        self.bound_config.save()
+        self.accept()
+
+    def onCancel(self):
+        """
+        Called when the user tries to cancel out of the prompt w/o saving.
+        """
+        # If the user hasn't made any changes, just close
+        if not self.bound_config.has_changed:
+            self.accept()
+            return
+
+        # Prompt the user if they made changes they may want to save
+        reply = qt.QMessageBox.question(
+            self,
+            "Unsaved Changes",
+            "You have not saved your changes; would you like to now?",
+            qt.QMessageBox.Yes, qt.QMessageBox.No
+        )
+
+        # Save to file only if the user confirms it
+        if reply == qt.QMessageBox.Yes:
             self.bound_config.save()
             self.accept()
-        elif button_role == qt.QDialogButtonBox.RejectRole:
-            self.preCloseCheck()
-            self.reject()
-        elif button_role == qt.QDialogButtonBox.ResetRole:
-            self.bound_config.backing_dict = self._reserve_state
-            self.reject()
         else:
-            raise ValueError("Pressed a button with an invalid role somehow...")
+            self.bound_config.backing_dict = self._restore_dict
+            self.bound_config.has_changed = False
+            self.reject()
 
-    def preCloseCheck(self):
+    def onReset(self):
         """
-        Before the prompt closes, check to confirm no changes were made
-        that the user might want to save beforehand!
-
-        :return: Whether the save request was accepted.
+        Called when the user explicitly requests the config be reset
         """
-        if self.bound_config.has_changed:
-            reply = qt.QMessageBox.question(
-                self,
-                "Unsaved Changes",
-                "You have not saved your changes; would you like to now?",
-                qt.QMessageBox.Yes, qt.QMessageBox.No
-            )
-            # Save to file only if the user confirms it
-            if reply == qt.QMessageBox.Yes:
-                self.bound_config.save()
-                return True
-            else:
-                self.bound_config.backing_dict = self._reserve_state
-                return False
+        self.bound_config.backing_dict = self._restore_dict
+        self._sync()
+        self.bound_config.has_changed = False
 
+    ## QT Events ##
     def closeEvent(self, event):
         """
-        Intercepts when the user closes the window outside by clicking the 'x'
-        in the top right; ensures any modifications don't get discarded by mistake.
+        Intercepts when the user closes the window by clicking the 'x' in the
+        dialog; ensures any modifications don't get discarded by mistake.
         """
-        self.preCloseCheck()
+        self.onCancel()
         event.accept()
 
 
@@ -514,7 +397,7 @@ class UserConfig(DictBackedConfig):
     ## Utils ##
     def show_gui(self):
         # Build the Config prompt
-        prompt = ConfigGUI(bound_config=self)
+        prompt = UserConfigDialog(bound_config=self)
         # Show it, blocking other interactions until its resolved
         prompt.exec()
 
@@ -673,6 +556,222 @@ class CARTConfig(DictBackedConfig):
         with open(MAIN_CONFIG, "w") as cf:
             json.dump(self._backing_dict, cf, indent=2)
 
+
+## GUI elements ##
+class NewUserDialog(qt.QDialog):
+    def __init__(self, reference_profile: "UserConfig", master_config: "CARTConfig"):
+        # Initialize the QDialog base itself
+        super().__init__()
+
+        # A reference config to copy from if the user requests it
+        self.reference_profile = reference_profile
+
+        # The master config we want to save the profile too
+        self.master_config = master_config
+
+        # The text field widget for the username
+        self.usernameEdit: qt.QLineEdit = None
+
+        # Selection field for the role
+        self.roleComboBox: qt.QComboBox = None
+
+        # Toggle box which make the profile a blank slate if checked
+        # (instead of copying the active profile's state, the default)
+        self.blankSlateBox: qt.QCheckBox = None
+
+        # Track the button box so we can react to them being pressed
+        self.buttonBox: qt.QDialogButtonBox = None
+
+        # Built the GUI contents
+        self.buildUI()
+
+    ## GUI components ##
+    def addButtons(self):
+        buttonBox = qt.QDialogButtonBox()
+        buttonBox.setStandardButtons(
+            qt.QDialogButtonBox.Cancel | qt.QDialogButtonBox.Ok
+        )
+        buttonBox.clicked.connect(self.onButtonPressed)
+        return buttonBox
+
+    def buildUI(self):
+        # General window properties
+        self.setWindowTitle("New User")
+
+        # Create a form layout to hold everything in
+        layout = qt.QFormLayout()
+        self.setLayout(layout)
+
+        # Add a field for submitting the username
+        usernameEdit = qt.QLineEdit()
+        usernameLabel = qt.QLabel("Username:")
+        usernameLabel.setToolTip(
+            "The ID for this profile. Cannot match an existing username!"
+        )
+        self.usernameEdit = usernameEdit
+
+        # Add them to our layout
+        layout.addRow(usernameLabel, usernameEdit)
+
+        # Add a combobox that lets the user select their role
+        roleComboBox = qt.QComboBox()
+        roleLabel = qt.QLabel("Role:")
+        roleLabel.setToolTip("What role the user should be marked as having.")
+
+        # Add the roles already available to the combobox
+        roleComboBox.addItems(self.master_config.user_roles)
+
+        # Make the combo-box editable
+        roleComboBox.setEditable(True)
+
+        self.roleComboBox = roleComboBox
+
+        # Add it to our GUI layout
+        layout.addRow(roleLabel, roleComboBox)
+
+        # Add the blank-state checkbox
+        blankStateBox = qt.QCheckBox()
+        blankStateLabel = qt.QLabel("Reset to Default?")
+        blankStateLabel.setToolTip("""
+            If selected, the new user profile will have no configuration settings, 
+            being a "blank slate". If unchecked, the configuration settings of the 
+            current profile (including the last-used settings) are copied over instead.
+        """)
+        self.blankSlateBox = blankStateBox
+        layout.addRow(blankStateLabel, blankStateBox)
+
+        # Add our button array to the bottom of the GUI
+        self.buttonBox = self.addButtons()
+        layout.addRow(self.buttonBox)
+
+        # Only enable the "confirm" button when a valid username is present
+        okButton = self.buttonBox.button(qt.QDialogButtonBox.Ok)
+        def syncOkButtonState(username: str):
+            stripped_name = username.strip()
+            if not stripped_name:
+                okButton.setEnabled(False)
+                okButton.setToolTip("Users must have a non-blank username")
+            elif stripped_name in self.master_config.profiles.keys():
+                okButton.setEnabled(False)
+                okButton.setToolTip("The provided username already exists!")
+            else:
+                okButton.setEnabled(True)
+                okButton.setToolTip("")
+        self.usernameEdit.textChanged.connect(syncOkButtonState)
+        # Sync the OK button's state immediately
+        syncOkButtonState(usernameEdit.text)
+
+    def onButtonPressed(self, button: qt.QPushButton):
+        # Get the role of the button
+        button_role = self.buttonBox.buttonRole(button)
+        # Match it to our corresponding function
+        # TODO: Replace this with a `match` statement when porting to Slicer 5.9
+        if button_role == qt.QDialogButtonBox.AcceptRole:
+            self.createNewProfile()
+            self.accept()
+        elif button_role == qt.QDialogButtonBox.RejectRole:
+            self.reject()
+        else:
+            raise ValueError("Pressed a button with an invalid role somehow...")
+
+    ## Access Management ##s
+    @property
+    def username(self) -> str:
+        return self.usernameEdit.text
+
+    @property
+    def selected_role(self) -> str:
+        return self.roleComboBox.currentText.strip()
+
+    @property
+    def shouldBlankState(self) -> bool:
+        return self.blankSlateBox.isChecked()
+
+    ## Utils
+    def createNewProfile(self):
+        # Build the profile config dict from our GUI
+        profile_dict = {
+            UserConfig.ROLE_KEY: self.selected_role
+        }
+
+        # Add a new entry into the config file
+        if self.shouldBlankState:
+            self.master_config.new_user_profile(
+                self.username,
+                profile_dict
+            )
+        else:
+            self.master_config.new_user_profile(
+                self.username,
+                profile_dict,
+                self.reference_profile
+            )
+
+        # If the role is new, add it to the master config list
+        if self.selected_role not in self.master_config.user_roles:
+            self.master_config.user_roles.append(self.selected_role)
+
+
+class UserConfigDialog(ConfigDialog[UserConfig]):
+    """
+    Configuration dialog which allows the user to configure their
+    personal CART settings.
+    """
+
+    def buildGUI(self, layout: qt.QFormLayout):
+        # General window properties
+        self.setWindowTitle("CART Configuration")
+
+        # Build the widget for the Iterative Save attribute
+        self._iterSaveWidget(layout)
+
+        self._roleWidget(layout)
+
+    def _iterSaveWidget(self, layout):
+        # Add a checkbox for the state of autosaving
+        iterSaveCheck = qt.QCheckBox()
+        iterSaveLabel = qt.QLabel("Save on Iteration:")
+        iterSaveLabel.setToolTip(
+            "If checked, the Task will try to save when you change cases automatically."
+        )
+
+        # Update the config's state when it changes
+        def setSaveOnIter(new_state: bool):
+            self.bound_config.save_on_iter = bool(new_state)
+        iterSaveCheck.stateChanged.connect(setSaveOnIter)
+
+        # Add it to our layout
+        layout.addRow(iterSaveLabel, iterSaveCheck)
+        # Track it for later synchronization
+        self.iterSaveCheck = iterSaveCheck
+
+    def _roleWidget(self, layout):
+        # Add a combobox that lets the user select their role
+        roleComboBox = qt.QComboBox()
+        roleLabel = qt.QLabel("Role:")
+        roleLabel.setToolTip("What role the user should be marked as having.")
+
+        # Make the combo-box editable
+        roleComboBox.setEditable(True)
+
+        # When a new role is selected, update our backing dict
+        def changeRole(new_role: str):
+            self.bound_config.role = new_role
+        roleComboBox.currentTextChanged.connect(changeRole)
+
+        # Add it to our layout
+        layout.addRow(roleLabel, roleComboBox)
+        # Track it for later synchronization
+        self.roleComboBox = roleComboBox
+
+    def sync(self):
+        # Iterative save checkbox
+        self.iterSaveCheck.setChecked(self.bound_config.save_on_iter)
+
+        # Role selection combobox
+        self.roleComboBox.clear()
+        self.roleComboBox.addItems(self.bound_config.valid_roles)
+        self.roleComboBox.currentText = self.bound_config.role
 
 # The location of the config file for this installation of CART.
 MAIN_CONFIG = Path(__file__).parent.parent.parent / "configuration.json"
