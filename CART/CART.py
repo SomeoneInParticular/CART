@@ -1228,7 +1228,11 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         return self._cohort_path
 
     @cohort_path.setter
-    def cohort_path(self, new_path: Path):
+    def cohort_path(self, new_path):
+        # If the input is not a path, try to cast it as one
+        if not isinstance(new_path, Path):
+            new_path = Path(new_path)
+
         # Confirm the file exists
         if not new_path.exists():
             raise ValueError(f"Cohort file '{new_path}' does not exist!")
