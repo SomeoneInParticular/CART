@@ -47,9 +47,17 @@ class DictBackedConfig(ABC):
 
     @backing_dict.setter
     def backing_dict(self, new_dict: dict):
+        """
+        The backing dictionary for this Config.
+
+        NOTE: The setter for this attribute does NOT change `has_changed` in any
+        way; you should change it to match the context of why you overwrote the
+        backing dict directly (i.e. setting it to "False" when you're resetting to
+        a previous state).
+        """
         # KO: To prevent de-sync with the parent config, replace the contents of
         #  our backing dict with the new dicts contents (instead of replacing
-        #  the dictionary itself
+        #  the dictionary itself)
         self._backing_dict.clear()
         for k, v in new_dict.items():
             self._backing_dict[k] = v
@@ -772,6 +780,7 @@ class UserConfigDialog(ConfigDialog[UserConfig]):
         self.roleComboBox.clear()
         self.roleComboBox.addItems(self.bound_config.valid_roles)
         self.roleComboBox.currentText = self.bound_config.role
+
 
 # The location of the config file for this installation of CART.
 MAIN_CONFIG = Path(__file__).parent.parent.parent / "configuration.json"
