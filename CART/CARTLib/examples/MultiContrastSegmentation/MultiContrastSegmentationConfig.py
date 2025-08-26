@@ -1,28 +1,20 @@
 import qt
 
-from CARTLib.utils.config import UserConfig
+from CARTLib.utils.config import DictBackedConfig, UserConfig
 
 
-class MultiContrastSegmentationConfig:
+class MultiContrastSegmentationConfig(DictBackedConfig):
     """
     Configuration manager for the MultiContrast task
     """
-    def __init__(self, backing_dict: dict, parent_config: UserConfig):
-        self._backing_dict = backing_dict
-        self.has_changed = False
+    CONFIG_KEY = "multi_contrast_segmentation"
 
-        self.parent_config = parent_config
+    def __init__(self, parent_config: UserConfig):
+        super().__init__(parent_config=parent_config)
 
-    @property
-    def backing_dict(self) -> dict:
-        return self._backing_dict.copy()
-
-    @backing_dict.setter
-    def backing_dict(self, new_dict: dict):
-        self._backing_dict.clear()
-        for k, v in new_dict.values():
-            self._backing_dict[k] = v
-        self.has_changed = False
+    @classmethod
+    def default_config_label(cls) -> str:
+        return cls.CONFIG_KEY
 
     ## Configuration Options ##
     SHOW_ON_LOAD_KEY = "show_on_load"
@@ -42,9 +34,6 @@ class MultiContrastSegmentationConfig:
         prompt = MultiContrastSegmentationConfigGUI(bound_config=self)
         # Show it, blocking other interactions until its resolved
         prompt.exec()
-
-    def save_to_file(self):
-        self.parent_config.save_to_file()
 
 
 class MultiContrastSegmentationConfigGUI(qt.QDialog):
@@ -107,7 +96,7 @@ class MultiContrastSegmentationConfigGUI(qt.QDialog):
         # Match it to our corresponding function
         # TODO: Replace this with a `match` statement when porting to Slicer 5.9
         if button_role == qt.QDialogButtonBox.AcceptRole:
-            self.bound_config.save_to_file()
+            self.bound_config.save()
             self.accept()
         elif button_role == qt.QDialogButtonBox.RejectRole:
             self.preCloseCheck()
@@ -136,7 +125,7 @@ class MultiContrastSegmentationConfigGUI(qt.QDialog):
             )
             # Save to file only if the user confirms it
             if reply == qt.QMessageBox.Yes:
-                self.bound_config.save_to_file()
+                self.bound_config.save()
                 return True
             else:
                 self.bound_config.backing_dict = self._reserve_state

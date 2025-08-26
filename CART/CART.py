@@ -85,7 +85,7 @@ class CART(ScriptedLoadableModule):
         )
 
         # Load our configuration
-        GLOBAL_CONFIG.load()
+        GLOBAL_CONFIG.load_from_json()
 
         # Add CARTLib to the Python Path for ease of (re-)use
         import sys
@@ -1359,7 +1359,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Save any changes made to the configuration
         # (Usually saves the user and
-        self.config.save_to_file()
+        self.config.save()
 
         # Act as though CART has just been reloaded so the task can initialize
         #  properly

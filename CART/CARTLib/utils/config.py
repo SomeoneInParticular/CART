@@ -1,4 +1,5 @@
 import json
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional
 
@@ -7,6 +8,112 @@ import qt
 # The location of the default config used by a fresh installation of CART.
 #  DO NOT TOUCH IT UNLESS YOU KNOW WHAT YOU'RE DOING.
 DEFAULT_FILE = Path(__file__).parent / "default_config.json"
+
+
+## Re-Usable Abstract Elements ##
+class DictBackedConfig(ABC):
+
+    CONFIG_KEY = None
+
+    def __init__(
+            self,
+            parent_config: Optional["DictBackedConfig"] = None,
+            config_key_override: Optional[str] = None
+    ):
+        # Track the parent config
+        self.parent_config: "DictBackedConfig" = parent_config
+
+        # If a config label was provided, use it instead of our classmethod
+        if config_key_override:
+            self.config_label = config_key_override
+        else:
+            self.config_label = self.default_config_label()
+
+        # Get (or generate) a backing dict
+        if self.parent_config:
+            # If the parent exists, ensure the backing dict is embedded within it
+            self._backing_dict = parent_config.get_or_default(self.config_label, {})
+        else:
+            # Otherwise, use a standalone dict
+            self._backing_dict = {}
+
+        # Whether the contents of this config has been changed since creation
+        self.has_changed = False
+
+    @property
+    def backing_dict(self) -> dict:
+        return self._backing_dict
+
+    @backing_dict.setter
+    def backing_dict(self, new_dict: dict):
+        # KO: To prevent de-sync with the parent config, replace the contents of
+        #  our backing dict with the new dicts contents (instead of replacing
+        #  the dictionary itself
+        self._backing_dict.clear()
+        for k, v in new_dict.items():
+            self._backing_dict[k] = v
+
+    @classmethod
+    @abstractmethod
+    def default_config_label(cls) -> str:
+        """
+        Should return a string denoting the type of Config this is.
+
+        Used to create child entries within parent configurations, as
+        well as to help with debugging.
+        """
+        ...
+
+    def get_or_default(self, key: str, default):
+        """
+        Gets a specific value from backing dict; if it doesn't exist,
+        initializes the key in the dict to the default value provided,
+        and returns it instead.
+        """
+        # Try to get the specified value
+        val = self._backing_dict.get(key, None)
+
+        # If it didn't exist, set it to our default and make a logged note
+        if val is None:
+            print(f"No '{key}' entry existed, setting it to {default}.")
+            val = default
+            self._backing_dict[key] = val
+            self.has_changed = True
+
+        return val
+
+    @abstractmethod
+    def show_gui(self) -> None:
+        """
+        Should show a dialogue prompt to the user, allowing them to change
+        the configuration values managed by this Config object.
+        """
+        ...
+
+    def save_without_parent(self) -> None:
+        """
+        Override if you want the save to go through when this
+        Config instance lacks a parent to delegate too
+        """
+        raise NotImplementedError(
+            f"Could not save DictBackedConfig instance of type '{self.__name__}'; "
+            f"It does not have an '_save_without_parent' implementation, "
+            f"and had no parent instance to delegate too."
+        )
+
+    def save(self) -> None:
+        """
+        Delegate to the parent configuration if possible
+        """
+        # Only save if our state has changed
+        if not self.has_changed:
+            return
+
+        # If we have a parent config, have it save instead
+        if self.parent_config:
+            self.parent_config.save()
+        else:
+            self.save_without_parent()
 
 
 ## GUI elements ##
@@ -175,10 +282,8 @@ class ConfigGUI(qt.QDialog):
         # Track the bound configuration to ourselves
         self.bound_config = bound_config
 
-        # Track the backing dict of the config at this state to restore
-        # if the user backs out; we're not copying here because the
-        # config's 'backing_dict' config does that for us already.
-        self._reserve_state = bound_config.backing_dict
+        # Track a copy of the backing dict to restore if the user backs out
+        self._reserve_state = bound_config.backing_dict.copy()
 
         # Track the button box so we can react to them being pressed
         self.buttonBox: qt.QDialogButtonBox = None
@@ -250,7 +355,7 @@ class ConfigGUI(qt.QDialog):
         # Match it to our corresponding function
         # TODO: Replace this with a `match` statement when porting to Slicer 5.9
         if button_role == qt.QDialogButtonBox.AcceptRole:
-            self.bound_config.save_to_file()
+            self.bound_config.save()
             self.accept()
         elif button_role == qt.QDialogButtonBox.RejectRole:
             self.preCloseCheck()
@@ -277,7 +382,7 @@ class ConfigGUI(qt.QDialog):
             )
             # Save to file only if the user confirms it
             if reply == qt.QMessageBox.Yes:
-                self.bound_config.save_to_file()
+                self.bound_config.save()
                 return True
             else:
                 self.bound_config.backing_dict = self._reserve_state
@@ -293,51 +398,36 @@ class ConfigGUI(qt.QDialog):
 
 
 ## Backing Config Managers ##
-class UserConfig:
+class UserConfig(DictBackedConfig):
     """
     Configuration manager for a CART user profile.
 
     Tracks the user's settings, allowing for them to be
     swapped on the fly.
     """
-
     DEFAULT_ROLE = "N/A"
 
-    def __init__(self, username: str, config_dict: dict, cart_config: "CARTConfig"):
-        # The username for this profile
-        self._username = username
+    def __init__(self, username: str, backing_dict: dict, parent_config: "CARTConfig"):
+        # Init w/o a parent config initially
+        super().__init__()
 
-        # Cross-reference attributes
-        self._backing_dict = config_dict
-        self._cart_config = cart_config
+        # Explicitly set our inherited attributes instead;
+        # needed as Users are not handled like regular Config entries
+        self._backing_dict = backing_dict
+        self.parent_config: "CARTConfig" = parent_config
 
-        # Track whether something has changed, so other processes can reference it
-        self._has_changed = False
+        # As each user gets its own config entry, its label is our username instead
+        self.config_label = username
+
+    @classmethod
+    def default_config_label(cls) -> str:
+        # Users are stored in a profile dict, and use their own username
+        # within that instead of a shared label.
+        pass
 
     @property
     def username(self):
-        return self._username
-
-    @property
-    def has_changed(self):
-        return self._has_changed
-
-    @property
-    def backing_dict(self):
-        # KO: We really don't want direct access to the dict itself,
-        #  so we return a copy instead
-        return self._backing_dict.copy()
-
-    @backing_dict.setter
-    def backing_dict(self, new_dict: dict):
-        # KO: we can't just assign, otherwise it would
-        #  de-sync with the global config
-        self._backing_dict.clear()
-        for k, v in new_dict.items():
-            self._backing_dict[k] = v
-        # We presume direct assignment = not changed;
-        # the dev can explicitly specify otherwise if need be
-        self._has_changed = False
+        return self.config_label
 
     ## Last Used Settings ##
     LAST_USED_COHORT_KEY = "last_used_cohort_file"
@@ -350,7 +440,7 @@ class UserConfig:
     @last_used_cohort_file.setter
     def last_used_cohort_file(self, new_path: Path):
         self._backing_dict[self.LAST_USED_COHORT_KEY] = str(new_path)
-        self._has_changed = True
+        self.has_changed = True
 
     LAST_USED_DATA_KEY = "last_used_data_path"
 
@@ -362,7 +452,7 @@ class UserConfig:
     @last_used_data_path.setter
     def last_used_data_path(self, new_path: Path):
         self._backing_dict[self.LAST_USED_DATA_KEY] = str(new_path)
-        self._has_changed = True
+        self.has_changed = True
 
     LAST_USED_TASK_KEY = "last_used_task"
 
@@ -380,37 +470,37 @@ class UserConfig:
 
     @property
     def role(self) -> str:
-        return self._get_or_default(self.ROLE_KEY, self.DEFAULT_ROLE)
+        return self.get_or_default(self.ROLE_KEY, self.DEFAULT_ROLE)
 
     @role.setter
     def role(self, new_role: str):
         self._backing_dict[self.ROLE_KEY] = new_role
-        self._has_changed = True
+        self.has_changed = True
 
     @property
     def valid_roles(self) -> list[str]:
-        return self._cart_config.user_roles
+        return self.parent_config.user_roles
 
     ## Autosaving Management ##
     SAVE_ON_ITER_KEY = "save_on_iter"
 
     @property
     def save_on_iter(self) -> bool:
-        return self._get_or_default(self.SAVE_ON_ITER_KEY, True)
+        return self.get_or_default(self.SAVE_ON_ITER_KEY, True)
 
     @save_on_iter.setter
     def save_on_iter(self, new_val: bool):
         # Validate that the value is a boolean, to avoid weird jank later
         assert isinstance(new_val, bool), f"'{self.SAVE_ON_ITER_KEY}' must be a boolean value."
         self._backing_dict[self.SAVE_ON_ITER_KEY] = new_val
-        self._has_changed = True
+        self.has_changed = True
 
     ## Sub-Configurations ##
     SUB_CONFIGS_KEY = "sub_config"
 
     @property
     def sub_configs(self) -> dict:
-        return self._get_or_default(self.SUB_CONFIGS_KEY, {})
+        return self.get_or_default(self.SUB_CONFIGS_KEY, {})
 
     def get_sub_config(self, key: str):
         sub_entry = self.sub_configs.get(key, False)
@@ -422,52 +512,40 @@ class UserConfig:
             return sub_entry
 
     ## Utils ##
-    def _get_or_default(self, key, default):
-        # Try to get the specified value
-        val = self._backing_dict.get(key, None)
-
-        # If it didn't exist, set it to our default and make a logged note
-        if val is None:
-            print(f"No '{key}' entry existed, setting it to {default}.")
-            val = default
-            self._backing_dict[key] = val
-            self._has_changed = True
-
-        return val
-
     def show_gui(self):
         # Build the Config prompt
         prompt = ConfigGUI(bound_config=self)
         # Show it, blocking other interactions until its resolved
         prompt.exec()
 
-    def save_to_file(self):
-        # Only do the (relatively) expensive I/O when we have changes
-        if self.has_changed:
-            # If the selected role is new, add it to the config first
-            if self.role not in self._cart_config.user_roles:
-                self._cart_config.user_roles.append(self.role)
+    def save(self):
+        # If the selected role is new, add it to the config first
+        if self.role not in self.parent_config.user_roles:
+            self.parent_config.user_roles.append(self.role)
 
-            # Save the configuration
-            self._cart_config.save()
+        super().save()
 
 
-class CARTConfig:
+class CARTConfig(DictBackedConfig):
     """
     Global configuration for CART itself.
 
     Manages user profiles, as well as tracking some simple metrics
     itself to allow for restoring the previous user
     """
-
     DEFAULT_USERNAME = "Default"
+    CONFIG_KEY = "CART"
 
     def __init__(self, config_path: Path):
+        # Initialize the dict-backed config attributes
+        super().__init__()
+
         # Path to the file the config should be saved to
         self.config_path = config_path
 
-        # The dictionary containing the configuration's contents
-        self._backing_dict: dict = None
+    @classmethod
+    def default_config_label(cls) -> str:
+        return cls.CONFIG_KEY
 
     ## User Management ##
     PROFILE_KEY = "user_profiles"
@@ -475,7 +553,7 @@ class CARTConfig:
 
     @property
     def profiles(self) -> dict[str, dict]:
-        return self._get_or_default(self.PROFILE_KEY, {})
+        return self.get_or_default(self.PROFILE_KEY, {})
 
     def new_user_profile(
             self,
@@ -497,8 +575,7 @@ class CARTConfig:
 
         # If a reference profile was provided, use its settings as our base
         if reference_profile:
-            # Note; this is implicitly copied via the profile's setter property
-            new_profile = reference_profile.backing_dict
+            new_profile = reference_profile.backing_dict.copy()
         # Otherwise, start with a blank slate
         else:
             new_profile = {}
@@ -545,7 +622,7 @@ class CARTConfig:
 
     @property
     def last_user(self):
-        return self._get_or_default(
+        return self.get_or_default(
             self.LAST_USER_KEY, self.DEFAULT_USERNAME
         )
 
@@ -557,7 +634,7 @@ class CARTConfig:
 
     @property
     def user_roles(self) -> list[str]:
-        return self._get_or_default(self.USER_ROLES_KEY, self.DEFAULT_ROLES)
+        return self.get_or_default(self.USER_ROLES_KEY, self.DEFAULT_ROLES)
 
     def new_user_role(self, new_role: str):
         if new_role in self.user_roles:
@@ -565,8 +642,11 @@ class CARTConfig:
 
         self.user_roles.append(new_role)
 
+    def show_gui(self):
+        raise NotImplementedError("You should configure CART on a per-user basis!")
+
     ## I/O ##
-    def load(self):
+    def load_from_json(self):
         """
         (Re-)Load the configuration from the file.
 
@@ -586,25 +666,12 @@ class CARTConfig:
             with open(self.config_path) as cf:
                 self._backing_dict = json.load(cf)
 
-    def save(self):
+    def save_without_parent(self):
         """
         Save the in-memory contents of the configuration back to our JSON file
         """
         with open(MAIN_CONFIG, "w") as cf:
             json.dump(self._backing_dict, cf, indent=2)
-
-    def _get_or_default(self, key, default):
-        # Try to get the specified value
-        val = self._backing_dict.get(key, None)
-
-        # If it didn't exist, set it to our default and make a logged note
-        if val is None:
-            print(f"No '{key}' entry existed, setting it to {default}.")
-            val = default
-            self._backing_dict[key] = val
-            self._has_changed = True
-
-        return val
 
 
 # The location of the config file for this installation of CART.

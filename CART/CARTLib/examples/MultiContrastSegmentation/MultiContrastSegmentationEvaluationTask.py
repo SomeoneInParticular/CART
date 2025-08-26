@@ -444,7 +444,6 @@ class MultiContrastSegmentationEvaluationTask(
         # Configuration
         self.config: MultiContrastSegmentationConfig = (
             MultiContrastSegmentationConfig(
-                backing_dict=self.user.get_sub_config(self.CONFIG_ID),
                 parent_config=self.user
             )
         )
