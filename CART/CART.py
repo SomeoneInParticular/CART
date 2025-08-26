@@ -1358,7 +1358,6 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.current_task_instance = task_constructor(self.config)
 
         # Save any changes made to the configuration
-        # (Usually saves the user and
         self.config.save()
 
         # Act as though CART has just been reloaded so the task can initialize
