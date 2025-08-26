@@ -2,7 +2,7 @@ import qt
 import csv
 from pathlib import Path
 
-from CARTLib.utils.config import config
+from CARTLib.utils.config import GLOBAL_CONFIG
 from CARTLib.utils.data_checker import fetch_resources
 
 class CohortGeneratorWindow(qt.QDialog):
@@ -387,7 +387,7 @@ class CohortGeneratorWindow(qt.QDialog):
             self.clear_fields()
         else:
             # Populate include/exclude inputs from config if available
-            selected_column_filters = config.get_filter(text)
+            selected_column_filters = GLOBAL_CONFIG.get_filter(text)
             if selected_column_filters:
                 include_input  = selected_column_filters["inclusion_input"]
                 exclude_input  = selected_column_filters["exclusion_input"]
@@ -562,8 +562,8 @@ class CohortGeneratorLogic:
                     row[new_name] = row.pop(old_name)
 
             # Update column name in configuration file
-            config.update_column_name(old_name, new_name)
-            config.save()
+            GLOBAL_CONFIG.update_column_name(old_name, new_name)
+            GLOBAL_CONFIG.save()
 
             return True
         except ValueError:
@@ -625,13 +625,13 @@ class CohortGeneratorLogic:
             self.headers.append(new_col_name)
 
         # Save or update used filters to config for population later
-        config.set_filter(
+        GLOBAL_CONFIG.set_filter(
             column_name=col_name,
             inclusion_input=','.join(include),
             exclusion_input=','.join(exclude)
         )
 
-        config.save()
+        GLOBAL_CONFIG.save()
 
         return True
 
@@ -661,8 +661,8 @@ class CohortGeneratorLogic:
                 row.pop(column_name, None)
 
             # Remove the filter from config
-            config.remove_filter(column_name)
-            config.save()
+            GLOBAL_CONFIG.remove_filter(column_name)
+            GLOBAL_CONFIG.save()
 
             return True
         except ValueError:

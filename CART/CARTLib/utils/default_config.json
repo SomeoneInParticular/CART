@@ -1,6 +1,13 @@
 {
-  "users": [],
-  "autosave": true,
-  "autosave_frequency": 120,
-  "filters": {}
+  "last_user": "Default",
+  "user_roles": [
+    "N/A"
+  ],
+  "user_profiles": {
+    "Default": {
+      "role": "N/A",
+      "save_on_iter": true,
+      "filters": {}
+    }
+  }
 }
