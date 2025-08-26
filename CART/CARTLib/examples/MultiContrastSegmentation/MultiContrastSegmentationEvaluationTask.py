@@ -480,11 +480,9 @@ class MultiContrastSegmentationEvaluationTask(
             fit=True,
         )
         # Hide the segmentation node if requested by the user's config
-        if not self.config.show_on_load:
-            # TODO
-            print("=" * 100)
-            print("Hiding initial segmentation")
-            print("=" * 100)
+        self.data_unit.set_primary_segments_visible(
+            self.config.show_on_load
+        )
         # If we have GUI, update it as well
         if self.gui:
             self.gui.update(data_unit)
