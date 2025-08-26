@@ -21,7 +21,7 @@ class MultiContrastSegmentationConfig(DictBackedConfig):
 
     @property
     def show_on_load(self) -> bool:
-        return self._backing_dict.get(self.SHOW_ON_LOAD_KEY, False)
+        return self._backing_dict.get(self.SHOW_ON_LOAD_KEY, True)
 
     @show_on_load.setter
     def show_on_load(self, new_state: bool):
