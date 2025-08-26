@@ -428,8 +428,6 @@ class MultiContrastSegmentationEvaluationTask(
     TaskBaseClass[MultiContrastSegmentationEvaluationDataUnit]
 ):
 
-    CONFIG_ID = "multi_contrast_segmentation"
-
     def __init__(self, user: UserConfig):
         super().__init__(user)
 
