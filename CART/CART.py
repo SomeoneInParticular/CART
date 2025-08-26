@@ -132,9 +132,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # A "dummy" widget, which holds the TaskGUI. Allows us to swap tasks on the fly.
         self.dummyTaskWidget: qt.QWidget = None
 
-        # Tracks the current data convention followed by data path
-        self.currentDataConvention = None
-
     def setup(self) -> None:
         """Called when the user opens the module the first time and the widget is initialized."""
         ScriptedLoadableModuleWidget.setup(self)
@@ -594,11 +591,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # Try to update the logic's path to match
             self.logic.data_path = Path(current_path)
 
-            # Try to identify the best convention for the data directory
-            self.currentDataConvention = check_conventions(self.logic.data_path)
-            self.cohortGeneratorButton.setEnabled(
-                self.currentDataConvention is not None
-            )
+            # TODO: Find a way to signal when this is changed so our CohortGenerator
+            #  widget can be updated appropriately.
         except Exception as exc:
             # Show the user an error
             self.pythonExceptionPrompt(exc)
@@ -697,7 +691,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Open the cohort generator window, passing in the current data path and cohort (if any)
         case_data = self.logic.data_manager.case_data
-        cohortGeneratorWindow = CohortGeneratorWindow(self, data_path=self.logic.data_path, cohort_data=case_data, cohort_path=self.logic.cohort_path, current_data_convention=self.currentDataConvention)
+        cohortGeneratorWindow = CohortGeneratorWindow(
+            self,
+            data_path=self.logic.data_path,
+            user_config=self.logic.config,
+            cohort_data=case_data,
+            cohort_path=self.logic.cohort_path
+        )
         cohortGeneratorWindowResult = cohortGeneratorWindow.exec_()
 
         if cohortGeneratorWindowResult == qt.QDialog.Accepted:

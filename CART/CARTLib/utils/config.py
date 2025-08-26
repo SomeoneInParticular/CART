@@ -385,50 +385,6 @@ class UserConfig(DictBackedConfig):
     def valid_roles(self) -> list[str]:
         return self.parent_config.user_roles
 
-    ## Resource file queries ##
-    @property
-    def filters(self) -> dict:
-        """Returns the entire dictionary of filters."""
-        return self._get_or_default("filters", {})
-
-    def get_filter(self, column_name: str) -> Optional[dict]:
-        """
-        Retrieves the inclusion/exclusion filters for a specific column.
-        Returns a dict like {'inclusion_input': '...', 'exclusion_input': '...'} or None.
-        """
-        print("FETCHING...")
-        return self.filters.get(column_name)
-
-    def set_filter(self, column_name: str, inclusion_input: str = "", exclusion_input: str = ""):
-        """
-        Sets or updates the filter strings for a given column name.
-        """
-        if "filters" not in self._backing_dict:
-            self._backing_dict["filters"] = {}
-
-        self._backing_dict["filters"][column_name] = {
-            "inclusion_input": inclusion_input,
-            "exclusion_input": exclusion_input
-        }
-        self._has_changed = True
-
-    def remove_filter(self, column_name: str):
-        """
-        Removes a filter for a given column name if it exists.
-        """
-        if "filters" in self._backing_dict and column_name in self._backing_dict["filters"]:
-            del self._backing_dict["filters"][column_name]
-            self._has_changed = True
-
-    def update_column_name(self, old_column_name: str, new_column_name: str):
-        """
-        Updates column name in the configuration file.
-        Called when a column header gets double clicked in the tentative cohort table.
-        """
-        if "filters" in self._backing_dict and old_column_name in self._backing_dict["filters"]:
-            self._backing_dict["filters"][new_column_name] = self._backing_dict["filters"].pop(old_column_name)
-            self._has_changed = True
-
     ## Autosaving Management ##
     SAVE_ON_ITER_KEY = "save_on_iter"
 

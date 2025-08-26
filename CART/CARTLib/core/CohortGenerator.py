@@ -1,24 +1,40 @@
 import qt
 import csv
 from pathlib import Path
+from typing import Optional
 
-from CARTLib.utils.config import GLOBAL_CONFIG
-from CARTLib.utils.data_checker import fetch_resources
+from CARTLib.utils.config import DictBackedConfig, UserConfig
+from CARTLib.utils.data_checker import fetch_resources, check_conventions
+
 
 class CohortGeneratorWindow(qt.QDialog):
     """
-    GUI to display and configure a cohort from a data directory.
+    GUI to display and configure a cohort's contents via pulling files
+    from a reference data directory.
     """
-
     ### UI ###
-    def __init__(self, parent, data_path, cohort_data=None, cohort_path=None, current_data_convention=None):
+    def __init__(
+            self,
+            parent,
+            data_path: Path,
+            user_config: UserConfig,
+            cohort_data=None,
+            cohort_path=None
+    ):
         super().__init__()
 
         # Create logic class
-        self.logic = CohortGeneratorLogic(data_path=data_path, cohort_data=cohort_data, cohort_path=cohort_path, current_data_convention=current_data_convention)
+        self.logic = CohortGeneratorLogic(
+            data_path=data_path,
+            user_config=user_config,
+            cohort_data=cohort_data,
+            cohort_path=cohort_path
+        )
 
         # Set window parameters
-        self.setWindowFlags(self.windowFlags() | qt.Qt.WindowMaximizeButtonHint | qt.Qt.WindowMinimizeButtonHint | qt.Qt.Window)
+        self.setWindowFlags(
+            self.windowFlags() | qt.Qt.WindowMaximizeButtonHint | qt.Qt.WindowMinimizeButtonHint | qt.Qt.Window
+        )
 
         # Make dialog/window non-modal, to allow interaction with main window
         self.setModal(False)
@@ -309,6 +325,9 @@ class CohortGeneratorWindow(qt.QDialog):
         # Update cohort filepath in the parent widget
         self.parent_widget.cohortFileSelectionButton.setCurrentPath(self.logic.selected_cohort_path)
 
+        # Try to find the matching convention for this new path
+        self.logic.current_data_convention = check_conventions(self.logic.selected_cohort_path)
+
     def on_toggle_override_selected_cohort_file(self):
         is_checked = self.override_selected_cohort_file_toggle_button.isChecked()
         self.logic.override_selected_cohort_file = is_checked
@@ -387,7 +406,7 @@ class CohortGeneratorWindow(qt.QDialog):
             self.clear_fields()
         else:
             # Populate include/exclude inputs from config if available
-            selected_column_filters = GLOBAL_CONFIG.get_filter(text)
+            selected_column_filters = self.logic.config.get_filter(text)
             if selected_column_filters:
                 include_input  = selected_column_filters["inclusion_input"]
                 exclude_input  = selected_column_filters["exclusion_input"]
@@ -486,13 +505,78 @@ class CohortGeneratorWindow(qt.QDialog):
     def on_cancel(self):
         self.close()
 
+# Config Manager
+class CohortGeneratorConfig(DictBackedConfig):
 
+    CONFIG_KEY = "cohort_generator_cache"
+
+    @classmethod
+    def default_config_label(cls) -> str:
+        return cls.CONFIG_KEY
+
+    def show_gui(self) -> None:
+        """
+        Do nothing; we have our own custom GUI instead
+        """
+        pass
+
+    ## Column Filters ##
+    FILTERS_KEY = "filters"
+
+    @property
+    def filters(self) -> dict:
+        """Returns the entire dictionary of filters."""
+        return self.get_or_default(self.FILTERS_KEY, {})
+
+    def get_filter(self, column_name: str) -> Optional[dict]:
+        """
+        Retrieves the inclusion/exclusion filters for a specific column.
+        Returns a dict like {'inclusion_input': '...', 'exclusion_input': '...'} or None.
+        """
+        return self.filters.get(column_name)
+
+    def set_filter(self, column_name: str, inclusion_input: str = "", exclusion_input: str = ""):
+        """
+        Sets or updates the filter strings for a given column name.
+        """
+        self.filters[column_name] = {
+            "inclusion_input": inclusion_input,
+            "exclusion_input": exclusion_input
+        }
+        self._has_changed = True
+
+    def remove_filter(self, column_name: str):
+        """
+        Removes a filter for a given column name if it exists.
+        """
+        if column_name in self.filters.keys():
+            del self.filters[column_name]
+            self._has_changed = True
+
+    def update_column_name(self, old_column_name: str, new_column_name: str):
+        """
+        Updates column name in the configuration file.
+        Called when a column header gets double clicked in the tentative cohort table.
+        """
+        if old_column_name in self.filters.keys():
+            self.filters[new_column_name] = self.filters.pop(old_column_name)
+            self._has_changed = True
+
+
+# Logic Manager
 class CohortGeneratorLogic:
-    def __init__(self, data_path, cohort_data=None, cohort_path=None, current_data_convention=None):
+    def __init__(
+            self,
+            data_path,
+            user_config: UserConfig,
+            cohort_data=None,
+            cohort_path=None
+    ):
         self.data_path = Path(data_path)
+        self.config = CohortGeneratorConfig(user_config)
         self.all_files_by_case: dict[str, list[str]] = {}
         self.cohort_data = cohort_data if cohort_data is not None else []
-        self.current_data_convention = current_data_convention
+        self.current_data_convention = check_conventions(data_path)
 
         self.headers = []
 
@@ -562,8 +646,8 @@ class CohortGeneratorLogic:
                     row[new_name] = row.pop(old_name)
 
             # Update column name in configuration file
-            GLOBAL_CONFIG.update_column_name(old_name, new_name)
-            GLOBAL_CONFIG.save()
+            self.config.update_column_name(old_name, new_name)
+            self.config.save()
 
             return True
         except ValueError:
@@ -625,13 +709,13 @@ class CohortGeneratorLogic:
             self.headers.append(new_col_name)
 
         # Save or update used filters to config for population later
-        GLOBAL_CONFIG.set_filter(
+        self.config.set_filter(
             column_name=col_name,
             inclusion_input=','.join(include),
             exclusion_input=','.join(exclude)
         )
 
-        GLOBAL_CONFIG.save()
+        self.config.save()
 
         return True
 
@@ -661,8 +745,8 @@ class CohortGeneratorLogic:
                 row.pop(column_name, None)
 
             # Remove the filter from config
-            GLOBAL_CONFIG.remove_filter(column_name)
-            GLOBAL_CONFIG.save()
+            self.config.remove_filter(column_name)
+            self.config.save()
 
             return True
         except ValueError:
