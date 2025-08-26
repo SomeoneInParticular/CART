@@ -1271,7 +1271,10 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         return self._data_path
 
     @data_path.setter
-    def data_path(self, new_path: Path):
+    def data_path(self, new_path):
+        if not isinstance(new_path, Path):
+            new_path = Path(new_path)
+
         # Confirm the directory exists
         if not new_path.exists():
             raise ValueError(f"Data path '{new_path}' does not exist!")
