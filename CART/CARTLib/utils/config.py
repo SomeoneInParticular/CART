@@ -39,7 +39,20 @@ class DictBackedConfig(ABC):
             self._backing_dict = {}
 
         # Whether the contents of this config has been changed since creation
-        self.has_changed = False
+        self._has_changed = False
+
+    @property
+    def has_changed(self) -> bool:
+        return self._has_changed
+
+    @has_changed.setter
+    def has_changed(self, new_state: bool):
+        # Update our own state
+        self._has_changed = new_state
+
+        # If we've changed, mark every parent as having changed as well
+        if new_state and self.parent_config:
+            self.parent_config.has_changed = new_state
 
     @property
     def backing_dict(self) -> dict:
@@ -503,6 +516,8 @@ class CARTConfig(DictBackedConfig):
 
         # If successful, return the username for easy reference
         if user_added_successfully:
+            # Mark oneself as having changed
+            self.has_changed = True
             # Return the new username for reference elsewhere
             return prompt.username
         # Otherwise, return nothing
@@ -520,6 +535,7 @@ class CARTConfig(DictBackedConfig):
     @last_user.setter
     def last_user(self, new_user: str):
         self._backing_dict[self.LAST_USER_KEY] = new_user
+        self.has_changed = True
 
     USER_ROLES_KEY = "user_roles"
 
@@ -532,6 +548,7 @@ class CARTConfig(DictBackedConfig):
             raise ValueError(f"Role '{new_role}' already exists!")
 
         self.user_roles.append(new_role)
+        self.has_changed = True
 
     def show_gui(self):
         raise NotImplementedError("You should configure CART on a per-user basis!")
