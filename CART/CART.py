@@ -246,10 +246,16 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 pass
 
             # Pull the currently selected cohort file next
-            self.cohortFileSelectionButton.currentPath = self.logic.cohort_path
+            if self.logic.cohort_path is None:
+                self.cohortFileSelectionButton.currentPath = ""
+            else:
+                self.cohortFileSelectionButton.currentPath = self.logic.cohort_path
 
             # Pull the currently selected data path next
-            self.dataPathSelectionWidget.currentPath = self.logic.data_path
+            if self.logic.data_path is None:
+                self.dataPathSelectionWidget.currentPath = ""
+            else:
+                self.dataPathSelectionWidget.currentPath = str(self.logic.data_path)
 
             # Finally, attempt to update our task from the config
             self.taskOptions.currentText = self.logic.task_id
@@ -583,7 +589,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If the data path is now empty, reset to the previous path and end early
         if not current_path:
             print("Error: Base path was empty, retaining previous base path.")
-            self.dataPathSelectionWidget.currentPath = str(self.logic._data_path)
+            if self.logic.data_path is None:
+                path_str = ""
+            else:
+                path_str = str(self.logic.data_path)
+            self.dataPathSelectionWidget.currentPath = path_str
             self.updateButtons()
             return
 
