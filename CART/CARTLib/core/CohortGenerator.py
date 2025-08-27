@@ -497,6 +497,7 @@ class CohortGeneratorWindow(qt.QDialog):
     def on_cancel(self):
         self.close()
 
+
 # Config Manager
 class CohortGeneratorConfig(DictBackedConfig):
 
