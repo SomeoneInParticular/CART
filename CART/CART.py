@@ -17,7 +17,6 @@ from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 from CARTLib.utils.config import GLOBAL_CONFIG, UserConfig
-from CARTLib.utils.data_checker import check_conventions
 
 from CARTLib.examples.SegmentationEvaluation.SegmentationEvaluationTask import (
     SegmentationEvaluationTask,
