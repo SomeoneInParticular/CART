@@ -695,7 +695,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.sync_with_logic()
 
     def onCohortGeneratorButtonClicked(self):
+        # Before trying to create a prompt, confirm we have a valid setup
+        if not self.dataPathSelectionWidget.currentPath:
+            # We can't generate a cohort without a dataset to reference
+            raise ValueError("Cannot edit a Cohort without a backing data path!")
+        elif not self.cohortFileSelectionButton.currentPath:
+            # If we don't have an initial cohort file, make one from scratch
+            from CARTLib.utils.bids import generate_blank_cohort
+            new_cohort = generate_blank_cohort(self.logic.data_path)
+            self.cohortFileSelectionButton.setCurrentPath(new_cohort)
 
+        # Load the cohort's contents into memory
         self.logic.load_cohort()
 
         # Open the cohort generator window, passing in the current data path and cohort (if any)
@@ -1259,6 +1269,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # If all checks pass, update our state
         self._cohort_path = new_path
         self.clear_task()
+        self.rebuild_data_manager()
 
         # Update the config to match
         self.config.last_used_cohort_file = new_path
