@@ -152,17 +152,17 @@ class MultiContrastSegmentationEvaluationGUI:
         # Radio buttons for output mode
         self.outputModeGroup = qt.QButtonGroup()
 
-        # Parallel directory option
-        parallelRadio = qt.QRadioButton("Save to parallel directory structure")
-        parallelRadio.setToolTip("Creates organized output in a separate directory")
-        self.outputModeGroup.addButton(parallelRadio, 0)
-        layout.addWidget(parallelRadio)
-
         # Overwrite original option
         overwriteRadio = qt.QRadioButton("Overwrite original segmentation files")
         overwriteRadio.setToolTip("Saves directly over the input segmentation files")
         self.outputModeGroup.addButton(overwriteRadio, 1)
         layout.addWidget(overwriteRadio)
+
+        # Alternative directory option
+        parallelRadio = qt.QRadioButton("Save to separate directory structure")
+        parallelRadio.setToolTip("Creates organized output in a separate directory")
+        self.outputModeGroup.addButton(parallelRadio, 0)
+        layout.addWidget(parallelRadio)
 
         # Set default selection based on current mode
         if hasattr(self.bound_task, "output_mode"):
