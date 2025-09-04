@@ -2,7 +2,7 @@ import json
 from abc import ABC, abstractmethod, ABCMeta
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generic, Optional, TypeVar
+from typing import Generic, Optional, TypeVar, Union
 
 import qt
 
@@ -337,9 +337,12 @@ class UserConfig(DictBackedConfig):
     LAST_USED_COHORT_KEY = "last_used_cohort_file"
 
     @property
-    def last_used_cohort_file(self) -> Path:
-        val = Path(self._backing_dict.get(self.LAST_USED_COHORT_KEY, ""))
-        return val
+    def last_used_cohort_file(self) -> Union[Path, None]:
+        val = self._backing_dict.get(self.LAST_USED_COHORT_KEY, None)
+        if val is None:
+            return None
+        # noinspection PyUnreachableCode
+        return Path(val)
 
     @last_used_cohort_file.setter
     def last_used_cohort_file(self, new_path: Path):
@@ -349,9 +352,12 @@ class UserConfig(DictBackedConfig):
     LAST_USED_DATA_KEY = "last_used_data_path"
 
     @property
-    def last_used_data_path(self) -> Path:
-        val = Path(self._backing_dict.get(self.LAST_USED_DATA_KEY, ""))
-        return val
+    def last_used_data_path(self) -> Union[Path, None]:
+        val = self._backing_dict.get(self.LAST_USED_DATA_KEY, None)
+        if val is None:
+            return None
+        # noinspection PyUnreachableCode
+        return Path(val)
 
     @last_used_data_path.setter
     def last_used_data_path(self, new_path: Path):

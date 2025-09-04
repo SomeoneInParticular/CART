@@ -17,7 +17,6 @@ from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 from CARTLib.utils.config import GLOBAL_CONFIG, UserConfig
-from CARTLib.utils.data_checker import check_conventions
 
 from CARTLib.examples.SegmentationEvaluation.SegmentationEvaluationTask import (
     SegmentationEvaluationTask,
@@ -246,10 +245,16 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 pass
 
             # Pull the currently selected cohort file next
-            self.cohortFileSelectionButton.currentPath = self.logic.cohort_path
+            if self.logic.cohort_path is None:
+                self.cohortFileSelectionButton.currentPath = ""
+            else:
+                self.cohortFileSelectionButton.currentPath = self.logic.cohort_path
 
             # Pull the currently selected data path next
-            self.dataPathSelectionWidget.currentPath = self.logic.data_path
+            if self.logic.data_path is None:
+                self.dataPathSelectionWidget.currentPath = ""
+            else:
+                self.dataPathSelectionWidget.currentPath = str(self.logic.data_path)
 
             # Finally, attempt to update our task from the config
             self.taskOptions.currentText = self.logic.task_id
@@ -583,7 +588,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If the data path is now empty, reset to the previous path and end early
         if not current_path:
             print("Error: Base path was empty, retaining previous base path.")
-            self.dataPathSelectionWidget.currentPath = str(self.logic._data_path)
+            if self.logic.data_path is None:
+                path_str = ""
+            else:
+                path_str = str(self.logic.data_path)
+            self.dataPathSelectionWidget.currentPath = path_str
             self.updateButtons()
             return
 
@@ -686,7 +695,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.sync_with_logic()
 
     def onCohortGeneratorButtonClicked(self):
+        # Before trying to create a prompt, confirm we have a valid setup
+        if not self.dataPathSelectionWidget.currentPath:
+            # We can't generate a cohort without a dataset to reference
+            raise ValueError("Cannot edit a Cohort without a backing data path!")
+        elif not self.cohortFileSelectionButton.currentPath:
+            # If we don't have an initial cohort file, make one from scratch
+            from CARTLib.utils.bids import generate_blank_cohort
+            new_cohort = generate_blank_cohort(self.logic.data_path)
+            self.cohortFileSelectionButton.setCurrentPath(new_cohort)
 
+        # Load the cohort's contents into memory
         self.logic.load_cohort()
 
         # Open the cohort generator window, passing in the current data path and cohort (if any)
@@ -1250,6 +1269,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # If all checks pass, update our state
         self._cohort_path = new_path
         self.clear_task()
+        self.rebuild_data_manager()
 
         # Update the config to match
         self.config.last_used_cohort_file = new_path

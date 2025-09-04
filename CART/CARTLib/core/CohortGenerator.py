@@ -307,15 +307,10 @@ class CohortGeneratorWindow(qt.QDialog):
         # Clear filename filters
         self.logic.clear_filters()
 
-        # Create an empty CSV in the correct folder
-        cohort_dir = self.logic.data_path / "cohort_files"
-        cohort_dir.mkdir(parents=True, exist_ok=True)
-
-        index = self.logic._determine_next_cohort_filename(cohort_dir)
-        cohort_name = f"cohort{index}.csv"
-        self.logic.selected_cohort_path = cohort_dir / cohort_name
-
-        self.logic._write_to_csv(cohort_dir, self.logic.get_headers())
+        # TODO: have this check the current data convention and delegate from there
+        from CARTLib.utils.bids import generate_blank_cohort
+        cohort_path = generate_blank_cohort(self.logic.data_path)
+        self.logic.selected_cohort_path = cohort_path
 
         # Update UI and hide warning
         self.populate_table()
@@ -324,9 +319,6 @@ class CohortGeneratorWindow(qt.QDialog):
 
         # Update cohort filepath in the parent widget
         self.parent_widget.cohortFileSelectionButton.setCurrentPath(self.logic.selected_cohort_path)
-
-        # Try to find the matching convention for this new path
-        self.logic.current_data_convention = check_conventions(self.logic.selected_cohort_path)
 
     def on_toggle_override_selected_cohort_file(self):
         is_checked = self.override_selected_cohort_file_toggle_button.isChecked()
@@ -504,6 +496,7 @@ class CohortGeneratorWindow(qt.QDialog):
 
     def on_cancel(self):
         self.close()
+
 
 # Config Manager
 class CohortGeneratorConfig(DictBackedConfig):
@@ -780,7 +773,7 @@ class CohortGeneratorLogic:
         self.disabled_columns.clear()
 
         # Save to CSV
-        dir_path = Path(self.data_path / "cohort_files")
+        dir_path = Path(self.data_path / "code")
         dir_path.mkdir(parents=True, exist_ok=True)
         #cohort_path = Path(dir_path / "cohort.csv")
 
@@ -793,12 +786,13 @@ class CohortGeneratorLogic:
         """
         override: bool = self.override_selected_cohort_file
 
-        cohort_path = self.selected_cohort_path
-
+        # Select the cohort path based on whether we want to override or not
         if not override:
-            index = self._determine_next_cohort_filename(dir_path)
-            cohort_name = "cohort" + str(index) + ".csv"
-            cohort_path = Path(dir_path / cohort_name)
+            # TODO: Replace with convention-specific query
+            from CARTLib.utils.bids import find_unused_cohort_path
+            cohort_path = find_unused_cohort_path(dir_path)
+        else:
+            cohort_path = self.selected_cohort_path
 
         # Update the selected cohort path
         self.selected_cohort_path = cohort_path
