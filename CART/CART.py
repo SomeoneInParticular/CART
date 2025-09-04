@@ -428,7 +428,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         configButton.toolTip = _("Change how CART is configured to iterate through your data.")
 
         # Clicking the config button shows the Config prompt
-        configButton.clicked.connect(self.logic.config.show_gui)
+        # KO: The lambda is needed, as it forced the "config" state to be re-evaluated
+        #  (if it wasn't, this call would ignore changes to the selected profile)
+        configButton.clicked.connect(lambda: self.logic.config.show_gui())
 
         # A button which confirms the current settings and attempts to start
         #  task iteration!
@@ -1201,14 +1203,15 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         if not profile_label:
             raise ValueError("Cannot load a blank profile!")
 
-        # Try to load that user's configuration
-        self.config = GLOBAL_CONFIG.get_profile_config(profile_label)
+        # Try to fetch that profile's configuration
+        new_config = GLOBAL_CONFIG.get_profile_config(profile_label)
 
         # If there is not corresponding config, terminate here
-        if self.config is None:
+        if new_config is None:
             raise ValueError(f"No profile exists for label '{profile_label}'")
 
         # Try to synchronize the config's state with our own
+        self.config = new_config
         self._data_path = self.config.last_used_data_path
         self._cohort_path = self.config.last_used_cohort_file
         self._task_id = self.config.last_used_task
