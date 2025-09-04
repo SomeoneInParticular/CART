@@ -772,6 +772,9 @@ class ProfileConfigDialog(ConfigDialog[ProfileConfig]):
             "If checked, the Task will try to save when you change cases automatically."
         )
 
+        # Synchronize to our bound config
+        iterSaveCheck.setChecked(self.bound_config.save_on_iter)
+
         # Update the config's state when it changes
         def setSaveOnIter(new_state: bool):
             self.bound_config.save_on_iter = bool(new_state)
@@ -790,6 +793,9 @@ class ProfileConfigDialog(ConfigDialog[ProfileConfig]):
 
         # Make the combo-box editable
         roleComboBox.setEditable(True)
+
+        # Set the selected role to match the current profile's role
+        roleComboBox.setCurrentText(self.bound_config.role)
 
         # When a new role is selected, update our backing dict
         def changeRole(new_role: str):
