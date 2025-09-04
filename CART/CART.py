@@ -1136,9 +1136,6 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         """Called when the logic class is instantiated. Can be used for initializing member variables."""
         ScriptedLoadableModuleLogic.__init__(self)
 
-        # Current profile label
-        self._active_profile: str = None
-
         # Current configuration
         self.config: ProfileConfig = None
 
@@ -1174,7 +1171,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
     ## Profile Management ##
     @property
     def active_profile_label(self) -> str:
-        return self._active_profile
+        return self.config.label
 
     @active_profile_label.setter
     def active_profile_label(self, new_name: str):
@@ -1187,11 +1184,8 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         if not stripped_name in GLOBAL_CONFIG.profiles.keys():
             raise ValueError(f"Cannot select profile '{stripped_name}', as it does not exist!")
 
-        # Update the current profile to this new one
-        self._active_profile = stripped_name
-
         # Sync ourselves with this new profile
-        self._load_profile_state(self._active_profile)
+        self._load_profile_state(stripped_name)
 
         # Clear any active task, as its no longer relevant
         self.clear_task()
@@ -1215,7 +1209,6 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             raise ValueError(f"No profile exists for label '{profile_label}'")
 
         # Try to synchronize the config's state with our own
-        self._active_profile = profile_label
         self._data_path = self.config.last_used_data_path
         self._cohort_path = self.config.last_used_cohort_file
         self._task_id = self.config.last_used_task
