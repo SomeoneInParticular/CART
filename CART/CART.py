@@ -16,7 +16,7 @@ from CARTLib.core.DataManager import DataManager
 from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.CohortGenerator import CohortGeneratorWindow
-from CARTLib.utils.config import GLOBAL_CONFIG, UserConfig
+from CARTLib.utils.config import GLOBAL_CONFIG, ProfileConfig
 
 from CARTLib.examples.SegmentationEvaluation.SegmentationEvaluationTask import (
     SegmentationEvaluationTask,
@@ -142,8 +142,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         mainGUI.text = "CART " + _("Setup")
         mainLayout = qt.QFormLayout(mainGUI)
 
-        # User selection/registration
-        self.buildUserUI(mainLayout)
+        # Profile selection/registration
+        self.buildProfileUI(mainLayout)
 
         # Task UI
         self.buildTaskUI(mainLayout)
@@ -214,7 +214,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         logic instance to avoid feedback loops.
         """
         affected_widgets = [
-            self.userSelectButton,
+            self.profileSelectButton,
             self.cohortFileSelectionButton,
             self.dataPathSelectionWidget,
             self.taskOptions
@@ -231,17 +231,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def sync_with_logic(self):
         # Block our widgets from emitting signals while we run
         with self.block_signals():
-            # Update the user selection widget with the contents of the logic instance
-            users = self.logic.get_available_usernames()
-            self.userSelectButton.clear()
-            self.userSelectButton.addItems(users)
+            # Update the profile selection widget with the contents of the logic instance
+            profile_labels = self.logic.get_profile_labels()
+            self.profileSelectButton.clear()
+            self.profileSelectButton.addItems(profile_labels)
 
-            # Select the user currently selected by the logic
+            # Select the profile currently selected by the logic
             try:
-                user_idx = users.index(self.logic.active_username)
-                self.userSelectButton.currentIndex = user_idx
+                profile_idx = profile_labels.index(self.logic.active_profile_label)
+                self.profileSelectButton.currentIndex = profile_idx
             except ValueError:
-                # Value error indicates the user was not in the list, which is fine
+                # Value error indicates the profile was not in the list, which is fine
                 pass
 
             # Pull the currently selected cohort file next
@@ -287,55 +287,55 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.taskGUI.setEnabled(True)
 
     ## GUI builders ##
-    def buildUserUI(self, mainLayout: qt.QFormLayout):
+    def buildProfileUI(self, mainLayout: qt.QFormLayout):
         """
-        Builds the GUI for the user management section of the Widget
+        Builds the GUI for the profile management section of the Widget
         :return:
         """
         # HBox to ensure everything is draw horizontally
-        userHBox = qt.QHBoxLayout()
+        profileHBox = qt.QHBoxLayout()
 
         # Insert this layout in the "main" GUI
-        mainLayout.addRow(_("User:"), userHBox)
+        mainLayout.addRow(_("Profile:"), profileHBox)
 
-        # Prior users list
-        userSelectButton = qt.QComboBox()
-        userSelectButton.placeholderText = _("[Not Selected]")
+        # Existing profiles list
+        profileSelectButton = qt.QComboBox()
+        profileSelectButton.placeholderText = _("[Not Selected]")
 
-        # Set the name of the button to the "UserSelectionButton"
-        userSelectButton.toolTip = _("Select a previous user.")
+        # Provide an informative tooltip
+        profileSelectButton.toolTip = _("Select an existing profile.")
 
         # When the user selects an existing entry, update the program to match
-        userSelectButton.activated.connect(self.userSelected)
+        profileSelectButton.activated.connect(self.profileSelected)
 
         # Add it to the HBox
-        userHBox.addWidget(userSelectButton)
+        profileHBox.addWidget(profileSelectButton)
 
         # Make the spacing between widgets (the button and dropdown) 0
-        userHBox.spacing = 0
+        profileHBox.spacing = 0
 
-        # New user button
+        # New profile button
         # TODO: Make this a QToolButton instead
-        newUserButton = qt.QPushButton("+")
+        newProfileButton = qt.QPushButton("+")
 
         # When the button is pressed, prompt them to fill out a form
-        newUserButton.clicked.connect(self.promptNewUser)
+        newProfileButton.clicked.connect(self.promptNewProfile)
 
         # Force its size to not change dynamically
-        newUserButton.setSizePolicy(qt.QSizePolicy.Fixed, qt.QSizePolicy.Fixed)
+        newProfileButton.setSizePolicy(qt.QSizePolicy.Fixed, qt.QSizePolicy.Fixed)
 
         # Force it to be square
         # KO: We can't just use "resize" here, because either Slicer or QT
         #  overrides it later; really appreciate 2 hours of debugging to figure
         #  that out!
-        newUserButton.setMaximumWidth(CARTWidget.MICRO_BUTTON_WIDTH)
-        newUserButton.setMaximumHeight(CARTWidget.MICRO_BUTTON_HEIGHT)
+        newProfileButton.setMaximumWidth(CARTWidget.MICRO_BUTTON_WIDTH)
+        newProfileButton.setMaximumHeight(CARTWidget.MICRO_BUTTON_HEIGHT)
 
         # Add it to the layout!
-        userHBox.addWidget(newUserButton)
+        profileHBox.addWidget(newProfileButton)
 
-        # Make the user selection button accessible
-        self.userSelectButton = userSelectButton
+        # Make the profile selection button accessible
+        self.profileSelectButton = profileSelectButton
 
     def buildBasePathUI(self, mainLayout: qt.QFormLayout):
         """
@@ -389,7 +389,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.cohortFileSelectionButton = cohortFileSelectionButton
 
     def buildTaskUI(self, mainLayout: qt.QFormLayout):
-        # Prior users list
+        # Task selection list
         taskOptions = qt.QComboBox()
         taskOptions.placeholderText = _("[Not Selected]")
 
@@ -524,31 +524,31 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     ## Connected Functions ##
 
     ### Setup Widgets ###
-    def promptNewUser(self):
+    def promptNewProfile(self):
         """
-        Prompt the user to fill out details for a new user profile.
+        Prompt the user to fill out details for a new profile.
 
         If successful, also updates the logic to match
         """
         try:
-            # Get the username for the new user profile; None if no
-            # user was created.
-            new_username = GLOBAL_CONFIG.promptNewUser(
+            # Get the label for the new profile; None if no
+            # profile was created.
+            new_label = GLOBAL_CONFIG.promptNewProfile(
                 self.logic.config
             )
-            # If a valid username was returned, update our logic to match
-            if new_username:
-                self.logic.active_username = new_username
+            # If a valid label was returned, update our logic to match
+            if new_label:
+                self.logic.active_profile_label = new_label
                 self.sync_with_logic()
                 # Save the config to entrench this new state
                 GLOBAL_CONFIG.save()
         except Exception as exc:
             self.pythonExceptionPrompt(exc)
 
-    def userSelected(self):
-        # Update the logic with this newly selected user
-        new_username = self.userSelectButton.currentText
-        self.logic.active_username = new_username
+    def profileSelected(self):
+        # Update the logic with this newly selected profile
+        new_label = self.profileSelectButton.currentText
+        self.logic.active_profile_label = new_label
 
         # Rebuild the GUI to match
         self.sync_with_logic()
@@ -556,7 +556,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Update the button states to match our current state
         self.updateButtons()
 
-    def _refreshUserList(self):
+    def _refreshProfileList(self):
         """
         Rebuild the list in the GUI from scratch, ensuring everything is
         maintained in order.
@@ -566,18 +566,18 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
          last. Therefore, this song and dance is needed
         """
         # Clear all entries
-        self.userSelectButton.clear()
+        self.profileSelectButton.clear()
 
         # Rebuild its contents from scratch
-        self.userSelectButton.addItems(self.logic.get_available_usernames())
+        self.profileSelectButton.addItems(self.logic.get_profile_labels())
 
         # Select the first (most recent) entry in the list
-        self.userSelectButton.currentIndex = 0
+        self.profileSelectButton.currentIndex = 0
 
     def onDataPathChanged(self):
         """
         Handles changes to the base path selection.
-        Falls back the previous base path if the user specified an empty space.
+        Falls back the previous base path if the user provided an empty space.
         """
         # Get the current path from the GUI
         current_path = self.dataPathSelectionWidget.currentPath
@@ -713,7 +713,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         cohortGeneratorWindow = CohortGeneratorWindow(
             self,
             data_path=self.logic.data_path,
-            user_config=self.logic.config,
+            profile=self.logic.config,
             cohort_data=case_data,
             cohort_path=self.logic.cohort_path
         )
@@ -1039,7 +1039,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def pythonExceptionPrompt(self, exc: Exception):
         """
-
         Prompts the user with the contents of an exception. Also logs the
          stack-trace to console for debugging purposes
 
@@ -1137,11 +1136,11 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         """Called when the logic class is instantiated. Can be used for initializing member variables."""
         ScriptedLoadableModuleLogic.__init__(self)
 
-        # Current username
-        self._active_username: str = None
+        # Current profile label
+        self._active_profile: str = None
 
         # Current configuration
-        self.config: UserConfig = None
+        self.config: ProfileConfig = None
 
         # Path to the cohort file currently in use
         self._cohort_path: Path = None
@@ -1170,75 +1169,75 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.data_unit_factory: Optional[DataUnitFactory] = None
 
         # Load our last state from the config file
-        self._load_user_state(GLOBAL_CONFIG.last_user)
+        self._load_profile_state(GLOBAL_CONFIG.last_profile)
 
-    ## User Management ##
+    ## Profile Management ##
     @property
-    def active_username(self) -> str:
-        return self._active_username
+    def active_profile_label(self) -> str:
+        return self._active_profile
 
-    @active_username.setter
-    def active_username(self, new_name: str):
-        # Validate the specified user is valid first
+    @active_profile_label.setter
+    def active_profile_label(self, new_name: str):
+        # Validate the specified profile label is valid first
         stripped_name = new_name.strip()
 
         if not stripped_name:
-            raise ValueError("Cannot set the active user to blank!")
+            raise ValueError("Cannot set the active profile label to blank!")
 
         if not stripped_name in GLOBAL_CONFIG.profiles.keys():
-            raise ValueError(f"Cannot select user '{stripped_name}'; they don't have a profile!")
+            raise ValueError(f"Cannot select profile '{stripped_name}', as it does not exist!")
 
-        # Set the user's profile as our own
-        self._active_username = stripped_name
+        # Update the current profile to this new one
+        self._active_profile = stripped_name
 
-        # Sync ourselves with this new user
-        self._load_user_state(self._active_username)
+        # Sync ourselves with this new profile
+        self._load_profile_state(self._active_profile)
 
         # Clear any active task, as its no longer relevant
         self.clear_task()
 
-        # Update the config to designate that this user is now the most recent
-        GLOBAL_CONFIG.last_user = stripped_name
+        # Update the config to designate that this profile is now the most recent
+        GLOBAL_CONFIG.last_profile = stripped_name
 
-    def _load_user_state(self, username: str):
+    def _load_profile_state(self, profile_label: str):
         """
         Attempt to load our last state from the configuration file
         """
-        # If a previous user doesn't exist, leave as-is
-        if not username:
-            raise ValueError("Cannot load a blank user!")
+        # If a previous profile doesn't exist, leave as-is
+        if not profile_label:
+            raise ValueError("Cannot load a blank profile!")
 
         # Try to load that user's configuration
-        self.config = GLOBAL_CONFIG.get_user_config(username)
+        self.config = GLOBAL_CONFIG.get_profile_config(profile_label)
 
         # If there is not corresponding config, terminate here
         if self.config is None:
-            raise ValueError(f"No profile exists for username '{username}'")
+            raise ValueError(f"No profile exists for label '{profile_label}'")
 
         # Try to synchronize the config's state with our own
-        self._active_username = username
+        self._active_profile = profile_label
         self._data_path = self.config.last_used_data_path
         self._cohort_path = self.config.last_used_cohort_file
         self._task_id = self.config.last_used_task
         self.select_default_data_factory()
 
-    def get_available_usernames(self) -> list[str]:
+    def get_profile_labels(self) -> list[str]:
         # Simple wrapper for our config
         return [str(x) for x in GLOBAL_CONFIG.profiles.keys()]
 
-    def new_user_profile(self, username: str) -> UserConfig:
+    def new_profile(self, label: str) -> ProfileConfig:
         """
-        Attempts to create a new user w/ the provided username,
-        using the previously active user's profile as reference.
+        Attempts to create a new profile w/ the provided label,
+        using the previously active profile as reference.
 
         We also immediately change to this new profile to give the
         user some feedback
         """
         # We always copy from the current profile by default
-        new_profile = GLOBAL_CONFIG.new_user_profile(
-            username, reference_profile=self.config
+        new_profile = GLOBAL_CONFIG.new_profile(
+            label, reference_profile=self.config
         )
-        self._load_user_state(username)
+        self._load_profile_state(label)
         return new_profile
 
     ## Cohort File Management ##
@@ -1391,9 +1390,9 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         Check if we're ready to run a task!
         :return: True if so, False otherwise.
         """
-        # We can't proceed if we don't have a selected user
-        if not self.active_username:
-            print("Missing a valid user!")
+        # We can't proceed if we don't have a selected profile
+        if not self.active_profile_label:
+            print("Missing a valid profile!")
             return False
         # We can't proceed if a data path has not been specified
         elif not self.data_path:
@@ -1526,7 +1525,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Pass it to the current task, so it can update anything it needs to
         self._update_task_with_new_case(current_unit)
 
-        # Return it for further user
+        # Return it for further use
         return current_unit
 
     def next_case(self, skip_complete: bool = False) -> Optional[DataUnitBase]:

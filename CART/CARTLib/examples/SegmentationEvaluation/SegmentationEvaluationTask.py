@@ -241,8 +241,8 @@ class SegmentationEvaluationGUI:
 
 
 class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
-    def __init__(self, user: str):
-        super().__init__(user)
+    def __init__(self, profile: str):
+        super().__init__(profile)
         # Variable for tracking the active GUI instance
         self.gui: Optional[SegmentationEvaluationGUI] = None
 
@@ -355,7 +355,7 @@ class SegmentationEvaluationTask(TaskBaseClass[SegmentationEvaluationDataUnit]):
         print(f"Output path set to: {self.output_dir}")
 
         # Create a new output manager with this directory
-        self.output_manager = _OutputManager(self.output_dir, self.username)
+        self.output_manager = _OutputManager(self.output_dir, self.profile_label)
 
         return None
 

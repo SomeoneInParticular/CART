@@ -3,7 +3,7 @@ import csv
 from pathlib import Path
 from typing import Optional
 
-from CARTLib.utils.config import DictBackedConfig, UserConfig
+from CARTLib.utils.config import DictBackedConfig, ProfileConfig
 from CARTLib.utils.data_checker import fetch_resources, check_conventions
 
 
@@ -17,7 +17,7 @@ class CohortGeneratorWindow(qt.QDialog):
             self,
             parent,
             data_path: Path,
-            user_config: UserConfig,
+            profile: ProfileConfig,
             cohort_data=None,
             cohort_path=None
     ):
@@ -26,7 +26,7 @@ class CohortGeneratorWindow(qt.QDialog):
         # Create logic class
         self.logic = CohortGeneratorLogic(
             data_path=data_path,
-            user_config=user_config,
+            profile=profile,
             cohort_data=cohort_data,
             cohort_path=cohort_path
         )
@@ -561,12 +561,12 @@ class CohortGeneratorLogic:
     def __init__(
             self,
             data_path,
-            user_config: UserConfig,
+            profile: ProfileConfig,
             cohort_data=None,
             cohort_path=None
     ):
         self.data_path = Path(data_path)
-        self.config = CohortGeneratorConfig(user_config)
+        self.config = CohortGeneratorConfig(profile)
         self.all_files_by_case: dict[str, list[str]] = {}
         self.cohort_data = cohort_data if cohort_data is not None else []
         self.current_data_convention = check_conventions(data_path)
