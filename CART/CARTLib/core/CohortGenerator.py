@@ -36,9 +36,6 @@ class CohortGeneratorWindow(qt.QDialog):
             self.windowFlags() | qt.Qt.WindowMaximizeButtonHint | qt.Qt.WindowMinimizeButtonHint | qt.Qt.Window
         )
 
-        # Make dialog/window non-modal, to allow interaction with main window
-        self.setModal(False)
-
         # Create reference to parent widget
         self.parent_widget = parent
 
