@@ -238,8 +238,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             # Select the profile currently selected by the logic
             try:
-                profile_idx = profile_labels.index(self.logic.active_profile_label)
-                self.profileSelectButton.currentIndex = profile_idx
+                self.profileSelectButton.currentText = self.logic.active_profile_label
             except ValueError:
                 # Value error indicates the profile was not in the list, which is fine
                 pass
@@ -257,7 +256,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 self.dataPathSelectionWidget.currentPath = str(self.logic.data_path)
 
             # Finally, attempt to update our task from the config
-            self.taskOptions.currentText = self.logic.task_id
+            if self.logic.task_id:
+                self.taskOptions.currentText = self.logic.task_id
+            else:
+                # Setting the text to "" fails for ComboBoxes which aren't editable
+                self.taskOptions.setCurrentIndex(-1)
 
             # Update our button state to match the new setup
             self.updateButtons()
@@ -554,6 +557,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Rebuild the GUI to match
         self.sync_with_logic()
+        print(self.logic.config.backing_dict)
 
         # Update the button states to match our current state
         self.updateButtons()
