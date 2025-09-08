@@ -35,7 +35,6 @@ def cart_task(label: str):
 
 def initialize_tasks():
     # Import all example tasks directly
-    from CARTLib.examples.SegmentationEvaluation.SegmentationEvaluationTask import SegmentationEvaluationTask
     from CARTLib.examples.MultiContrastSegmentation import MultiContrastSegmentationEvaluationTask
     from CARTLib.examples.RegistrationReview import RegistrationReviewTask
 
