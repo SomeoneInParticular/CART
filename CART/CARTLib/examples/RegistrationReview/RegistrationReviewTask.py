@@ -7,6 +7,7 @@ import ctk
 import qt
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.utils.layout import Orientation
+from CARTLib.utils.task import cart_task
 from slicer.i18n import tr as _
 from .RegistrationReviewDataUnit import RegistrationReviewDataUnit
 
@@ -425,6 +426,7 @@ class RegistrationReviewGUI:
                 break
 
 
+@cart_task("Registration Review")
 class RegistrationReviewTask(TaskBaseClass[RegistrationReviewDataUnit]):
     """
     Task for reviewing registration results.
