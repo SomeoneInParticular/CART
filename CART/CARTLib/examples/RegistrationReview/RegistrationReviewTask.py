@@ -5,11 +5,13 @@ from typing import Optional
 
 import ctk
 import qt
+from slicer.i18n import tr as _
+
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.utils.layout import Orientation
 from CARTLib.utils.task import cart_task
-from slicer.i18n import tr as _
-from .RegistrationReviewDataUnit import RegistrationReviewDataUnit
+
+from RegistrationReviewDataUnit import RegistrationReviewDataUnit
 
 VERSION = 0.01
 
