@@ -70,7 +70,13 @@ class MultiContrastSegmentationEvaluationDataUnit(CARTStandardUnit):
         if self.primary_segmentation_key in self.segmentation_keys:
             self.segmentation_keys.remove(self.primary_segmentation_key)
         self.segmentation_keys = [self.primary_segmentation_key, *self.segmentation_keys]
-        self.segmentation_nodes = {k: self.segmentation_nodes[k] for k in self.segmentation_keys}
+
+        # Segmentation nodes only contains loaded nodes;
+        # we need to skip over the keys w/o a corresponding node
+        self.segmentation_nodes = {
+            k: self.segmentation_nodes[k] for k in self.segmentation_keys
+            if k in self.segmentation_nodes.keys()
+        }
 
         # Return the node
         return primary_node
