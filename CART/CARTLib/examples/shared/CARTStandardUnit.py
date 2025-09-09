@@ -53,8 +53,7 @@ class CARTStandardUnit(DataUnitBase):
         # Segmentation-related parameters
         self.segmentation_keys: list[str]
         self.segmentation_paths: dict[str, Path]
-        self.segmentation_keys, self.segmentation_paths, _ = (
-            parse_segmentations(case_data, data_path))
+        self.segmentation_keys, self.segmentation_paths = parse_segmentations(case_data, data_path)
         self.segmentation_nodes: dict[str, slicer.vtkMRMLSegmentationNode] = dict()
 
         # Markup-related parameters

@@ -239,6 +239,7 @@ def create_empty_segmentation_node(
     return seg_node
 
 
+## COHORT STRATIFICATION ##
 def parse_volumes(
     case_data: dict[str, Any], data_path: Path
 ) -> tuple[list[str], dict[str, Path], str]:
@@ -282,24 +283,18 @@ def parse_volumes(
     return volume_keys, volume_paths, primary_volume_key
 
 
+# TODO: Remove the "default fallback"
 def parse_segmentations(
-    case_data, data_path, DEFAULT_SEGMENTATION_KEY="default_segmentation"
-) -> tuple[list[str], dict[str, Path], str]:
+    case_data, data_path
+) -> tuple[list[str], dict[str, Path]]:
     # Parse our segmentation keys
     segmentation_keys = extract_case_keys_by_prefix(
         case_data, "Segmentation", force_present=False
     )
 
-    # If we don't have segmentations, assume the user wants to create one instead
+    # If there were none, end here
     if not segmentation_keys:
-        segmentation_keys = [DEFAULT_SEGMENTATION_KEY]
-    primary_segmentation_key = next(
-        (k for k in segmentation_keys if "primary" in k.lower()),
-        segmentation_keys[0],
-    )
-    # Move primaries to the front of the list so they are auto-selected by the GUI
-    segmentation_keys.remove(primary_segmentation_key)
-    segmentation_keys = [primary_segmentation_key, *segmentation_keys]
+        return [], {}
 
     # Initialize our segmentation paths
     segmentation_paths: dict[str, Path] = {
@@ -309,7 +304,7 @@ def parse_segmentations(
     valid_segmentation_paths = {
         k: v for k, v in segmentation_paths.items() if v is not None
     }
-    return segmentation_keys, valid_segmentation_paths, primary_segmentation_key
+    return segmentation_keys, valid_segmentation_paths
 
 
 def parse_markups(case_data, data_path) -> tuple[list[str], dict[str, Path]]:
