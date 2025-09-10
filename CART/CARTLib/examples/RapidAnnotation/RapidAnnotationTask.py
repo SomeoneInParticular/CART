@@ -10,9 +10,17 @@ from CARTLib.utils.task import cart_task
 
 
 class RapidAnnotationGUI:
+
+    COMPLETED_BRUSH = qt.QBrush(
+        qt.QColor(0, 255, 0, 100)
+    )
+
     def __init__(self, bound_task: "RapidAnnotationTask"):
         self.bound_task = bound_task
         self.data_unit: Optional[RapidAnnotationUnit] = None
+
+        # Widget displaying the data unit
+        self.annotationList = None
 
     def setup(self) -> qt.QFormLayout:
         # Initialize a layout we'll insert everything into
@@ -22,18 +30,49 @@ class RapidAnnotationGUI:
         annotationList = qt.QListWidget()
         annotationListLabel = qt.QLabel("Registered Annotations")
 
+        # Insert all attributes tracked by the logic into the annotation list
+        annotationList.addItems(self.bound_task.tracked_annotations)
+
         # Add it to the layout and track it for later
         formLayout.addRow(annotationListLabel)
         formLayout.addRow(annotationList)
-
-        # Insert all attributes tracked by the logic to the list
-        annotationList.addItems(self.bound_task.tracked_annotations)
+        self.annotationList = annotationList
 
         return formLayout
 
     def update(self, data_unit: RapidAnnotationUnit):
+        # Track the new data unit
         self.data_unit = data_unit
+
+        # Update the layout to use its contents
         self.data_unit.layout_handler.apply_layout()
+
+        # Synchronize with our logic's state
+        self._syncAnnotationList()
+
+        # Start node placement
+        # TODO: make this automated start configurable
+        self.startPlacements()
+
+    def _syncAnnotationList(self):
+        for i in range(self.annotationList.count):
+            listItem = self.annotationList.item(i)
+            label = listItem.text()
+            if self.bound_task.annotation_complete_map.get(label, False):
+                listItem.setBackground(self.COMPLETED_BRUSH)
+
+    def startPlacements(self):
+        # Ensure the data unit's annotation node the selected one
+        selectionNode = slicer.app.applicationLogic().GetSelectionNode()
+        selectionNode.SetActivePlaceNodeID(self.data_unit.annotation_node.GetID())
+
+        # Iterate through our annotation list and start placing nodes in order
+        for i in range(self.annotationList.count):
+            listItem = self.annotationList.item(i)
+            label = listItem.text()
+            if not self.bound_task.annotation_complete_map.get(label, False):
+                # TODO
+                print(f"Label '{label}' still needs to be placed!")
 
     ## GUI SYNCHRONIZATION ##
     def enter(self) -> None:
@@ -84,8 +123,6 @@ class RapidAnnotationSetupPrompt(qt.QDialog):
         # Add it to the layout
         layout.addRow(confirmButton)
 
-
-
     def add_new_annotation(self):
         # Add a blank item
         newItem = qt.QListWidgetItem("")
@@ -108,16 +145,22 @@ class RapidAnnotationSetupPrompt(qt.QDialog):
             annotations.append(item.text())
         return annotations
 
+
 @cart_task("Rapid Annotation")
 class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
     def __init__(self, profile: ProfileConfig):
         super().__init__(profile)
 
-        # Local attributes
+        # GUI and data
         self.gui: Optional[RapidAnnotationGUI] = None
-        self.tracked_annotations: list[str] = []
-        self.output_dir: Optional[Path] = None
         self.data_unit: Optional[RapidAnnotationUnit] = None
+
+        # Annotation tracking
+        self.tracked_annotations: list[str] = []
+        self.annotation_complete_map: dict[str, bool] = {}
+
+        # Output management
+        self.output_dir: Optional[Path] = None
         self.csv_log_path: Optional[Path] = None
 
     def setup(self, container: qt.QWidget) -> None:
@@ -157,6 +200,15 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
             background=self.data_unit.primary_volume_node,
             fit=True
         )
+
+        # Re-build our set of to-be-placed of fiducials
+        self.annotation_complete_map.clear()
+        self.annotation_complete_map = {k: False for k in self.tracked_annotations}
+        # Mark those the data unit already has as already being annotated
+        for i in range(data_unit.annotation_node.GetNumberOfControlPoints()):
+            fiducial_label = data_unit.annotation_node.GetNthFiducialLabel(i)
+            if fiducial_label in self.annotation_complete_map.keys():
+                self.annotation_complete_map[fiducial_label] = True
 
         # If we have a GUI, update it as well
         if self.gui:
