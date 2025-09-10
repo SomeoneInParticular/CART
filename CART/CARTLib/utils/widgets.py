@@ -26,7 +26,7 @@ class _NodeComboBoxProxy(qt.QComboBox):
         # Reference to its "bound" widget which we will be instructing instead.
         self._bound_widget = bound_widget
 
-        # Isolate the bound widget's ComboBox, as it
+        # Isolate the bound widget's ComboBox, as we will update it by-proxy
         self._combo_box = self._findComboBox()
 
         # Map from our indices to those used by the bound widget's
@@ -56,7 +56,6 @@ class _NodeComboBoxProxy(qt.QComboBox):
         #  valid method in the Slicer docs, it doesn't actually work! Ref:
         #  https://apidocs.slicer.org/main/classqMRMLNodeComboBox.html#a2313ce3b060a2a2068a117f3ea232a56
         self.idx_map = {}
-        i = 0
         for i in range(self._bound_widget.nodeCount()):
             node = self._bound_widget.nodeFromIndex(i)
             if self._bound_widget.showHidden or not node.GetHideFromEditors():
@@ -232,3 +231,11 @@ class CARTSegmentationEditorWidget(
 
     def refresh(self):
         self.proxySegNodeComboBox.refresh()
+
+    def setSegmentationNode(self, segment_node):
+        # KO: We need to delegate to our proxy widget here,
+        # otherwise it and the "real" Slicer state will no longer
+        # by in sync
+        self.proxySegNodeComboBox.setCurrentText(
+            segment_node.GetName()
+        )
