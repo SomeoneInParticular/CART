@@ -277,7 +277,6 @@ def parse_volumes(
     )
 
     # Move the primary key to the front of our list
-    print(primary_volume_key)
     volume_keys.remove(primary_volume_key)
     volume_keys = [primary_volume_key, *volume_keys]
     return volume_keys, volume_paths, primary_volume_key
