@@ -34,7 +34,6 @@ class CARTStandardUnit(DataUnitBase):
         case_data: dict[str, str],
         data_path: Path,
         scene: slicer.vtkMRMLScene = slicer.mrmlScene,
-
     ) -> None:
         super().__init__(case_data, data_path, scene)
 
