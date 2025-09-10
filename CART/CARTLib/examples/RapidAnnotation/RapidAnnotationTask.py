@@ -37,7 +37,6 @@ class RapidAnnotationGUI:
         pass
 
 
-
 @cart_task("Rapid Annotation")
 class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
     def __init__(self, profile: ProfileConfig):
@@ -83,6 +82,14 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
     def save(self) -> Optional[str]:
         # TODO
         pass
+
+    def enter(self):
+        if self.gui:
+            self.gui.enter()
+
+    def exit(self):
+        if self.gui:
+            self.gui.exit()
 
     @classmethod
     def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
