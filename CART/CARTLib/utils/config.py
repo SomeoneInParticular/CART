@@ -374,6 +374,7 @@ class ProfileConfig(DictBackedConfig):
     @last_used_task.setter
     def last_used_task(self, new_task: str):
         self._backing_dict[self.LAST_USED_TASK_KEY] = new_task
+        self.has_changed = True
 
     ## Profile Role ##
     ROLE_KEY = "role"

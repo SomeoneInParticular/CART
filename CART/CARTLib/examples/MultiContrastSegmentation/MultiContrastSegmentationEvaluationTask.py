@@ -382,16 +382,17 @@ class MultiContrastSegmentationEvaluationGUI:
         Populate the volume combo, select primary, and fire off initial layers.
         """
         self.data_unit = data_unit
-        # sync segmentation editor
-        self.segmentEditorWidget.setSegmentationNode(
-            self.data_unit.primary_segmentation_node
-        )
 
         # Apply the data unit's layout to our viewer
         self.data_unit.layout_handler.apply_layout()
 
         # Refresh the SegmentEditor Widget immediately
         self.segmentEditorWidget.refresh()
+
+        # Force it to select the primary segmentation node
+        self.segmentEditorWidget.setSegmentationNode(
+            self.data_unit.primary_segmentation_node
+        )
 
     def _save(self) -> None:
         err = self.bound_task.save()
