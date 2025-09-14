@@ -1,12 +1,14 @@
 from pathlib import Path
 from typing import Optional
 
+import ctk
 import qt
 import slicer
-from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory, D
+from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.examples.RapidAnnotation.RapidAnnotationUnit import RapidAnnotationUnit
 from CARTLib.utils.config import ProfileConfig
 from CARTLib.utils.task import cart_task
+from slicer.i18n import tr as _
 
 
 class RapidAnnotationGUI:
@@ -164,7 +166,6 @@ class RapidAnnotationSetupPrompt(qt.QDialog):
 
         self._build_ui()
 
-    # noinspection PyAttributeOutsideInit
     def _build_ui(self):
         """
         Build the GUI elements into this prompt
@@ -172,29 +173,69 @@ class RapidAnnotationSetupPrompt(qt.QDialog):
         # Create the layout to actually place everything in
         layout = qt.QFormLayout(self)
 
+        self._buildAnnotationGUI(layout)
+
+        self._buildOutputGUI(layout)
+
+        self._buildButtons(layout)
+
+    def _buildAnnotationGUI(self, layout: qt.QFormLayout):
         # Create a list widget w/ drag and drop capabilities
         annotationList = qt.QListWidget()
         annotationListLabel = qt.QLabel("Registered Annotations")
-
-        # Add it to the layout and track it for later
-        layout.addRow(annotationListLabel)
-        layout.addRow(annotationList)
-        self.annotationList = annotationList
 
         # Add a button to add items to the list
         addButton = qt.QPushButton("Add")
         addButton.clicked.connect(self.add_new_annotation)
 
-        # Add it to the layout
-        layout.addRow(addButton)
+        # Add it to the layout and track it for later
+        layout.addRow(annotationListLabel, addButton)
+        layout.addRow(annotationList)
+        self.annotationList = annotationList
 
-        # Add a confirm button
-        confirmButton = qt.QPushButton("Confirm")
-        confirmButton.clicked.connect(lambda _: self.accept())
+    def _buildOutputGUI(self, layout: qt.QFormLayout):
+        # Add a label clarifying the next widget's purpose
+        description = qt.QLabel("Output Directory:")
+        layout.addRow(description)
 
-        # Add it to the layout
-        layout.addRow(confirmButton)
+        # Ensure only directories are chosen
+        outputFileEdit = ctk.ctkPathLineEdit()
+        outputFileEdit.setToolTip(
+            _("The directory where the saved markups will be placed.")
+        )
+        outputFileEdit.filters = ctk.ctkPathLineEdit.Dirs
 
+        # Set its state to match the task's if it has one
+        if self.bound_logic._output_dir:
+            self.outputFileEdit.currentPath = str(self.bound_logic._output_dir)
+
+        # Update the layout and track it for later
+        layout.addRow(outputFileEdit)
+        self.outputFileEdit = outputFileEdit
+
+        # Add a dropdown to select the output format
+        formatLabel = qt.QLabel("Format: ")
+        formatBox = qt.QComboBox()
+
+        # TODO; fill this from an enum instead
+        formatBox.addItems(["json", "csv"])
+
+        # Update the layout and track it for later
+        layout.addRow(formatLabel, formatBox)
+        self.formatBox = formatBox
+
+    def _buildButtons(self, layout: qt.QFormLayout):
+        # Button box for confirming/rejecting the current use
+        buttonBox = qt.QDialogButtonBox()
+        buttonBox.addButton(_("Confirm"), qt.QDialogButtonBox.AcceptRole)
+        buttonBox.addButton(_("Cancel"), qt.QDialogButtonBox.RejectRole)
+        layout.addRow(buttonBox)
+
+        # Connect signals
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+
+    # Annotation management
     def add_new_annotation(self):
         # Add a blank item
         newItem = qt.QListWidgetItem("")
@@ -217,6 +258,17 @@ class RapidAnnotationSetupPrompt(qt.QDialog):
             annotations.append(item.text())
         return annotations
 
+    # Output management
+    def get_output(self):
+        new_path = self.outputFileEdit.currentPath
+        if new_path is "":
+            return None
+        new_path = Path(new_path)
+        if not new_path.exists():
+            return None
+        if not new_path.is_dir():
+            return None
+        return new_path
 
 @cart_task("Rapid Annotation")
 class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
@@ -232,7 +284,7 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
         self.annotation_complete_map: dict[str, bool] = {}
 
         # Output management
-        self.output_dir: Optional[Path] = None
+        self._output_dir: Optional[Path] = None
         self.csv_log_path: Optional[Path] = None
 
     def setup(self, container: qt.QWidget) -> None:
@@ -247,7 +299,9 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
             raise AssertionError(
                 f"Failed to set up for {self.__class__.__name__}")
 
+        # Pull the relevant information out of the setup prompt
         self.tracked_annotations = prompt.get_annotations()
+        self.output_dir = prompt.get_output()
 
         # Initialize our GUI
         self.gui = RapidAnnotationGUI(self)
@@ -262,6 +316,40 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
 
         # Enter the GUI
         self.gui.enter()
+
+    @property
+    def output_dir(self) -> Path:
+        return self._output_dir
+
+    @output_dir.setter
+    def output_dir(self, new_path: Path):
+        """
+        Made this a property to ensure that it isn't overridden by an
+        invalid directory; also notifies the user that this occurred
+        (via GUI prompt if available) so that they can respond
+        appropriately
+        """
+        # If the path exists and is valid, set it and end
+        if new_path and new_path.exists() and new_path.is_dir():
+            self._output_dir = new_path
+            return
+        # Otherwise, update the user so that they may respond appropriately
+        self.on_bad_output()
+
+    def on_bad_output(self):
+        # Determine which error message to show
+        if not self.output_dir:
+            msg = _("No valid output provided! Will not be able to save your results!")
+        else:
+            msg = _("No output provided, falling back to previous output directory.")
+        # Log it to the console for later reference
+        print(msg)
+        # If we have a GUI, prompt the user as well
+        if self.gui:
+            prompt = qt.QErrorMessage()
+            prompt.setWindowTitle("Bad Output!")
+            prompt.showMessage(msg)
+            prompt.exec()
 
     def receive(self, data_unit: RapidAnnotationUnit):
         # Track the data unit for later
