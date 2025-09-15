@@ -149,7 +149,6 @@ def save_markups_to_json(markups_node, path: Path):
     # Use Slicer's utility function to save the markups node
     assert path.name.endswith(".mrk.json"), "Path must end with .mrk.json"
     slicer.util.saveNode(markups_node, str(path))
-    slicer.mrmlScene.RemoveNode(markups_node)
 
 
 ## ORGANIZATION ##
