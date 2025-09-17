@@ -5,6 +5,7 @@ import ctk
 import qt
 import slicer
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from CARTLib.examples.RapidAnnotation.RapidAnnotationOutputManager import RapidAnnotationOutputManager
 from CARTLib.examples.RapidAnnotation.RapidAnnotationUnit import RapidAnnotationUnit
 from CARTLib.utils.config import ProfileConfig
 from CARTLib.utils.task import cart_task
@@ -285,7 +286,7 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
 
         # Output management
         self._output_dir: Optional[Path] = None
-        self.csv_log_path: Optional[Path] = None
+        self._output_manager: Optional[RapidAnnotationOutputManager] = None
 
     def setup(self, container: qt.QWidget) -> None:
         print(f"Running {self.__class__.__name__} setup!")
@@ -303,6 +304,10 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
         self.tracked_annotations = prompt.get_annotations()
         self.output_dir = prompt.get_output()
 
+        if self.output_dir == "":
+            # TODO: make this a user prompt instead
+            raise ValueError("Cannot initialize task without an output directory!")
+
         # Initialize our GUI
         self.gui = RapidAnnotationGUI(self)
         layout = self.gui.setup()
@@ -316,6 +321,9 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
 
         # Enter the GUI
         self.gui.enter()
+
+        # Build the output manager
+        self._output_manager = None
 
     @property
     def output_dir(self) -> Path:
@@ -332,9 +340,22 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
         # If the path exists and is valid, set it and end
         if new_path and new_path.exists() and new_path.is_dir():
             self._output_dir = new_path
+            self._output_manager = None
             return
         # Otherwise, update the user so that they may respond appropriately
         self.on_bad_output()
+
+    @property
+    def output_manager(self):
+        # If the output manager hasn't been generated yet or was reset,
+        # and we have an output directory, create a new one
+        if not self._output_manager:
+            self._output_manager = RapidAnnotationOutputManager(
+                self.profile,
+                self.output_dir
+            )
+
+        return self._output_manager
 
     def on_bad_output(self):
         # Determine which error message to show
@@ -375,8 +396,9 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
             self.gui.update(data_unit)
 
     def save(self) -> Optional[str]:
-        # TODO
-        pass
+        if not self.data_unit:
+            raise ValueError("Cannot save, nothing to save!")
+        self.output_manager.save_markups(self.data_unit)
 
     def enter(self):
         if self.gui:
