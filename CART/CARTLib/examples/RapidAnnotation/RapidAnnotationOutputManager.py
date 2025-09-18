@@ -121,9 +121,6 @@ class RapidAnnotationOutputManager:
 
         # Add/replace the entry in our CSV log with one representing this file
         new_entry_key = (data_unit.uid, self.profile_label)
-        print("-" * 100)
-        print(new_entry_key)
-        print("-" * 100)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.csv_log[new_entry_key] = {
             self.UID_KEY: data_unit.uid,
