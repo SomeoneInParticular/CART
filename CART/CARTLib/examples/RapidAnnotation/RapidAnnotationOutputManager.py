@@ -54,6 +54,7 @@ class RapidAnnotationOutputManager:
     ## PROPERTIES ##
     @property
     def profile_label(self) -> str:
+        # Simple alias to sidestep a common argument chain
         return self.profile.label
 
     @property
@@ -64,8 +65,7 @@ class RapidAnnotationOutputManager:
          * Ensure the folders on the filesystem are only created once,
            the first time they're needed
         """
-        # If we don't have a path, determine where it should be and
-        # create the required folders
+        # If we don't have a path yet, determine where it should be
         if self._csv_log_file is None:
             # The log is just placed within the output directory
             csv_path = self.output_dir / f"cart_markup.csv"
@@ -105,7 +105,7 @@ class RapidAnnotationOutputManager:
     def markup_output_dir(self) -> Path:
         # If we don't have an output for our markups yet, create one
         if self._markup_output_dir is None:
-            # Otherwise, determine it and create the requisite folders
+            # Determine the path and create the requisite folders
             self._markup_output_dir = self.output_dir / self.profile_label
             self._markup_output_dir.mkdir(parents=True, exist_ok=True)
         return self._markup_output_dir
