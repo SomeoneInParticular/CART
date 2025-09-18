@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Optional
 
-import ctk
 import qt
 import slicer
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
@@ -10,124 +9,9 @@ from CARTLib.utils.task import cart_task
 from slicer.i18n import tr as _
 
 from RapidAnnotationConfig import RapidAnnotationConfig
-from RapidAnnotationGUI import RapidAnnotationGUI
+from RapidAnnotationGUI import RapidAnnotationGUI, RapidAnnotationSetupPrompt
 from RapidAnnotationOutputManager import RapidAnnotationOutputManager
 from RapidAnnotationUnit import RapidAnnotationUnit
-
-
-class RapidAnnotationSetupPrompt(qt.QDialog):
-    def __init__(self, bound_logic: "RapidAnnotationTask"):
-        super().__init__()
-
-        self.setWindowTitle("Set Up Annotations")
-
-        self.bound_logic = bound_logic
-
-        self._build_ui()
-
-    def _build_ui(self):
-        """
-        Build the GUI elements into this prompt
-        """
-        # Create the layout to actually place everything in
-        layout = qt.QFormLayout(self)
-
-        self._buildAnnotationGUI(layout)
-
-        self._buildOutputGUI(layout)
-
-        self._buildButtons(layout)
-
-    def _buildAnnotationGUI(self, layout: qt.QFormLayout):
-        # Create a list widget w/ drag and drop capabilities
-        annotationList = qt.QListWidget()
-        annotationListLabel = qt.QLabel("Registered Annotations")
-
-        # Add a button to add items to the list
-        addButton = qt.QPushButton("Add")
-        addButton.clicked.connect(self.add_new_annotation)
-
-        # Add it to the layout and track it for later
-        layout.addRow(annotationListLabel, addButton)
-        layout.addRow(annotationList)
-        self.annotationList = annotationList
-
-    def _buildOutputGUI(self, layout: qt.QFormLayout):
-        # Add a label clarifying the next widget's purpose
-        description = qt.QLabel("Output Directory:")
-        layout.addRow(description)
-
-        # Ensure only directories are chosen
-        outputFileEdit = ctk.ctkPathLineEdit()
-        outputFileEdit.setToolTip(
-            _("The directory where the saved markups will be placed.")
-        )
-        outputFileEdit.filters = ctk.ctkPathLineEdit.Dirs
-
-        # Set its state to match the task's if it has one
-        if self.bound_logic._output_dir:
-            self.outputFileEdit.currentPath = str(self.bound_logic._output_dir)
-
-        # Update the layout and track it for later
-        layout.addRow(outputFileEdit)
-        self.outputFileEdit = outputFileEdit
-
-        # Add a dropdown to select the output format
-        formatLabel = qt.QLabel("Format: ")
-        formatBox = qt.QComboBox()
-
-        # TODO; fill this from an enum instead
-        formatBox.addItems(["json", "csv"])
-
-        # Update the layout and track it for later
-        layout.addRow(formatLabel, formatBox)
-        self.formatBox = formatBox
-
-    def _buildButtons(self, layout: qt.QFormLayout):
-        # Button box for confirming/rejecting the current use
-        buttonBox = qt.QDialogButtonBox()
-        buttonBox.addButton(_("Confirm"), qt.QDialogButtonBox.AcceptRole)
-        buttonBox.addButton(_("Cancel"), qt.QDialogButtonBox.RejectRole)
-        layout.addRow(buttonBox)
-
-        # Connect signals
-        buttonBox.accepted.connect(self.accept)
-        buttonBox.rejected.connect(self.reject)
-
-    # Annotation management
-    def add_new_annotation(self):
-        # Add a blank item
-        newItem = qt.QListWidgetItem("")
-        # Make it editable
-        newItem.setFlags(
-            newItem.flags() | qt.Qt.ItemIsEditable
-        )
-        # Add it to the list
-        self.annotationList.addItem(newItem)
-        # Set it as the current active item
-        self.annotationList.setCurrentItem(newItem)
-        # Immediately start editing it
-        self.annotationList.editItem(newItem)
-
-    def get_annotations(self) -> list[str]:
-        # For some reason, `items()` doesn't work
-        annotations = []
-        for i in range(self.annotationList.count):
-            item = self.annotationList.item(i)
-            annotations.append(item.text())
-        return annotations
-
-    # Output management
-    def get_output(self):
-        new_path = self.outputFileEdit.currentPath
-        if new_path is "":
-            return None
-        new_path = Path(new_path)
-        if not new_path.exists():
-            return None
-        if not new_path.is_dir():
-            return None
-        return new_path
 
 
 @cart_task("Rapid Annotation")

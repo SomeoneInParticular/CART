@@ -1,7 +1,10 @@
+from pathlib import Path
 from typing import Optional
 
+import ctk
 import qt
 import slicer
+from slicer.i18n import tr as _
 
 from RapidAnnotationUnit import RapidAnnotationUnit
 
@@ -13,6 +16,186 @@ if TYPE_CHECKING:
     from RapidAnnotationTask import RapidAnnotationTask
 
 
+## WIDGETS ##
+class MarkupListWidget(qt.QWidget):
+    def __init__(self, task: "RapidAnnotationTask"):
+        super().__init__()
+
+        # Create the layout to hold everything in
+        layout = qt.QVBoxLayout()
+        self.setLayout(layout)
+
+        self._addMarkupList(layout)
+
+        self._addButtonPanel(layout)
+
+        # Synchronize ourselves with the loaded task
+        self._loadStateFromTask(task)
+
+    def _addMarkupList(self, layout):
+        # Create a list widget
+        markupList = qt.QListWidget()
+        markupListLabel = qt.QLabel("Markup Labels")
+
+        # When the selected item changes, update our state to match
+        markupList.itemSelectionChanged.connect(
+            self._onSelectionChanged
+        )
+
+        # Track it for later and add it to the layout
+        layout.addWidget(markupListLabel)
+        layout.addWidget(markupList)
+        self.markupList = markupList
+
+    ## Signal Functions ##
+    def _addButtonPanel(self, layout):
+        # Add a button to add items to the list
+        addButton = qt.QPushButton("Add")
+        addButton.clicked.connect(self._addNewMarkup)
+
+        # Add a button to remove items from the list
+        removeButton = qt.QPushButton("Remove")
+        removeButton.clicked.connect(self.remove_selected_markups)
+
+        # Make them side-by-side and add them to the layout
+        buttonLayout = qt.QHBoxLayout()
+        buttonLayout.addWidget(addButton)
+        buttonLayout.addWidget(removeButton)
+        layout.addLayout(buttonLayout)
+
+        # Track them for later
+        self.addButton = addButton
+        self.removeButton = removeButton
+
+    def _onSelectionChanged(self):
+        # Make it so we can only remove items when there are items
+        #  selected to be removed
+        self.removeButton.setEnabled(
+            len(self.markupList.selectedItems()) > 0
+        )
+
+    def _addNewMarkup(self):
+        # TODO: make this create a prompt w/ validation instead
+        # Add a blank item
+        newItem = qt.QListWidgetItem("")
+        # Make it editable
+        newItem.setFlags(
+            newItem.flags() | qt.Qt.ItemIsEditable
+        )
+        # Add it to the list
+        self.markupList.addItem(newItem)
+        # Set it as the current active item
+        self.markupList.setCurrentItem(newItem)
+        # Immediately start editing it
+        self.markupList.editItem(newItem)
+
+    def remove_selected_markups(self):
+        for item in self.markupList.selectedItems():
+            # Why "removeItemWidget" doesn't do this, only god knows
+            self.markupList.takeItem(self.markupList.row(item))
+
+    def _loadStateFromTask(self, task: "RapidAnnotationTask"):
+        # Re-assess the markup list state based on the logic
+        self.markupList.clear()
+        self.markupList.addItems(task.tracked_annotations)
+
+        # Disable the remove button, as there is no longer any selection
+        self.removeButton.setEnabled(False)
+
+    def get_markups(self):
+        # Need to do this, as the signature for `items` is too ambiguous
+        annotations = []
+        for i in range(self.markupList.count):
+            item = self.markupList.item(i)
+            annotations.append(item.text())
+        return annotations
+
+## PROMPTS ##
+class RapidAnnotationSetupPrompt(qt.QDialog):
+    def __init__(self, bound_logic: "RapidAnnotationTask"):
+        super().__init__()
+
+        self.setWindowTitle("Set Up Annotations")
+
+        self.bound_logic = bound_logic
+
+        self._build_ui()
+
+    def _build_ui(self):
+        """
+        Build the GUI elements into this prompt
+        """
+        # Create the layout to actually place everything in
+        layout = qt.QFormLayout(self)
+
+        # Initialize a copy of the Markup list to the config
+        self.markupWidget = MarkupListWidget(self.bound_logic)
+        layout.addWidget(self.markupWidget)
+
+        self._buildOutputGUI(layout)
+
+        self._buildButtons(layout)
+
+    def _buildOutputGUI(self, layout: qt.QFormLayout):
+        # Add a label clarifying the next widget's purpose
+        description = qt.QLabel("Output Directory:")
+        layout.addRow(description)
+
+        # Ensure only directories are chosen
+        outputFileEdit = ctk.ctkPathLineEdit()
+        outputFileEdit.setToolTip(
+            _("The directory where the saved markups will be placed.")
+        )
+        outputFileEdit.filters = ctk.ctkPathLineEdit.Dirs
+
+        # Set its state to match the task's if it has one
+        if self.bound_logic._output_dir:
+            self.outputFileEdit.currentPath = str(self.bound_logic._output_dir)
+
+        # Update the layout and track it for later
+        layout.addRow(outputFileEdit)
+        self.outputFileEdit = outputFileEdit
+
+        # Add a dropdown to select the output format
+        formatLabel = qt.QLabel("Format: ")
+        formatBox = qt.QComboBox()
+
+        # TODO; fill this from an enum instead
+        formatBox.addItems(["json", "csv"])
+
+        # Update the layout and track it for later
+        layout.addRow(formatLabel, formatBox)
+        self.formatBox = formatBox
+
+    def _buildButtons(self, layout: qt.QFormLayout):
+        # Button box for confirming/rejecting the current use
+        buttonBox = qt.QDialogButtonBox()
+        buttonBox.addButton(_("Confirm"), qt.QDialogButtonBox.AcceptRole)
+        buttonBox.addButton(_("Cancel"), qt.QDialogButtonBox.RejectRole)
+        layout.addRow(buttonBox)
+
+        # Connect signals
+        buttonBox.accepted.connect(self.accept)
+        buttonBox.rejected.connect(self.reject)
+
+    def get_annotations(self) -> list[str]:
+        # For some reason, `items()` doesn't work
+        return self.markupWidget.get_markups()
+
+    # Output management
+    def get_output(self):
+        new_path = self.outputFileEdit.currentPath
+        if new_path is "":
+            return None
+        new_path = Path(new_path)
+        if not new_path.exists():
+            return None
+        if not new_path.is_dir():
+            return None
+        return new_path
+
+
+## GUIs ##
 class RapidAnnotationGUI:
 
     COMPLETED_BRUSH = qt.QBrush(
