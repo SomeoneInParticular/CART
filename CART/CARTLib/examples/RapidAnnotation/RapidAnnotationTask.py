@@ -5,6 +5,7 @@ import ctk
 import qt
 import slicer
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from CARTLib.examples.RapidAnnotation.RapidAnnotationConfig import RapidAnnotationConfig
 from CARTLib.examples.RapidAnnotation.RapidAnnotationOutputManager import RapidAnnotationOutputManager
 from CARTLib.examples.RapidAnnotation.RapidAnnotationUnit import RapidAnnotationUnit
 from CARTLib.utils.config import ProfileConfig
@@ -271,6 +272,7 @@ class RapidAnnotationSetupPrompt(qt.QDialog):
             return None
         return new_path
 
+
 @cart_task("Rapid Annotation")
 class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
     def __init__(self, profile: ProfileConfig):
@@ -288,25 +290,36 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
         self._output_dir: Optional[Path] = None
         self._output_manager: Optional[RapidAnnotationOutputManager] = None
 
+        # Config management
+        self.config = RapidAnnotationConfig(parent_config=self.profile)
+
     def setup(self, container: qt.QWidget) -> None:
         print(f"Running {self.__class__.__name__} setup!")
 
-        # Prompt the user with the setup GUI
-        prompt = RapidAnnotationSetupPrompt(self)
-        setup_successful = prompt.exec()
+        if self.config.last_used_output and self.config.last_used_markups:
+            # TODO: Ask the user if they want to load the last state instead
+            print("Loading last saved state!")
 
-        # If the setup failed, error out to prevent further task init
-        if not setup_successful:
-            raise AssertionError(
-                f"Failed to set up for {self.__class__.__name__}")
+            self.tracked_annotations = self.config.last_used_markups
+            self.output_dir = self.config.last_used_output
 
-        # Pull the relevant information out of the setup prompt
-        self.tracked_annotations = prompt.get_annotations()
-        self.output_dir = prompt.get_output()
+        else:
+            # Prompt the user with the setup GUI
+            prompt = RapidAnnotationSetupPrompt(self)
+            setup_successful = prompt.exec()
 
-        if self.output_dir == "":
-            # TODO: make this a user prompt instead
-            raise ValueError("Cannot initialize task without an output directory!")
+            # If the setup failed, error out to prevent further task init
+            if not setup_successful:
+                raise AssertionError(
+                    f"Failed to set up for {self.__class__.__name__}")
+
+            # Pull the relevant information out of the setup prompt
+            self.tracked_annotations = prompt.get_annotations()
+            self.output_dir = prompt.get_output()
+
+            if self.output_dir == "":
+                # TODO: make this a user prompt instead
+                raise ValueError("Cannot initialize task without an output directory!")
 
         # Initialize our GUI
         self.gui = RapidAnnotationGUI(self)
@@ -324,6 +337,12 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
 
         # Build the output manager
         self._output_manager = None
+
+        # Update our config with this annotation set and save it
+        self.config.last_used_markups = self.tracked_annotations
+        self.config.last_used_output = self.output_dir
+        self.config.save()
+
 
     @property
     def output_dir(self) -> Path:
