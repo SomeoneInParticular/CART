@@ -297,13 +297,13 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
         print(f"Running {self.__class__.__name__} setup!")
 
         if self.config.last_used_output and self.config.last_used_markups:
-            # TODO: Ask the user if they want to load the last state instead
-            print("Loading last saved state!")
+            if slicer.util.confirmYesNoDisplay(
+                "A previous run of this task was found; would you like to load it?"
+            ):
+                self.tracked_annotations = self.config.last_used_markups
+                self.output_dir = self.config.last_used_output
 
-            self.tracked_annotations = self.config.last_used_markups
-            self.output_dir = self.config.last_used_output
-
-        else:
+        if self.tracked_annotations is None or self.output_dir is None:
             # Prompt the user with the setup GUI
             prompt = RapidAnnotationSetupPrompt(self)
             setup_successful = prompt.exec()
@@ -317,9 +317,9 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
             self.tracked_annotations = prompt.get_annotations()
             self.output_dir = prompt.get_output()
 
-            if self.output_dir == "":
-                # TODO: make this a user prompt instead
-                raise ValueError("Cannot initialize task without an output directory!")
+        if self.output_dir == Path(""):
+            # TODO: make this a user prompt instead
+            raise ValueError("Cannot initialize task without an output directory!")
 
         # Initialize our GUI
         self.gui = RapidAnnotationGUI(self)
