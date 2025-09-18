@@ -137,6 +137,9 @@ class DictBackedConfig(ABC):
         else:
             self.save_without_parent()
 
+        # Mark ourselves as no longer having changes from the file
+        self.has_changed = False
+
 
 # I love Metaclass conflicts! Wooo!
 class _ABCQDialog(type(qt.QDialog), ABCMeta):
