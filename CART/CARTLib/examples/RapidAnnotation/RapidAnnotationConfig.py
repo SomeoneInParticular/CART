@@ -35,7 +35,10 @@ class RapidAnnotationConfig(DictBackedConfig):
 
     @last_used_output.setter
     def last_used_output(self, new_path: Path):
-        self._backing_dict[self.LAST_USED_OUTPUT] = str(new_path.resolve())
+        if new_path is None:
+            self._backing_dict[self.LAST_USED_OUTPUT] = None
+        else:
+            self._backing_dict[self.LAST_USED_OUTPUT] = str(new_path.resolve())
         self.has_changed = True
 
     ## Utils ##

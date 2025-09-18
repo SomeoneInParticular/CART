@@ -317,8 +317,7 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
             self.tracked_annotations = prompt.get_annotations()
             self.output_dir = prompt.get_output()
 
-        if self.output_dir == Path(""):
-            # TODO: make this a user prompt instead
+        if self.output_dir is None:
             raise ValueError("Cannot initialize task without an output directory!")
 
         # Initialize our GUI
