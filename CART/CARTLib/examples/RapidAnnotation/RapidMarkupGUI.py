@@ -105,7 +105,7 @@ class MarkupListWidget(qt.QWidget):
     def _loadStateFromTask(self, task: "RapidAnnotationTask"):
         # Re-assess the markup list state based on the logic
         self.markupList.clear()
-        self.markupList.addItems(task.tracked_annotations)
+        self.markupList.addItems(task.markup_labels)
 
         # Disable the remove button, as there is no longer any selection
         self.removeButton.setEnabled(False)
@@ -293,7 +293,7 @@ class RapidAnnotationGUI:
         annotationListLabel = qt.QLabel("Registered Annotations")
 
         # Insert all attributes tracked by the logic into the annotation list
-        annotationList.addItems(self.bound_task.tracked_annotations)
+        annotationList.addItems(self.bound_task.markup_labels)
 
         # Add it to the layout and track it for later
         formLayout.addRow(annotationListLabel)
@@ -317,9 +317,11 @@ class RapidAnnotationGUI:
     def _syncAnnotationList(self):
         for i in range(self.annotationList.count):
             listItem = self.annotationList.item(i)
-            label = listItem.text()
-            if self.bound_task.annotation_complete_map.get(label, False):
+            markup_completed = self.bound_task.markup_placed[i]
+            if markup_completed:
                 listItem.setBackground(self.COMPLETED_BRUSH)
+            elif markup_completed is False:
+                listItem.setBackground(self.SKIPPED_BRUSH)
             else:
                 listItem.setBackground(self.BLANK_BRUSH)
 
@@ -350,7 +352,8 @@ class RapidAnnotationGUI:
             anot_item = self.annotationList.item(i)
             anot_label = anot_item.text()
             # If this annotation isn't completed, get the user to try and place it
-            if not self.bound_task.annotation_complete_map.get(anot_label, False):
+            is_placed = self.bound_task.markup_placed[i]
+            if not is_placed:
                 # Enter placement mode for the user
                 interactionNode.SetCurrentInteractionMode(interactionNode.Place)
                 interactionNode.SetPlaceModePersistence(True)
@@ -366,7 +369,8 @@ class RapidAnnotationGUI:
 
                     # Mark this annotation as complete
                     anot_item.setBackground(self.COMPLETED_BRUSH)
-                    self.bound_task.annotation_complete_map[anot_label] = True
+
+                    self.bound_task.markup_placed[i] = True
 
                     # Try to prompt the user for the next node
                     self._userPlacePoint(i)

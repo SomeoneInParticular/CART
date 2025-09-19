@@ -24,8 +24,9 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
         self.data_unit: Optional[RapidAnnotationUnit] = None
 
         # Annotation tracking
-        self.tracked_annotations: list[str] = []
-        self.annotation_complete_map: dict[str, bool] = {}
+        self.markup_labels: list[str] = []
+        # None -> nothing done, True -> has been placed, False -> has been skipped
+        self.markup_placed: list[Optional[bool]] = []
 
         # Output management
         self._output_dir: Optional[Path] = None
@@ -41,10 +42,10 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
             if slicer.util.confirmYesNoDisplay(
                 "A previous run of this task was found; would you like to load it?"
             ):
-                self.tracked_annotations = self.config.last_used_markups
+                self.markup_labels = self.config.last_used_markups
                 self.output_dir = self.config.last_used_output
 
-        if self.tracked_annotations is None or self.output_dir is None:
+        if self.markup_labels is None or self.output_dir is None:
             # Prompt the user with the setup GUI
             prompt = RapidAnnotationSetupPrompt(self)
             setup_successful = prompt.exec()
@@ -55,7 +56,10 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
                     f"Failed to set up for {self.__class__.__name__}")
 
             # Pull the relevant information out of the setup prompt
-            self.tracked_annotations = prompt.get_annotations()
+            for v in prompt.get_annotations():
+                self.markup_labels.append(v)
+                self.markup_placed.append(None)
+            self.markup_labels = prompt.get_annotations()
             self.output_dir = prompt.get_output()
 
         if self.output_dir is None:
@@ -79,11 +83,11 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
         self._output_manager = None
 
         # Update our config with this annotation set and save it
-        self.config.last_used_markups = self.tracked_annotations
+        self.config.last_used_markups = self.markup_labels
         self.config.last_used_output = self.output_dir
         self.config.save()
 
-
+    ## Properties
     @property
     def output_dir(self) -> Path:
         return self._output_dir
@@ -116,6 +120,16 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
 
         return self._output_manager
 
+    ## Unit Management ##
+    def add_markup(self, new_label: str):
+        self.markup_labels.append(new_label)
+        self.markup_placed.append(False)
+
+    def remove_markup(self, idx: int):
+        del self.markup_labels[idx]
+        del self.markup_placed[idx]
+
+    ## Utils ##
     def on_bad_output(self):
         # Determine which error message to show
         if not self.output_dir:
@@ -131,6 +145,7 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
             prompt.showMessage(msg)
             prompt.exec()
 
+    ## Overrides ##
     def receive(self, data_unit: RapidAnnotationUnit):
         # Track the data unit for later
         self.data_unit = data_unit
@@ -142,13 +157,15 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
         )
 
         # Re-build our set of to-be-placed of fiducials
-        self.annotation_complete_map.clear()
-        self.annotation_complete_map = {k: False for k in self.tracked_annotations}
+        self.markup_placed = [None for _ in self.markup_labels]
         # Mark those the data unit already has as already being annotated
         for i in range(data_unit.annotation_node.GetNumberOfControlPoints()):
             fiducial_label = data_unit.annotation_node.GetNthControlPointLabel(i)
-            if fiducial_label in self.annotation_complete_map.keys():
-                self.annotation_complete_map[fiducial_label] = True
+            if fiducial_label in self.markup_labels:
+                for j, k in enumerate(self.markup_labels):
+                    if k == fiducial_label and not self.markup_placed[i]:
+                        self.markup_placed[j] = True
+                        break  # End so that the next iteration can work
 
         # If we have a GUI, update it as well
         if self.gui:
