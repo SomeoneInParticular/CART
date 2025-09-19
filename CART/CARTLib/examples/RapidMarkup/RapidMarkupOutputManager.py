@@ -6,12 +6,12 @@ from typing import Optional
 from CARTLib.utils.config import ProfileConfig
 from CARTLib.utils.data import save_markups_to_json
 
-from RapidAnnotationUnit import RapidAnnotationUnit
+from RapidMarkupUnit import RapidMarkupUnit
 
 VERSION = "0.0.1"
 
 
-class RapidAnnotationOutputManager:
+class RapidMarkupOutputManager:
 
     UID_KEY = "uid"
     PROFILE_KEY = "profile"
@@ -111,9 +111,9 @@ class RapidAnnotationOutputManager:
         return self._markup_output_dir
 
     ## I/O ##
-    def save_markups(self, data_unit: RapidAnnotationUnit):
+    def save_markups(self, data_unit: RapidMarkupUnit):
         # Get the markup node from the data unit
-        markup_node = data_unit.annotation_node
+        markup_node = data_unit.markup_node
 
         # Save it to the Slicer JSON format
         markup_output_file = self.markup_output_dir / f"{data_unit.uid}.mrk.json"

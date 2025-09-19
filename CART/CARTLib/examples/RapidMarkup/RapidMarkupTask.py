@@ -8,20 +8,20 @@ from CARTLib.utils.config import ProfileConfig
 from CARTLib.utils.task import cart_task
 from slicer.i18n import tr as _
 
-from RapidAnnotationConfig import RapidAnnotationConfig
-from RapidAnnotationGUI import RapidAnnotationGUI, RapidAnnotationSetupPrompt
-from RapidAnnotationOutputManager import RapidAnnotationOutputManager
-from RapidAnnotationUnit import RapidAnnotationUnit
+from RapidMarkupConfig import RapidMarkupConfig
+from RapidMarkupGUI import RapidMarkupGUI, RapidMarkupSetupPrompt
+from RapidMarkupOutputManager import RapidMarkupOutputManager
+from RapidMarkupUnit import RapidMarkupUnit
 
 
-@cart_task("Rapid Annotation")
-class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
+@cart_task("Rapid Markup")
+class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
     def __init__(self, profile: ProfileConfig):
         super().__init__(profile)
 
         # GUI and data
-        self.gui: Optional[RapidAnnotationGUI] = None
-        self.data_unit: Optional[RapidAnnotationUnit] = None
+        self.gui: Optional[RapidMarkupGUI] = None
+        self.data_unit: Optional[RapidMarkupUnit] = None
 
         # Annotation tracking
         self.markup_labels: list[str] = []
@@ -30,10 +30,10 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
 
         # Output management
         self._output_dir: Optional[Path] = None
-        self._output_manager: Optional[RapidAnnotationOutputManager] = None
+        self._output_manager: Optional[RapidMarkupOutputManager] = None
 
         # Config management
-        self.config = RapidAnnotationConfig(parent_config=self.profile)
+        self.config = RapidMarkupConfig(parent_config=self.profile)
 
     def setup(self, container: qt.QWidget) -> None:
         print(f"Running {self.__class__.__name__} setup!")
@@ -47,7 +47,7 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
 
         if self.markup_labels is None or self.output_dir is None:
             # Prompt the user with the setup GUI
-            prompt = RapidAnnotationSetupPrompt(self)
+            prompt = RapidMarkupSetupPrompt(self)
             setup_successful = prompt.exec()
 
             # If the setup failed, error out to prevent further task init
@@ -56,17 +56,17 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
                     f"Failed to set up for {self.__class__.__name__}")
 
             # Pull the relevant information out of the setup prompt
-            for v in prompt.get_annotations():
+            for v in prompt.get_markup_labels():
                 self.markup_labels.append(v)
                 self.markup_placed.append(None)
-            self.markup_labels = prompt.get_annotations()
+            self.markup_labels = prompt.get_markup_labels()
             self.output_dir = prompt.get_output()
 
         if self.output_dir is None:
             raise ValueError("Cannot initialize task without an output directory!")
 
         # Initialize our GUI
-        self.gui = RapidAnnotationGUI(self)
+        self.gui = RapidMarkupGUI(self)
         layout = self.gui.setup()
 
         # Insert it into CART's GUI
@@ -113,7 +113,7 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
         # If the output manager hasn't been generated yet or was reset,
         # and we have an output directory, create a new one
         if not self._output_manager:
-            self._output_manager = RapidAnnotationOutputManager(
+            self._output_manager = RapidMarkupOutputManager(
                 self.profile,
                 self.output_dir
             )
@@ -146,7 +146,7 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
             prompt.exec()
 
     ## Overrides ##
-    def receive(self, data_unit: RapidAnnotationUnit):
+    def receive(self, data_unit: RapidMarkupUnit):
         # Track the data unit for later
         self.data_unit = data_unit
 
@@ -159,8 +159,8 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
         # Re-build our set of to-be-placed of fiducials
         self.markup_placed = [None for _ in self.markup_labels]
         # Mark those the data unit already has as already being annotated
-        for i in range(data_unit.annotation_node.GetNumberOfControlPoints()):
-            fiducial_label = data_unit.annotation_node.GetNthControlPointLabel(i)
+        for i in range(data_unit.markup_node.GetNumberOfControlPoints()):
+            fiducial_label = data_unit.markup_node.GetNthControlPointLabel(i)
             if fiducial_label in self.markup_labels:
                 for j, k in enumerate(self.markup_labels):
                     if k == fiducial_label and not self.markup_placed[i]:
@@ -187,5 +187,5 @@ class RapidAnnotationTask(TaskBaseClass[RapidAnnotationUnit]):
     @classmethod
     def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
         return {
-            "Default": RapidAnnotationUnit
+            "Default": RapidMarkupUnit
         }

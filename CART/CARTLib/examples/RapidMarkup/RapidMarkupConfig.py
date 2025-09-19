@@ -4,9 +4,9 @@ from typing import Optional
 from CARTLib.utils.config import DictBackedConfig, ProfileConfig
 
 
-class RapidAnnotationConfig(DictBackedConfig):
+class RapidMarkupConfig(DictBackedConfig):
 
-    CONFIG_KEY = "rapid_annotation"
+    CONFIG_KEY = "rapid_markup"
 
     @classmethod
     def default_config_label(cls) -> str:

@@ -6,19 +6,19 @@ import qt
 import slicer
 from slicer.i18n import tr as _
 
-from RapidAnnotationUnit import RapidAnnotationUnit
+from RapidMarkupUnit import RapidMarkupUnit
 
 
 # Type hint guard; only risk the cyclic import if type hints are running
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     # noinspection PyUnusedImports
-    from RapidAnnotationTask import RapidAnnotationTask
+    from RapidMarkupTask import RapidMarkupTask
 
 
 ## WIDGETS ##
 class MarkupListWidget(qt.QWidget):
-    def __init__(self, task: "RapidAnnotationTask"):
+    def __init__(self, task: "RapidMarkupTask"):
         super().__init__()
 
         # Create the layout to hold everything in
@@ -102,7 +102,7 @@ class MarkupListWidget(qt.QWidget):
             # Why "removeItemWidget" doesn't do this, only god knows
             self.markupList.takeItem(self.markupList.row(item))
 
-    def _loadStateFromTask(self, task: "RapidAnnotationTask"):
+    def _loadStateFromTask(self, task: "RapidMarkupTask"):
         # Re-assess the markup list state based on the logic
         self.markupList.clear()
         self.markupList.addItems(task.markup_labels)
@@ -112,19 +112,19 @@ class MarkupListWidget(qt.QWidget):
 
     def get_markups(self):
         # Need to do this, as the signature for `items` is too ambiguous
-        annotations = []
+        markups = []
         for i in range(self.markupList.count):
             item = self.markupList.item(i)
-            annotations.append(item.text())
-        return annotations
+            markups.append(item.text())
+        return markups
 
 
 ## PROMPTS ##
-class RapidAnnotationSetupPrompt(qt.QDialog):
-    def __init__(self, bound_logic: "RapidAnnotationTask"):
+class RapidMarkupSetupPrompt(qt.QDialog):
+    def __init__(self, bound_logic: "RapidMarkupTask"):
         super().__init__()
 
-        self.setWindowTitle("Set Up Annotations")
+        self.setWindowTitle("Set Up Rapid Markup")
 
         self.bound_logic = bound_logic
 
@@ -187,7 +187,7 @@ class RapidAnnotationSetupPrompt(qt.QDialog):
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
 
-    def get_annotations(self) -> list[str]:
+    def get_markup_labels(self) -> list[str]:
         # For some reason, `items()` doesn't work
         return self.markupWidget.get_markups()
 
@@ -253,7 +253,7 @@ class AddMarkupDialog(qt.QDialog):
         return self.lineEdit.text
 
 ## GUIs ##
-class RapidAnnotationGUI:
+class RapidMarkupGUI:
 
     COMPLETED_BRUSH = qt.QBrush(
         qt.QColor(0, 255, 0, 100)
@@ -268,39 +268,39 @@ class RapidAnnotationGUI:
         qt.QColor(0, 0, 0, 255)
     )
 
-    def __init__(self, bound_task: "RapidAnnotationTask"):
+    def __init__(self, bound_task: "RapidMarkupTask"):
         self.bound_task = bound_task
-        self.data_unit: Optional[RapidAnnotationUnit] = None
+        self.data_unit: Optional[RapidMarkupUnit] = None
 
         # Widget displaying the data unit
-        self.annotationList = None
+        self.markupList = None
 
         # Observer IDs; need to be tracked here to avoid cyclic referencing
-        self.anot_observer_id: Optional[str] = None
+        self.markup_observer_id: Optional[str] = None
         self.backout_observer_id: Optional[str] = None
 
     def setup(self) -> qt.QFormLayout:
         # Initialize a layout we'll insert everything into
         formLayout = qt.QFormLayout()
 
-        self._initAnnotationList(formLayout)
+        self._initMarkupList(formLayout)
 
         return formLayout
 
-    def _initAnnotationList(self, formLayout: qt.QFormLayout):
+    def _initMarkupList(self, formLayout: qt.QFormLayout):
         # Create a list widget w/ drag and drop capabilities
-        annotationList = qt.QListWidget()
-        annotationListLabel = qt.QLabel("Registered Annotations")
+        markupList = qt.QListWidget()
+        markupListLabel = qt.QLabel(_("Registered Markups"))
 
-        # Insert all attributes tracked by the logic into the annotation list
-        annotationList.addItems(self.bound_task.markup_labels)
+        # Insert all attributes tracked by the logic into the markup list
+        markupList.addItems(self.bound_task.markup_labels)
 
         # Add it to the layout and track it for later
-        formLayout.addRow(annotationListLabel)
-        formLayout.addRow(annotationList)
-        self.annotationList = annotationList
+        formLayout.addRow(markupListLabel)
+        formLayout.addRow(markupList)
+        self.markupList = markupList
 
-    def update(self, data_unit: RapidAnnotationUnit):
+    def update(self, data_unit: RapidMarkupUnit):
         # Track the new data unit
         self.data_unit = data_unit
 
@@ -308,15 +308,15 @@ class RapidAnnotationGUI:
         self.data_unit.layout_handler.apply_layout()
 
         # Synchronize with our logic's state
-        self._syncAnnotationList()
+        self._syncMarkupList()
 
         # Start node placement
         # TODO: make this automated start configurable
-        self.initAnnotationPlacement()
+        self.initMarkupPlacement()
 
-    def _syncAnnotationList(self):
-        for i in range(self.annotationList.count):
-            listItem = self.annotationList.item(i)
+    def _syncMarkupList(self):
+        for i in range(self.markupList.count):
+            listItem = self.markupList.item(i)
             markup_completed = self.bound_task.markup_placed[i]
             if markup_completed:
                 listItem.setBackground(self.COMPLETED_BRUSH)
@@ -325,10 +325,10 @@ class RapidAnnotationGUI:
             else:
                 listItem.setBackground(self.BLANK_BRUSH)
 
-    def initAnnotationPlacement(self):
-        # Ensure the data unit's annotation node the selected one
+    def initMarkupPlacement(self):
+        # Ensure the data unit's markup node is the selected one
         selectionNode = slicer.app.applicationLogic().GetSelectionNode()
-        selectionNode.SetActivePlaceNodeID(self.data_unit.annotation_node.GetID())
+        selectionNode.SetActivePlaceNodeID(self.data_unit.markup_node.GetID())
 
         # Start by getting the user to place the first node
         self._userPlacePoint()
@@ -336,9 +336,9 @@ class RapidAnnotationGUI:
     # TODO: Rewrite this, this is cursed beyond belief
     def _userPlacePoint(self, prior_idx: int = -1):
         # Remove the previous observer callbacks
-        anot_node = self.bound_task.data_unit.annotation_node
-        if self.anot_observer_id:
-            anot_node.RemoveObserver(self.anot_observer_id)
+        markup_node = self.bound_task.data_unit.markup_node
+        if self.markup_observer_id:
+            markup_node.RemoveObserver(self.markup_observer_id)
 
         interactionNode = slicer.app.applicationLogic().GetInteractionNode()
         if self.backout_observer_id:
@@ -348,10 +348,10 @@ class RapidAnnotationGUI:
         start_index = prior_idx + 1
 
         # Find the next valid index in the remaining range
-        for i in range(start_index, self.annotationList.count):
-            anot_item = self.annotationList.item(i)
-            anot_label = anot_item.text()
-            # If this annotation isn't completed, get the user to try and place it
+        for i in range(start_index, self.markupList.count):
+            markup_item = self.markupList.item(i)
+            markup_label = markup_item.text()
+            # If this markup hasn't been placed, get the user to try and place it
             is_placed = self.bound_task.markup_placed[i]
             if not is_placed:
                 # Enter placement mode for the user
@@ -359,30 +359,30 @@ class RapidAnnotationGUI:
                 interactionNode.SetPlaceModePersistence(True)
 
                 # Highlight the corresponding entry in our list
-                anot_item.setBackground(self.HIGHLIGHTED_BRUSH)
+                markup_item.setBackground(self.HIGHLIGHTED_BRUSH)
 
                 # Register a callback for when a new point is placed!
-                def _onAnotAdded(caller, _):
+                def _onMarkupAdded(caller, _):
                     # Change the name of the newly added node to its proper name
                     newest_point_idx = caller.GetNumberOfControlPoints() - 1
-                    caller.SetNthControlPointLabel(newest_point_idx, anot_label)
+                    caller.SetNthControlPointLabel(newest_point_idx, markup_label)
 
-                    # Mark this annotation as complete
-                    anot_item.setBackground(self.COMPLETED_BRUSH)
+                    # Mark this markup as being placed visually
+                    markup_item.setBackground(self.COMPLETED_BRUSH)
 
                     self.bound_task.markup_placed[i] = True
 
                     # Try to prompt the user for the next node
                     self._userPlacePoint(i)
 
-                self.anot_observer_id = anot_node.AddObserver(
-                    anot_node.PointPositionDefinedEvent, _onAnotAdded
+                self.markup_observer_id = markup_node.AddObserver(
+                    markup_node.PointPositionDefinedEvent, _onMarkupAdded
                 )
 
                 # Register a callback for when the user exits placement mode (indicating they backed out)
                 def _onBackOut(_, __):
                     # Highlight the entry in "skipped" colors
-                    anot_item.setBackground(self.SKIPPED_BRUSH)
+                    markup_item.setBackground(self.SKIPPED_BRUSH)
 
                     # Proceed to the next point
                     self._userPlacePoint(i)
