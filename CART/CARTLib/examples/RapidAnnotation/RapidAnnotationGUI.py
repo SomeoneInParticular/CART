@@ -75,19 +75,27 @@ class MarkupListWidget(qt.QWidget):
         )
 
     def _addNewMarkup(self):
-        # TODO: make this create a prompt w/ validation instead
-        # Add a blank item
-        newItem = qt.QListWidgetItem("")
-        # Make it editable
-        newItem.setFlags(
-            newItem.flags() | qt.Qt.ItemIsEditable
-        )
-        # Add it to the list
-        self.markupList.addItem(newItem)
-        # Set it as the current active item
-        self.markupList.setCurrentItem(newItem)
-        # Immediately start editing it
-        self.markupList.editItem(newItem)
+        # Start the Add Markup dialog
+        dialog = AddMarkupDialog()
+
+        # Exec it to show it to the user
+        dialog_return = dialog.exec()
+
+        # If the user closed the dialog, just end as-is
+        if not dialog_return:
+            return
+
+        # Otherwise, get the text from the markup
+        new_markup_str = dialog.getMarkup().strip()
+        # If the markup string exists, add it to the list
+        if new_markup_str:
+            newItem = qt.QListWidgetItem(new_markup_str)
+            self.markupList.addItem(newItem)
+        # Otherwise, notify the user it was blank and not added
+        else:
+            slicer.util.warningDisplay(_(
+                "Label was blank, no markup was added."
+            ))
 
     def remove_selected_markups(self):
         for item in self.markupList.selectedItems():
@@ -109,6 +117,7 @@ class MarkupListWidget(qt.QWidget):
             item = self.markupList.item(i)
             annotations.append(item.text())
         return annotations
+
 
 ## PROMPTS ##
 class RapidAnnotationSetupPrompt(qt.QDialog):
@@ -194,6 +203,54 @@ class RapidAnnotationSetupPrompt(qt.QDialog):
             return None
         return new_path
 
+
+class AddMarkupDialog(qt.QDialog):
+    def __init__(self):
+        # Initialize the prompt itself
+        super().__init__()
+
+        # Update our basic attributes
+        self.setWindowTitle(_("New Markup Label"))
+
+        # Initialize our layout
+        layout = qt.QFormLayout(self)
+
+        # Set up our own GUI
+        self._buildUI(layout)
+
+    def _buildUI(self, layout: qt.QFormLayout):
+        # Line edit + its label
+        lineEditLabel = qt.QLabel(_("Markup Label"))
+        lineEdit = qt.QLineEdit()
+
+        # Add it to our layout
+        layout.addRow(lineEditLabel, lineEdit)
+
+        # Track the line edit for later
+        self.lineEdit = lineEdit
+
+        # Add a button box to confirm and cancel
+        buttonBox = qt.QDialogButtonBox()
+        buttonBox.setStandardButtons(
+            qt.QDialogButtonBox.Cancel | qt.QDialogButtonBox.Ok
+        )
+
+        # Function to map button presses to corresponding actions
+        def onButtonPressed(button: qt.QPushButton):
+            button_role = buttonBox.buttonRole(button)
+            if button_role == qt.QDialogButtonBox.RejectRole:
+                self.reject()
+            elif button_role == qt.QDialogButtonBox.AcceptRole:
+                self.accept()
+            else:
+                raise ValueError("Pressed a button with an invalid role!")
+        buttonBox.clicked.connect(onButtonPressed)
+
+        # Add it to the layout
+        layout.addRow(buttonBox)
+
+    def getMarkup(self) -> str:
+        return self.lineEdit.text
 
 ## GUIs ##
 class RapidAnnotationGUI:
