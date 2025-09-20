@@ -285,6 +285,7 @@ class AddMarkupDialog(qt.QDialog):
     def getMarkup(self) -> str:
         return self.lineEdit.text
 
+
 ## GUIs ##
 class RapidMarkupGUI:
     def __init__(self, bound_task: "RapidMarkupTask"):
@@ -297,6 +298,13 @@ class RapidMarkupGUI:
         # Observer IDs; need to be tracked here to avoid cyclic referencing
         self.markup_observer_id: Optional[str] = None
         self.backout_observer_id: Optional[str] = None
+
+        # Whether the user is actively placing markups currently
+        self.is_user_placing_markups: bool = False
+
+        # Quick reference variables
+        self._prior_placement_mode = None
+        self._interaction_node = slicer.app.applicationLogic().GetInteractionNode()
 
     def setup(self) -> qt.QFormLayout:
         # Initialize a layout we'll insert everything into
@@ -330,7 +338,7 @@ class RapidMarkupGUI:
 
         # Start node placement
         # TODO: make this automated start configurable
-        self.initMarkupPlacement()
+        self.enterMarkupMode()
 
     def onMarkupAdded(self, _, start_idx, end_idx):
         # Add the new elements to our logic as well
@@ -344,13 +352,50 @@ class RapidMarkupGUI:
         for i in range(start_idx, end_idx+1):
             self.bound_task.remove_markup_at(i)
 
-    def initMarkupPlacement(self):
-        # Ensure the data unit's markup node is the selected one
+    ## User Interaction Management ##
+    def enterMarkupMode(self):
+        # Mark ourselves as being in markup mode
+        self.is_user_placing_markups = True
+
+        # Ensure the data unit's markup node is selected
         selectionNode = slicer.app.applicationLogic().GetSelectionNode()
         selectionNode.SetActivePlaceNodeID(self.data_unit.markup_node.GetID())
 
+        # Disable the markup list to prevent markups from being added/removed
+        self.markupList.setEnabled(False)
+
+        # Enable persistent placement mode
+        self._prior_placement_mode = self._interaction_node.GetPlaceModePersistence()
+        self._interaction_node.SetPlaceModePersistence(True)
+
         # Start by getting the user to place the first node
         self._userPlacePoint()
+
+    def endMarkupMode(self):
+        # Mark ourselves as no longer being in markup mode
+        self.is_user_placing_markups = False
+
+        # If observer callbacks are in place, remove them
+        markup_node = self.bound_task.data_unit.markup_node
+        if self.markup_observer_id:
+            markup_node.RemoveObserver(self.markup_observer_id)
+
+        if self.backout_observer_id:
+            self._interaction_node.RemoveObserver(self.backout_observer_id)
+
+        # Exit placement mode, if we were in it
+        self._interaction_node.SetCurrentInteractionMode(
+            self._interaction_node.ViewTransform
+        )
+
+        # Restore place mode persistence to what it was prior to our change
+        self._interaction_node.SetPlaceModePersistence(
+            self._prior_placement_mode
+        )
+        self._prior_placement_mode = None
+
+        # Re-enable the ability to select, add, and remove markup nodes
+        self.markupList.setEnabled(True)
 
     # TODO: Rewrite this, this is cursed beyond belief
     def _userPlacePoint(self, prior_idx: int = -1):
@@ -375,7 +420,6 @@ class RapidMarkupGUI:
             if not is_placed:
                 # Enter placement mode for the user
                 interactionNode.SetCurrentInteractionMode(interactionNode.Place)
-                interactionNode.SetPlaceModePersistence(True)
 
                 # Highlight the corresponding entry in our list
                 markup_item.setBackground(self.markupList.HIGHLIGHTED_BRUSH)
@@ -413,12 +457,15 @@ class RapidMarkupGUI:
                 # Terminate
                 break
         else:
-            # If the loop ran to completion, exit persistent mode
-            interactionNode.SetPlaceModePersistence(False)
+            # If the loop ran to completion, exit markup mode
+            self.endMarkupMode()
 
     ## GUI SYNCHRONIZATION ##
     def enter(self) -> None:
         pass
 
     def exit(self) -> None:
+        # If we are in markup mode (the user was placing markups), exit it
+        if self.is_user_placing_markups:
+            self.endMarkupMode()
         pass
