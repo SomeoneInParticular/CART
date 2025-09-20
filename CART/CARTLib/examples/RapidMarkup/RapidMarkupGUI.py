@@ -324,6 +324,8 @@ class RapidMarkupGUI:
 
         self._initMarkupList(formLayout)
 
+        self._addStartButton(formLayout)
+
         return formLayout
 
     def _initMarkupList(self, formLayout: qt.QFormLayout):
@@ -337,6 +339,24 @@ class RapidMarkupGUI:
         # Add it to the layout and track it for later
         formLayout.addWidget(markupList)
         self.markupList = markupList
+
+    def _addStartButton(self, formLayout: qt.QFormLayout):
+        # Create the button itself
+        startButton = qt.QPushButton(_("Begin Placement"))
+
+        # When the start button is clicked, start user placement
+        startButton.clicked.connect(self.initiateMarkupPlacement)
+
+        # Only enable the start button when something has been selected
+        self.markupList.selectionChanged.connect(
+            lambda: startButton.setEnabled(self.markupList.selectedIdx != -1)
+        )
+
+        # Initially disable the button, as nothing has been selected yet
+        startButton.setEnabled(False)
+
+        # Add it to the layout
+        formLayout.addWidget(startButton)
 
     def update(self, data_unit: RapidMarkupUnit):
         # Track the new data unit
