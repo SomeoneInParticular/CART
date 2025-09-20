@@ -101,6 +101,15 @@ class MarkupListWidget(qt.QWidget):
         # Alias to easily expose the function for connections
         return self.markupList.model().rowsRemoved
 
+    @property
+    def selectedIdx(self) -> int:
+        return self.markupList.currentRow
+
+    @property
+    def selectionChanged(self):
+        # Expose this signal for easy access
+        return self.markupList.itemSelectionChanged
+
     ## Signal Functions ##
     def _onSelectionChanged(self):
         # Make it so we can only remove items when there are items
@@ -340,8 +349,11 @@ class RapidMarkupGUI:
         self.markupList.syncStateWithTask(self.bound_task)
 
         # Start node placement
-        # TODO: make this automated start configurable
-        self.initiateMarkupPlacement()
+        # TODO: Make this automated start configurable
+        first_incomplete = self.findNextUnplaced()
+        if first_incomplete is not None:
+            self.markupList.selectAt(first_incomplete)
+            self.initiateMarkupPlacement()
 
     def onMarkupAdded(self, _, start_idx, end_idx):
         # Add the new elements to our logic as well
@@ -403,7 +415,7 @@ class RapidMarkupGUI:
         # Re-enable the ability to select, add, and remove markup nodes
         self.markupList.setEnabled(True)
 
-    def initiateMarkupPlacement(self, idx: int = 0):
+    def initiateMarkupPlacement(self, idx: int = None):
         """
         Initiate the user placing a given markup position.
         """
@@ -411,8 +423,12 @@ class RapidMarkupGUI:
         if not self.is_user_placing_markups:
             self._enterMarkupMode()
 
-        # Select the entry in our list to highlight it
-        self.markupList.selectAt(idx)
+        # If no index was specified, use the selected index instead
+        if idx is None:
+            idx = self.markupList.selectedIdx
+        else:
+            # Otherwise, select the specified index automatically
+            self.markupList.selectAt(idx)
 
         # Tell slicer to enter placement mode
         self._interaction_node.SetCurrentInteractionMode(
