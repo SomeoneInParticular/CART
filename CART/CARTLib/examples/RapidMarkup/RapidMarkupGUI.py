@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -18,6 +19,20 @@ if TYPE_CHECKING:
 
 ## WIDGETS ##
 class MarkupListWidget(qt.QWidget):
+
+    COMPLETED_BRUSH = qt.QBrush(
+        qt.QColor(0, 255, 0, 100)
+    )
+    HIGHLIGHTED_BRUSH = qt.QBrush(
+        qt.QColor(0, 0, 255, 100)
+    )
+    SKIPPED_BRUSH = qt.QBrush(
+        qt.QColor(255, 0, 0, 100)
+    )
+    BLANK_BRUSH = qt.QBrush(
+        qt.QColor(0, 0, 0, 0)
+    )
+
     def __init__(self, task: "RapidMarkupTask"):
         super().__init__()
 
@@ -30,8 +45,12 @@ class MarkupListWidget(qt.QWidget):
         self._addButtonPanel(layout)
 
         # Synchronize ourselves with the loaded task
-        self._loadStateFromTask(task)
+        self.syncStateWithTask(task)
 
+        # Track it for later
+        self.bound_task = task
+
+    ## GUI Construction ##
     def _addMarkupList(self, layout):
         # Create a list widget
         markupList = qt.QListWidget()
@@ -47,7 +66,6 @@ class MarkupListWidget(qt.QWidget):
         layout.addWidget(markupList)
         self.markupList = markupList
 
-    ## Signal Functions ##
     def _addButtonPanel(self, layout):
         # Add a button to add items to the list
         addButton = qt.QPushButton("Add")
@@ -67,6 +85,23 @@ class MarkupListWidget(qt.QWidget):
         self.addButton = addButton
         self.removeButton = removeButton
 
+    ## Properties ##
+    @property
+    def count(self) -> int:
+        # Alias for the underlying list widget's count
+        return self.markupList.count
+
+    @property
+    def rowsInserted(self):
+        # Alias to easily expose the function for connections
+        return self.markupList.model().rowsInserted
+
+    @property
+    def rowsRemoved(self):
+        # Alias to easily expose the function for connections
+        return self.markupList.model().rowsRemoved
+
+    ## Signal Functions ##
     def _onSelectionChanged(self):
         # Make it so we can only remove items when there are items
         #  selected to be removed
@@ -97,26 +132,43 @@ class MarkupListWidget(qt.QWidget):
                 "Label was blank, no markup was added."
             ))
 
+    ## Utils ##
     def remove_selected_markups(self):
         for item in self.markupList.selectedItems():
             # Why "removeItemWidget" doesn't do this, only god knows
             self.markupList.takeItem(self.markupList.row(item))
 
-    def _loadStateFromTask(self, task: "RapidMarkupTask"):
+    def itemAt(self, idx: int) -> qt.QListWidgetItem:
+        return self.markupList.item(idx)
+
+    @contextmanager
+    def noUpdateSignals(self):
+        self.markupList.blockSignals(True)
+        self.markupList.model().blockSignals(True)
+
+        yield
+
+        self.markupList.blockSignals(False)
+        self.markupList.model().blockSignals(False)
+
+    def syncStateWithTask(self, task: "RapidMarkupTask"):
         # Re-assess the markup list state based on the logic
-        self.markupList.clear()
-        self.markupList.addItems(task.markup_labels)
+        with self.noUpdateSignals():
+            self.markupList.clear()
+
+            for i, label in enumerate(task.markup_labels):
+                listItem = qt.QListWidgetItem(label)
+                markup_completed = task.markup_placed[i]
+                if markup_completed:
+                    listItem.setBackground(self.COMPLETED_BRUSH)
+                elif markup_completed is False:
+                    listItem.setBackground(self.SKIPPED_BRUSH)
+                else:
+                    listItem.setBackground(self.BLANK_BRUSH)
+                self.markupList.addItem(listItem)
 
         # Disable the remove button, as there is no longer any selection
         self.removeButton.setEnabled(False)
-
-    def get_markups(self):
-        # Need to do this, as the signature for `items` is too ambiguous
-        markups = []
-        for i in range(self.markupList.count):
-            item = self.markupList.item(i)
-            markups.append(item.text())
-        return markups
 
 
 ## PROMPTS ##
@@ -136,10 +188,6 @@ class RapidMarkupSetupPrompt(qt.QDialog):
         """
         # Create the layout to actually place everything in
         layout = qt.QFormLayout(self)
-
-        # Initialize a copy of the Markup list to the config
-        self.markupWidget = MarkupListWidget(self.bound_logic)
-        layout.addWidget(self.markupWidget)
 
         self._buildOutputGUI(layout)
 
@@ -165,17 +213,6 @@ class RapidMarkupSetupPrompt(qt.QDialog):
         layout.addRow(outputFileEdit)
         self.outputFileEdit = outputFileEdit
 
-        # Add a dropdown to select the output format
-        formatLabel = qt.QLabel("Format: ")
-        formatBox = qt.QComboBox()
-
-        # TODO; fill this from an enum instead
-        formatBox.addItems(["json", "csv"])
-
-        # Update the layout and track it for later
-        layout.addRow(formatLabel, formatBox)
-        self.formatBox = formatBox
-
     def _buildButtons(self, layout: qt.QFormLayout):
         # Button box for confirming/rejecting the current use
         buttonBox = qt.QDialogButtonBox()
@@ -186,10 +223,6 @@ class RapidMarkupSetupPrompt(qt.QDialog):
         # Connect signals
         buttonBox.accepted.connect(self.accept)
         buttonBox.rejected.connect(self.reject)
-
-    def get_markup_labels(self) -> list[str]:
-        # For some reason, `items()` doesn't work
-        return self.markupWidget.get_markups()
 
     # Output management
     def get_output(self):
@@ -254,26 +287,12 @@ class AddMarkupDialog(qt.QDialog):
 
 ## GUIs ##
 class RapidMarkupGUI:
-
-    COMPLETED_BRUSH = qt.QBrush(
-        qt.QColor(0, 255, 0, 100)
-    )
-    HIGHLIGHTED_BRUSH = qt.QBrush(
-        qt.QColor(0, 0, 255, 100)
-    )
-    SKIPPED_BRUSH = qt.QBrush(
-        qt.QColor(255, 0, 0, 100)
-    )
-    BLANK_BRUSH = qt.QBrush(
-        qt.QColor(0, 0, 0, 255)
-    )
-
     def __init__(self, bound_task: "RapidMarkupTask"):
         self.bound_task = bound_task
         self.data_unit: Optional[RapidMarkupUnit] = None
 
         # Widget displaying the data unit
-        self.markupList = None
+        self.markupList: MarkupListWidget = None
 
         # Observer IDs; need to be tracked here to avoid cyclic referencing
         self.markup_observer_id: Optional[str] = None
@@ -288,16 +307,15 @@ class RapidMarkupGUI:
         return formLayout
 
     def _initMarkupList(self, formLayout: qt.QFormLayout):
-        # Create a list widget w/ drag and drop capabilities
-        markupList = qt.QListWidget()
-        markupListLabel = qt.QLabel(_("Registered Markups"))
+        # Create a markup list
+        markupList = MarkupListWidget(self.bound_task)
 
-        # Insert all attributes tracked by the logic into the markup list
-        markupList.addItems(self.bound_task.markup_labels)
+        # Connect the row addition/removal signals to sync functions
+        markupList.rowsInserted.connect(self.onMarkupAdded)
+        markupList.rowsRemoved.connect(self.onMarkupRemoved)
 
         # Add it to the layout and track it for later
-        formLayout.addRow(markupListLabel)
-        formLayout.addRow(markupList)
+        formLayout.addWidget(markupList)
         self.markupList = markupList
 
     def update(self, data_unit: RapidMarkupUnit):
@@ -308,22 +326,23 @@ class RapidMarkupGUI:
         self.data_unit.layout_handler.apply_layout()
 
         # Synchronize with our logic's state
-        self._syncMarkupList()
+        self.markupList.syncStateWithTask(self.bound_task)
 
         # Start node placement
         # TODO: make this automated start configurable
         self.initMarkupPlacement()
 
-    def _syncMarkupList(self):
-        for i in range(self.markupList.count):
-            listItem = self.markupList.item(i)
-            markup_completed = self.bound_task.markup_placed[i]
-            if markup_completed:
-                listItem.setBackground(self.COMPLETED_BRUSH)
-            elif markup_completed is False:
-                listItem.setBackground(self.SKIPPED_BRUSH)
-            else:
-                listItem.setBackground(self.BLANK_BRUSH)
+    def onMarkupAdded(self, _, start_idx, end_idx):
+        # Add the new elements to our logic as well
+        for i in range(start_idx, end_idx+1):
+            item = self.markupList.itemAt(i)
+            label = item.text()
+            self.bound_task.add_markup_at(i, label)
+
+    def onMarkupRemoved(self, _, start_idx, end_idx):
+        # Remove the dropped elements from our logic as well
+        for i in range(start_idx, end_idx+1):
+            self.bound_task.remove_markup_at(i)
 
     def initMarkupPlacement(self):
         # Ensure the data unit's markup node is the selected one
@@ -349,7 +368,7 @@ class RapidMarkupGUI:
 
         # Find the next valid index in the remaining range
         for i in range(start_index, self.markupList.count):
-            markup_item = self.markupList.item(i)
+            markup_item = self.markupList.itemAt(i)
             markup_label = markup_item.text()
             # If this markup hasn't been placed, get the user to try and place it
             is_placed = self.bound_task.markup_placed[i]
@@ -359,7 +378,7 @@ class RapidMarkupGUI:
                 interactionNode.SetPlaceModePersistence(True)
 
                 # Highlight the corresponding entry in our list
-                markup_item.setBackground(self.HIGHLIGHTED_BRUSH)
+                markup_item.setBackground(self.markupList.HIGHLIGHTED_BRUSH)
 
                 # Register a callback for when a new point is placed!
                 def _onMarkupAdded(caller, _):
@@ -368,7 +387,7 @@ class RapidMarkupGUI:
                     caller.SetNthControlPointLabel(newest_point_idx, markup_label)
 
                     # Mark this markup as being placed visually
-                    markup_item.setBackground(self.COMPLETED_BRUSH)
+                    markup_item.setBackground(self.markupList.COMPLETED_BRUSH)
 
                     self.bound_task.markup_placed[i] = True
 
@@ -382,7 +401,7 @@ class RapidMarkupGUI:
                 # Register a callback for when the user exits placement mode (indicating they backed out)
                 def _onBackOut(_, __):
                     # Highlight the entry in "skipped" colors
-                    markup_item.setBackground(self.SKIPPED_BRUSH)
+                    markup_item.setBackground(self.markupList.SKIPPED_BRUSH)
 
                     # Proceed to the next point
                     self._userPlacePoint(i)

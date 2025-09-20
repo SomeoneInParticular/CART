@@ -43,9 +43,10 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
                 "A previous run of this task was found; would you like to load it?"
             ):
                 self.markup_labels = self.config.last_used_markups
+                self.markup_placed = [None for _ in self.markup_labels]
                 self.output_dir = self.config.last_used_output
 
-        if self.markup_labels is None or self.output_dir is None:
+        if self.output_dir is None:
             # Prompt the user with the setup GUI
             prompt = RapidMarkupSetupPrompt(self)
             setup_successful = prompt.exec()
@@ -55,11 +56,6 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
                 raise AssertionError(
                     f"Failed to set up for {self.__class__.__name__}")
 
-            # Pull the relevant information out of the setup prompt
-            for v in prompt.get_markup_labels():
-                self.markup_labels.append(v)
-                self.markup_placed.append(None)
-            self.markup_labels = prompt.get_markup_labels()
             self.output_dir = prompt.get_output()
 
         if self.output_dir is None:
@@ -121,13 +117,19 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         return self._output_manager
 
     ## Unit Management ##
-    def add_markup(self, new_label: str):
-        self.markup_labels.append(new_label)
-        self.markup_placed.append(False)
+    def add_markup_at(self, idx: int, new_label: str):
+        self.markup_labels.insert(idx, new_label)
+        self.markup_placed.insert(idx, None)
 
-    def remove_markup(self, idx: int):
+        # Update the config to match
+        self.config.last_used_markups = self.markup_labels
+
+    def remove_markup_at(self, idx: int):
         del self.markup_labels[idx]
         del self.markup_placed[idx]
+
+        # Update the config to match
+        self.config.last_used_markups = self.markup_labels
 
     ## Utils ##
     def on_bad_output(self):
@@ -166,6 +168,9 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
                     if k == fiducial_label and not self.markup_placed[i]:
                         self.markup_placed[j] = True
                         break  # End so that the next iteration can work
+
+        # Save any changes to our config
+        self.config.save()
 
         # If we have a GUI, update it as well
         if self.gui:
