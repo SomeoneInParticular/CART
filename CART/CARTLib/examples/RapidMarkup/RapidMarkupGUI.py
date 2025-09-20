@@ -141,6 +141,9 @@ class MarkupListWidget(qt.QWidget):
     def itemAt(self, idx: int) -> qt.QListWidgetItem:
         return self.markupList.item(idx)
 
+    def selectAt(self, idx: int) -> None:
+        self.markupList.setCurrentRow(idx)
+
     @contextmanager
     def noUpdateSignals(self):
         self.markupList.blockSignals(True)
@@ -338,7 +341,7 @@ class RapidMarkupGUI:
 
         # Start node placement
         # TODO: make this automated start configurable
-        self.enterMarkupMode()
+        self.initiateMarkupPlacement()
 
     def onMarkupAdded(self, _, start_idx, end_idx):
         # Add the new elements to our logic as well
@@ -353,7 +356,11 @@ class RapidMarkupGUI:
             self.bound_task.remove_markup_at(i)
 
     ## User Interaction Management ##
-    def enterMarkupMode(self):
+    def _enterMarkupMode(self):
+        # If we are already in markup mode, end here
+        if self.is_user_placing_markups:
+            return
+
         # Mark ourselves as being in markup mode
         self.is_user_placing_markups = True
 
@@ -368,20 +375,16 @@ class RapidMarkupGUI:
         self._prior_placement_mode = self._interaction_node.GetPlaceModePersistence()
         self._interaction_node.SetPlaceModePersistence(True)
 
-        # Start by getting the user to place the first node
-        self._userPlacePoint()
+    def _exitMarkupMode(self):
+        # If we are not in markup mode, end here
+        if not self.is_user_placing_markups:
+            return
 
-    def endMarkupMode(self):
         # Mark ourselves as no longer being in markup mode
         self.is_user_placing_markups = False
 
         # If observer callbacks are in place, remove them
-        markup_node = self.bound_task.data_unit.markup_node
-        if self.markup_observer_id:
-            markup_node.RemoveObserver(self.markup_observer_id)
-
-        if self.backout_observer_id:
-            self._interaction_node.RemoveObserver(self.backout_observer_id)
+        self.unregisterObservers()
 
         # Exit placement mode, if we were in it
         self._interaction_node.SetCurrentInteractionMode(
@@ -394,71 +397,102 @@ class RapidMarkupGUI:
         )
         self._prior_placement_mode = None
 
+        # Unselect everything
+        self.markupList.selectAt(-1)
+
         # Re-enable the ability to select, add, and remove markup nodes
         self.markupList.setEnabled(True)
 
-    # TODO: Rewrite this, this is cursed beyond belief
-    def _userPlacePoint(self, prior_idx: int = -1):
+    def initiateMarkupPlacement(self, idx: int = 0):
+        """
+        Initiate the user placing a given markup position.
+        """
+        # If we're not already in markup mode, enter it
+        if not self.is_user_placing_markups:
+            self._enterMarkupMode()
+
+        # Select the entry in our list to highlight it
+        self.markupList.selectAt(idx)
+
+        # Tell slicer to enter placement mode
+        self._interaction_node.SetCurrentInteractionMode(
+            self._interaction_node.Place
+        )
+
+        # Register observers for post-placement functions
+        self.registerObservers(idx)
+
+    def registerObservers(self, target_idx: int):
+        """
+        Register observers for when
+        """
+        # Pull information for the target index
+        markup_item = self.markupList.itemAt(target_idx)
+        markup_label = markup_item.text()
+
+        # Find the next unplaced markup index
+        next_idx = self.findNextUnplaced(target_idx + 1)
+
+        # Register a callback for when a new point has been placed
+        def _onPlace(caller, _):
+            # Change the name of the newly added node to the label
+            cp_idx = caller.GetNumberOfControlPoints() - 1
+            caller.SetNthControlPointLabel(cp_idx, markup_label)
+
+            # Mark this markup as being placed visually
+            markup_item.setBackground(self.markupList.COMPLETED_BRUSH)
+
+            # Update the logic that it has been placed
+            self.bound_task.markup_placed[target_idx] = True
+
+            # Try to prompt the user for the next unplaced markup
+            if next_idx is not None:
+                self.initiateMarkupPlacement(next_idx)
+            # Otherwise, end markup mode here
+            else:
+                self._exitMarkupMode()
+
+        def _onCancel(_, __):
+            # Highlight the entry in "skipped" colors
+            markup_item.setBackground(self.markupList.SKIPPED_BRUSH)
+
+            # Try to prompt the user for the next unplaced markup
+            if next_idx is not None:
+                self.initiateMarkupPlacement(next_idx)
+            # Otherwise, end markup mode here
+            else:
+                self._exitMarkupMode()
+
+        # Unregister previous observers
+        self.unregisterObservers()
+
+        # Register the new observers
+        markup_node = self.bound_task.data_unit.markup_node
+        self.markup_observer_id = markup_node.AddObserver(
+            markup_node.PointPositionDefinedEvent, _onPlace
+        )
+        self.backout_observer_id = self._interaction_node.AddObserver(
+            self._interaction_node.InteractionModeChangedEvent, _onCancel
+        )
+
+    def unregisterObservers(self) -> None:
         # Remove the previous observer callbacks
         markup_node = self.bound_task.data_unit.markup_node
         if self.markup_observer_id:
             markup_node.RemoveObserver(self.markup_observer_id)
 
-        interactionNode = slicer.app.applicationLogic().GetInteractionNode()
         if self.backout_observer_id:
-            interactionNode.RemoveObserver(self.backout_observer_id)
+            self._interaction_node.RemoveObserver(self.backout_observer_id)
 
-        # Move the starting point up 1
-        start_index = prior_idx + 1
-
-        # Find the next valid index in the remaining range
-        for i in range(start_index, self.markupList.count):
-            markup_item = self.markupList.itemAt(i)
-            markup_label = markup_item.text()
-            # If this markup hasn't been placed, get the user to try and place it
-            is_placed = self.bound_task.markup_placed[i]
-            if not is_placed:
-                # Enter placement mode for the user
-                interactionNode.SetCurrentInteractionMode(interactionNode.Place)
-
-                # Highlight the corresponding entry in our list
-                markup_item.setBackground(self.markupList.HIGHLIGHTED_BRUSH)
-
-                # Register a callback for when a new point is placed!
-                def _onMarkupAdded(caller, _):
-                    # Change the name of the newly added node to its proper name
-                    newest_point_idx = caller.GetNumberOfControlPoints() - 1
-                    caller.SetNthControlPointLabel(newest_point_idx, markup_label)
-
-                    # Mark this markup as being placed visually
-                    markup_item.setBackground(self.markupList.COMPLETED_BRUSH)
-
-                    self.bound_task.markup_placed[i] = True
-
-                    # Try to prompt the user for the next node
-                    self._userPlacePoint(i)
-
-                self.markup_observer_id = markup_node.AddObserver(
-                    markup_node.PointPositionDefinedEvent, _onMarkupAdded
-                )
-
-                # Register a callback for when the user exits placement mode (indicating they backed out)
-                def _onBackOut(_, __):
-                    # Highlight the entry in "skipped" colors
-                    markup_item.setBackground(self.markupList.SKIPPED_BRUSH)
-
-                    # Proceed to the next point
-                    self._userPlacePoint(i)
-
-                self.backout_observer_id = interactionNode.AddObserver(
-                    interactionNode.InteractionModeChangedEvent, _onBackOut
-                )
-
-                # Terminate
-                break
-        else:
-            # If the loop ran to completion, exit markup mode
-            self.endMarkupMode()
+    def findNextUnplaced(self, start_idx: int = 0) -> Optional[int]:
+        """
+        Find the next unplaced markup in our logic.
+        If none exist, returns None.
+        """
+        for i in range(start_idx, self.markupList.count):
+            if not self.bound_task.markup_placed[i]:
+                return i
+        return None
 
     ## GUI SYNCHRONIZATION ##
     def enter(self) -> None:
@@ -467,5 +501,5 @@ class RapidMarkupGUI:
     def exit(self) -> None:
         # If we are in markup mode (the user was placing markups), exit it
         if self.is_user_placing_markups:
-            self.endMarkupMode()
+            self._exitMarkupMode()
         pass
