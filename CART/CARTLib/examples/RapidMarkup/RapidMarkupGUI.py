@@ -326,6 +326,8 @@ class RapidMarkupGUI:
 
         self._addStartButton(formLayout)
 
+        self._addConfigButton(formLayout)
+
         return formLayout
 
     def _initMarkupList(self, formLayout: qt.QFormLayout):
@@ -358,6 +360,16 @@ class RapidMarkupGUI:
         # Add it to the layout
         formLayout.addWidget(startButton)
 
+    def _addConfigButton(self, formLayout: qt.QFormLayout):
+        # Create the button itself
+        configButton = qt.QPushButton(_("Configure"))
+
+        # When the button is pressed, make the config GUI appear
+        configButton.clicked.connect(self.bound_task.config.show_gui)
+
+        # Add it to the layout
+        formLayout.addWidget(configButton)
+
     def update(self, data_unit: RapidMarkupUnit):
         # Track the new data unit
         self.data_unit = data_unit
@@ -368,12 +380,14 @@ class RapidMarkupGUI:
         # Synchronize with our logic's state
         self.markupList.syncStateWithTask(self.bound_task)
 
-        # Start node placement
-        # TODO: Make this automated start configurable
-        first_incomplete = self.findNextUnplaced()
-        if first_incomplete is not None:
-            self.markupList.selectAt(first_incomplete)
-            self.initiateMarkupPlacement()
+        # Start node placement automatically if configured
+        if self.bound_task.config.start_automatically:
+            # See if there is an unplaced label to still place
+            first_incomplete = self.findNextUnplaced()
+            # If so, initiate its placement
+            if first_incomplete is not None:
+                self.markupList.selectAt(first_incomplete)
+                self.initiateMarkupPlacement()
 
     def onMarkupAdded(self, _, start_idx, end_idx):
         # Add the new elements to our logic as well

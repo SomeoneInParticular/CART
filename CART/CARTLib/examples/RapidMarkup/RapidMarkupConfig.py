@@ -1,7 +1,48 @@
 from pathlib import Path
 from typing import Optional
 
-from CARTLib.utils.config import DictBackedConfig, ProfileConfig
+import qt
+from slicer.i18n import tr as _
+
+
+from CARTLib.utils.config import DictBackedConfig, ConfigDialog
+
+
+class RapidMarkupConfigDialog(ConfigDialog["RapidMarkupConfig"]):
+    def sync(self):
+        # Update the auto-start checkbox to match the config state
+        self.autoStartCheckBox.blockSignals(True)
+
+        self.autoStartCheckBox.setChecked(self.bound_config.start_automatically)
+
+        self.autoStartCheckBox.blockSignals(False)
+
+    def buildGUI(self, layout: qt.QFormLayout):
+        # General window properties
+        self.setWindowTitle(_("Rapid Markup Configuration"))
+
+        # Build checkboxes for the GUI
+        self._buildCheckboxes(layout)
+
+    def _buildCheckboxes(self, layout: qt.QFormLayout):
+        # Checkbox for automated markup placement start
+        autoStartCheckBox = qt.QCheckBox()
+        autoStartLabel = qt.QLabel(_("Start Automatically"))
+        autoStartLabel.setToolTip(_(
+            "If checked, markup placement for the next unplaced label will "
+            "begin automatically when a new case is loaded."
+        ))
+
+        # When the checkbox changes, change the values
+        def onAutoStartChanged(new_val: bool):
+            self.bound_config.start_automatically = new_val
+        autoStartCheckBox.stateChanged.connect(onAutoStartChanged)
+
+        # Add it to the layout
+        layout.addRow(autoStartCheckBox, autoStartLabel)
+
+        # Track it for later
+        self.autoStartCheckBox = autoStartCheckBox
 
 
 class RapidMarkupConfig(DictBackedConfig):
@@ -41,7 +82,19 @@ class RapidMarkupConfig(DictBackedConfig):
             self._backing_dict[self.LAST_USED_OUTPUT] = str(new_path.resolve())
         self.has_changed = True
 
+    START_AUTOMATICALLY = "start_automatically"
+
+    @property
+    def start_automatically(self) -> bool:
+        return self.get_or_default(self.START_AUTOMATICALLY, False)
+
+    @start_automatically.setter
+    def start_automatically(self, new_val: bool) -> None:
+        self._backing_dict[self.START_AUTOMATICALLY] = new_val
+        self.has_changed = True
+
     ## Utils ##
     def show_gui(self) -> None:
-        pass
+        dialog = RapidMarkupConfigDialog(self)
+        dialog.exec()
 
