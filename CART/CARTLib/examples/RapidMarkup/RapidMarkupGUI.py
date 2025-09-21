@@ -347,7 +347,10 @@ class RapidMarkupGUI:
         startButton = qt.QPushButton(_("Begin Placement"))
 
         # When the start button is clicked, start user placement
-        startButton.clicked.connect(self.initiateMarkupPlacement)
+        startButton.clicked.connect(
+            # Lambda required to prevent passing the buttons "state" post-click
+            lambda: self.initiateMarkupPlacement()
+        )
 
         # Only enable the start button when something has been selected
         self.markupList.selectionChanged.connect(
