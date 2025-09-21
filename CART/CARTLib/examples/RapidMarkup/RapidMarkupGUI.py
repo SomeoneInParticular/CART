@@ -474,7 +474,13 @@ class RapidMarkupGUI:
 
     def registerObservers(self, target_idx: int):
         """
-        Register observers for when
+        Register observers for cleaning up after markup placement is done.
+
+        Specifically:
+            * Marks the list item with the correct color
+            * Change the text of the placed markup to match the label
+            * Ensures placement mode is exited correctly when needed
+            * (If configured) Initiate the next label's placement
         """
         # Pull information for the target index
         markup_item = self.markupList.itemAt(target_idx)
@@ -496,7 +502,7 @@ class RapidMarkupGUI:
             self.bound_task.markup_placed[target_idx] = True
 
             # Try to prompt the user for the next unplaced markup
-            if next_idx is not None:
+            if next_idx is not None and self.bound_task.config.chain_placement:
                 self.initiateMarkupPlacement(next_idx)
             # Otherwise, end markup mode here
             else:
@@ -507,7 +513,7 @@ class RapidMarkupGUI:
             markup_item.setBackground(self.markupList.SKIPPED_BRUSH)
 
             # Try to prompt the user for the next unplaced markup
-            if next_idx is not None:
+            if next_idx is not None and self.bound_task.config.chain_placement:
                 self.initiateMarkupPlacement(next_idx)
             # Otherwise, end markup mode here
             else:

@@ -10,12 +10,10 @@ from CARTLib.utils.config import DictBackedConfig, ConfigDialog
 
 class RapidMarkupConfigDialog(ConfigDialog["RapidMarkupConfig"]):
     def sync(self):
-        # Update the auto-start checkbox to match the config state
-        self.autoStartCheckBox.blockSignals(True)
-
-        self.autoStartCheckBox.setChecked(self.bound_config.start_automatically)
-
-        self.autoStartCheckBox.blockSignals(False)
+        # Disable our signals while we synchronize
+        with self.block_signals():
+            self.autoStartCheckBox.setChecked(self.bound_config.start_automatically)
+            self.chainPlacementCheckBox.setChecked(self.bound_config.chain_placement)
 
     def buildGUI(self, layout: qt.QFormLayout):
         # General window properties
@@ -33,16 +31,36 @@ class RapidMarkupConfigDialog(ConfigDialog["RapidMarkupConfig"]):
             "begin automatically when a new case is loaded."
         ))
 
-        # When the checkbox changes, change the values
+        # When the checkbox changes, change the corresponding config value
         def onAutoStartChanged(new_val: bool):
             self.bound_config.start_automatically = new_val
         autoStartCheckBox.stateChanged.connect(onAutoStartChanged)
 
         # Add it to the layout
-        layout.addRow(autoStartCheckBox, autoStartLabel)
+        layout.addRow(autoStartLabel, autoStartCheckBox)
 
         # Track it for later
         self.autoStartCheckBox = autoStartCheckBox
+
+        # Checkbox for chaining markup placements
+        chainPlacementCheckBox = qt.QCheckBox()
+        chainPlacementLabel = qt.QLabel(_("Chain Placements"))
+        chainPlacementLabel.setToolTip(_(
+            "If checked, placing or skipping a markup label will initiate the  "
+            "placement of the next markup label in the list. "
+            "Repeats until all unplaced labels have been placed or skipped."
+        ))
+
+        # When the checkbox changes, change the values
+        def onChainPlacementChanged(new_val: bool):
+            self.bound_config.chain_placement = new_val
+        chainPlacementCheckBox.stateChanged.connect(onChainPlacementChanged)
+
+        # Add it to the layout
+        layout.addRow(chainPlacementLabel, chainPlacementCheckBox)
+
+        # Track it for later
+        self.chainPlacementCheckBox = chainPlacementCheckBox
 
 
 class RapidMarkupConfig(DictBackedConfig):
@@ -91,6 +109,17 @@ class RapidMarkupConfig(DictBackedConfig):
     @start_automatically.setter
     def start_automatically(self, new_val: bool) -> None:
         self._backing_dict[self.START_AUTOMATICALLY] = new_val
+        self.has_changed = True
+
+    CHAIN_PLACEMENT = "chain_placement"
+
+    @property
+    def chain_placement(self) -> bool:
+        return self.get_or_default(self.CHAIN_PLACEMENT, False)
+
+    @chain_placement.setter
+    def chain_placement(self, new_val: bool):
+        self._backing_dict[self.CHAIN_PLACEMENT] = new_val
         self.has_changed = True
 
     ## Utils ##
