@@ -23,10 +23,9 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         self.gui: Optional[RapidMarkupGUI] = None
         self.data_unit: Optional[RapidMarkupUnit] = None
 
-        # Annotation tracking
-        self.markup_labels: list[str] = []
-        # None -> nothing done, True -> has been placed, False -> has been skipped
-        self.markup_placed: list[Optional[bool]] = []
+        # Markup tracking
+        self.markups: list[tuple[str, Optional[str]]] = []
+        self.untracked_markups: dict[str, list[str]] = {}
 
         # Output management
         self._output_dir: Optional[Path] = None
@@ -42,8 +41,9 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
             if slicer.util.confirmYesNoDisplay(
                 "A previous run of this task was found; would you like to load it?"
             ):
-                self.markup_labels = self.config.last_used_markups
-                self.markup_placed = [None for _ in self.markup_labels]
+                self.markups = [
+                    (l, None) for l in self.config.last_used_markups
+                ]
                 self.output_dir = self.config.last_used_output
 
         if self.output_dir is None:
@@ -86,6 +86,10 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
 
     ## Properties
     @property
+    def markup_labels(self) -> list[str]:
+        return [l for l, __ in self.markups]
+
+    @property
     def output_dir(self) -> Path:
         return self._output_dir
 
@@ -118,16 +122,56 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         return self._output_manager
 
     ## Unit Management ##
-    def add_markup_at(self, idx: int, new_label: str):
-        self.markup_labels.insert(idx, new_label)
-        self.markup_placed.insert(idx, None)
+    def _pop_untracked_markup(self, label: str) -> Optional[str]:
+        """
+        Tries to find an untracked markup with a label matching the
+        label provided. If it succeeds, removes it from our
+        'untracked' map and provides the ID for the corresponding
+        node for re-use. If it fails, returns None instead
+        """
+        if label in self.untracked_markups.keys():
+            markup_id = self.untracked_markups[label].pop()
+            if len(self.untracked_markups[label]) < 1:
+                del self.untracked_markups[label]
+            return markup_id
+        else:
+            return None
+
+    def add_markup_label(self, idx: int, new_label: str) -> Optional[str]:
+        """
+        Add a new markup label to the logic.
+
+        Returns the ID of the matching markup node in the tracked
+        data unit if one was found; otherwise, returns None
+        """
+        markup_id = None
+        # Bind to any untracked markup that may exist by the same name if possible
+        if new_label in self.untracked_markups.keys():
+            markup_id = self._pop_untracked_markup(new_label)
+
+        # Track the resulting tuple
+        self.markups.insert(idx, (new_label, markup_id))
 
         # Update the config to match
         self.config.last_used_markups = self.markup_labels
 
-    def remove_markup_at(self, idx: int):
-        del self.markup_labels[idx]
-        del self.markup_placed[idx]
+        # Return the ID of the markup node, if any
+        return markup_id
+
+    def remove_markup_label(self, idx: int):
+        markup_label, markup_id = self.markups[idx]
+
+        # TODO: Re-enable this w/ configuration
+        # # If we have an associated markup, remove it from the scene as well
+        # if markup_id:
+        #     markup_idx = self.data_unit.markup_node.GetNthControlPointIndexByID(markup_id)
+        #     self.data_unit.markup_node.RemoveNthControlPoint(markup_idx)
+
+        # Stop tracking the markup
+        untracked_markup_group = self.untracked_markups.get(markup_label, [])
+        untracked_markup_group.append(markup_id)
+        self.untracked_markups[markup_label] = untracked_markup_group
+        del self.markups[idx]
 
         # Update the config to match
         self.config.last_used_markups = self.markup_labels
@@ -142,17 +186,30 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         it will just update the new control point's label to match
         the label specified by this logic, and track it for later.
 
-        If one does, however, it will replace the old control point
-        in the MRML scene, effectively "moving" it.
+        If one does, however, it will move that control point to the
+        position of the newest control point and then delete it,
+        effectively "replacing" it.
         """
-        # Change the name of the newly added node to the label
+        # Pull some globally relevant data first
         markup_node = self.data_unit.markup_node
-        newest_cp_idx = markup_node.GetNumberOfControlPoints() - 1
-        markup_label = self.markup_labels[idx]
-        markup_node.SetNthControlPointLabel(newest_cp_idx, markup_label)
+        markup_label, markup_id = self.markups[idx]
+        new_markup_idx = markup_node.GetNumberOfControlPoints() - 1
 
-        # Update the logic that it has been placed
-        self.markup_placed[idx] = True
+        # If this index doesn't have a markup yet, simply use it
+        if not markup_id:
+            # Make the markups label match our own
+            markup_node.SetNthControlPointLabel(new_markup_idx, markup_label)
+            # Track it for later re-use
+            markup_id = markup_node.GetNthControlPointID(new_markup_idx)
+            self.markups[idx] = (markup_label, markup_id)
+        # Otherwise, move the markup instead
+        else:
+            # Move the old markup to the new markup's position
+            new_pos = markup_node.GetNthControlPointPositionVector(new_markup_idx)
+            old_markup_idx = markup_node.GetNthControlPointIndexByID(markup_id)
+            markup_node.SetNthControlPointPosition(old_markup_idx, new_pos)
+            # Delete the new markup
+            markup_node.RemoveNthControlPoint(new_markup_idx)
 
     ## Utils ##
     def on_bad_output(self):
@@ -181,16 +238,21 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
             fit=True
         )
 
-        # Re-build our set of to-be-placed of fiducials
-        self.markup_placed = [None for _ in self.markup_labels]
-        # Mark those the data unit already has as already being annotated
+        # Generate a map of pre-existing values within the data unit (if any)
+        self.untracked_markups = dict()
         for i in range(data_unit.markup_node.GetNumberOfControlPoints()):
-            fiducial_label = data_unit.markup_node.GetNthControlPointLabel(i)
-            if fiducial_label in self.markup_labels:
-                for j, k in enumerate(self.markup_labels):
-                    if k == fiducial_label and not self.markup_placed[i]:
-                        self.markup_placed[j] = True
-                        break  # End so that the next iteration can work
+            markup_id = data_unit.markup_node.GetNthControlPointID(i)
+            markup_label = data_unit.markup_node.GetNthControlPointLabel(i)
+            prior_vals = self.untracked_markups.get(markup_label, [])
+            prior_vals.append(markup_id)
+            self.untracked_markups[markup_label] = prior_vals
+
+        # Generate our list of tracked markups, binding to pre-existing where possible
+        for i, (l, __) in enumerate(self.markups):
+            # Try to find the corresponding markup
+            v = self._pop_untracked_markup(l)
+            # Build a tuple from the result
+            self.markups[i] = (l, v)
 
         # Save any changes to our config
         self.config.save()

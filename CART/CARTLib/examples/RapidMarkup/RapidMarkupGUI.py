@@ -44,11 +44,11 @@ class MarkupListWidget(qt.QWidget):
 
         self._addButtonPanel(layout)
 
-        # Synchronize ourselves with the loaded task
-        self.syncStateWithTask(task)
-
         # Track it for later
         self.bound_task = task
+
+        # Synchronize ourselves with the loaded task
+        self.syncStateWithTask()
 
     ## GUI Construction ##
     def _addMarkupList(self, layout):
@@ -163,18 +163,15 @@ class MarkupListWidget(qt.QWidget):
         self.markupList.blockSignals(False)
         self.markupList.model().blockSignals(False)
 
-    def syncStateWithTask(self, task: "RapidMarkupTask"):
+    def syncStateWithTask(self):
         # Re-assess the markup list state based on the logic
         with self.noUpdateSignals():
             self.markupList.clear()
 
-            for i, label in enumerate(task.markup_labels):
+            for i, (label, markup_id) in enumerate(self.bound_task.markups):
                 listItem = qt.QListWidgetItem(label)
-                markup_completed = task.markup_placed[i]
-                if markup_completed:
+                if markup_id:
                     listItem.setBackground(self.COMPLETED_BRUSH)
-                elif markup_completed is False:
-                    listItem.setBackground(self.SKIPPED_BRUSH)
                 else:
                     listItem.setBackground(self.BLANK_BRUSH)
                 self.markupList.addItem(listItem)
@@ -381,7 +378,7 @@ class RapidMarkupGUI:
         self.data_unit.layout_handler.apply_layout()
 
         # Synchronize with our logic's state
-        self.markupList.syncStateWithTask(self.bound_task)
+        self.markupList.syncStateWithTask()
 
         # Start node placement automatically if configured
         if self.bound_task.config.start_automatically:
@@ -397,12 +394,16 @@ class RapidMarkupGUI:
         for i in range(start_idx, end_idx+1):
             item = self.markupList.itemAt(i)
             label = item.text()
-            self.bound_task.add_markup_at(i, label)
+            markup_id = self.bound_task.add_markup_label(i, label)
+            # If there was an associated markup ID, color the new item
+            # as having already been placed
+            if markup_id:
+                item.setBackground(self.markupList.COMPLETED_BRUSH)
 
     def onMarkupRemoved(self, _, start_idx, end_idx):
         # Remove the dropped elements from our logic as well
         for i in range(start_idx, end_idx+1):
-            self.bound_task.remove_markup_at(i)
+            self.bound_task.remove_markup_label(i)
 
     ## User Interaction Management ##
     def _enterMarkupMode(self):
@@ -436,6 +437,13 @@ class RapidMarkupGUI:
         self.unregisterObservers()
 
         # Exit placement mode, if we were in it
+        # TODO: Figure out why this throws a "control point does not exist" error
+        #  when the user moves an existing markup AND all control points managed
+        #  by the logic have been placed.
+        # KO: Seems to be an upstream bug caused by a de-sync when a control point
+        #  (markup) has been deleted very recently, but I cannot tell for sure.
+        #  In any case, the code still works just fine without it; just spams the
+        #  console with errors, which can be quite annoying.
         self._interaction_node.SetCurrentInteractionMode(
             self._interaction_node.ViewTransform
         )
@@ -543,8 +551,9 @@ class RapidMarkupGUI:
         Find the next unplaced markup in our logic.
         If none exist, returns None.
         """
-        for i in range(start_idx, self.markupList.count):
-            if not self.bound_task.markup_placed[i]:
+        for i in range(start_idx, len(self.bound_task.markups)):
+            __, cp_id = self.bound_task.markups[i]
+            if not cp_id:
                 return i
         return None
 
