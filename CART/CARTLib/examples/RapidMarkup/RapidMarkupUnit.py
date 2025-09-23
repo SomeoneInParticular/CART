@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import slicer
-from CARTLib.examples.shared import CARTStandardUnit
+from CARTLib.utils.data import CARTStandardUnit
 
 
 class RapidMarkupUnit(CARTStandardUnit):

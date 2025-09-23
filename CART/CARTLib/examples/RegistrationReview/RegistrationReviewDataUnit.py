@@ -1,4 +1,4 @@
-from CARTLib.examples.shared import CARTStandardUnit
+from CARTLib.utils.data import CARTStandardUnit
 
 
 class RegistrationReviewDataUnit(CARTStandardUnit):

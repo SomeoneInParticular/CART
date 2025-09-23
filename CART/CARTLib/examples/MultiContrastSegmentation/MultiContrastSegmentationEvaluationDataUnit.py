@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import Optional
 
 import slicer
-from CARTLib.examples.shared import CARTStandardUnit
-from CARTLib.utils.data import create_empty_segmentation_node
+
+from CARTLib.utils.data import create_empty_segmentation_node, CARTStandardUnit
 
 
 class MultiContrastSegmentationEvaluationDataUnit(CARTStandardUnit):
