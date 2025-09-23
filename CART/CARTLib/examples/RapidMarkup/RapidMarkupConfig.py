@@ -14,6 +14,7 @@ class RapidMarkupConfigDialog(ConfigDialog["RapidMarkupConfig"]):
         with self.block_signals():
             self.autoStartCheckBox.setChecked(self.bound_config.start_automatically)
             self.chainPlacementCheckBox.setChecked(self.bound_config.chain_placement)
+            self.removeFromSceneCheckBox.setChecked(self.bound_config.remove_from_scene)
 
     def buildGUI(self, layout: qt.QFormLayout):
         # General window properties
@@ -61,6 +62,28 @@ class RapidMarkupConfigDialog(ConfigDialog["RapidMarkupConfig"]):
 
         # Track it for later
         self.chainPlacementCheckBox = chainPlacementCheckBox
+
+        # Checkbox for scene removal on delete
+        removeFromSceneCheckBox = qt.QCheckBox()
+        removeFromSceneLabel = qt.QLabel(_("Deletions Remove Corresponding Markup"))
+        removeFromSceneCheckBox.setToolTip(_(
+            "If checked, removing a markup label will also remove its associated markup "
+            "point in the Slicer scene. Otherwise, the markup is left in the scene "
+            "(and can be interacted with manually), but can no longer be interacted with "
+            "using the task GUI until the corresponding label is re-added."
+        ))
+
+        # When the checkbox changes, change the values
+        def onRemoveFromSceneChanged(new_val: bool):
+            self.bound_config.remove_from_scene = new_val
+
+        removeFromSceneCheckBox.stateChanged.connect(onRemoveFromSceneChanged)
+
+        # Add it to the layout
+        layout.addRow(removeFromSceneLabel, removeFromSceneCheckBox)
+
+        # Track it for later
+        self.removeFromSceneCheckBox = removeFromSceneCheckBox
 
 
 class RapidMarkupConfig(DictBackedConfig):
@@ -120,6 +143,17 @@ class RapidMarkupConfig(DictBackedConfig):
     @chain_placement.setter
     def chain_placement(self, new_val: bool):
         self._backing_dict[self.CHAIN_PLACEMENT] = new_val
+        self.has_changed = True
+
+    REMOVE_FROM_SCENE = "remove_from_scene"
+
+    @property
+    def remove_from_scene(self) -> bool:
+        return self.get_or_default(self.REMOVE_FROM_SCENE, False)
+
+    @remove_from_scene.setter
+    def remove_from_scene(self, new_val: bool):
+        self._backing_dict[self.REMOVE_FROM_SCENE] = new_val
         self.has_changed = True
 
     ## Utils ##

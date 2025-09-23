@@ -161,16 +161,18 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
     def remove_markup_label(self, idx: int):
         markup_label, markup_id = self.markups[idx]
 
-        # TODO: Re-enable this w/ configuration
-        # # If we have an associated markup, remove it from the scene as well
-        # if markup_id:
-        #     markup_idx = self.data_unit.markup_node.GetNthControlPointIndexByID(markup_id)
-        #     self.data_unit.markup_node.RemoveNthControlPoint(markup_idx)
-
-        # Stop tracking the markup
-        untracked_markup_group = self.untracked_markups.get(markup_label, [])
-        untracked_markup_group.append(markup_id)
-        self.untracked_markups[markup_label] = untracked_markup_group
+        # If the user has configured it, remove the corresponding markup from the scene as well
+        if markup_id and self.config.remove_from_scene:
+            # Find the markup in question and remove it from the scene
+            markup_idx = self.data_unit.markup_node.GetNthControlPointIndexByID(markup_id)
+            self.data_unit.markup_node.RemoveNthControlPoint(markup_idx)
+        # Otherwise, we just stop tracking it instead
+        else:
+            # Move the markup from tracked to untracked
+            untracked_markup_group = self.untracked_markups.get(markup_label, [])
+            untracked_markup_group.append(markup_id)
+            self.untracked_markups[markup_label] = untracked_markup_group
+        # Remove the markup from being tracked
         del self.markups[idx]
 
         # Update the config to match
