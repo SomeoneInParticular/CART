@@ -131,6 +131,28 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         # Update the config to match
         self.config.last_used_markups = self.markup_labels
 
+    def update_on_new_markup(self, idx: int):
+        """
+        Updates the reference to the control point ("markup") at
+        the specified index to match the attributes of the most
+        newly placed control point.
+
+        If no associated control point exists for the index yet,
+        it will just update the new control point's label to match
+        the label specified by this logic, and track it for later.
+
+        If one does, however, it will replace the old control point
+        in the MRML scene, effectively "moving" it.
+        """
+        # Change the name of the newly added node to the label
+        markup_node = self.data_unit.markup_node
+        newest_cp_idx = markup_node.GetNumberOfControlPoints() - 1
+        markup_label = self.markup_labels[idx]
+        markup_node.SetNthControlPointLabel(newest_cp_idx, markup_label)
+
+        # Update the logic that it has been placed
+        self.markup_placed[idx] = True
+
     ## Utils ##
     def on_bad_output(self):
         # Determine which error message to show

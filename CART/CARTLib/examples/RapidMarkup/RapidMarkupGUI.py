@@ -487,22 +487,17 @@ class RapidMarkupGUI:
         """
         # Pull information for the target index
         markup_item = self.markupList.itemAt(target_idx)
-        markup_label = markup_item.text()
 
         # Find the next unplaced markup index
         next_idx = self.findNextUnplaced(target_idx + 1)
 
         # Register a callback for when a new point has been placed
-        def _onPlace(caller, _):
+        def _onPlace(_, __):
             # Change the name of the newly added node to the label
-            cp_idx = caller.GetNumberOfControlPoints() - 1
-            caller.SetNthControlPointLabel(cp_idx, markup_label)
+            self.bound_task.update_on_new_markup(target_idx)
 
             # Mark this markup as being placed visually
             markup_item.setBackground(self.markupList.COMPLETED_BRUSH)
-
-            # Update the logic that it has been placed
-            self.bound_task.markup_placed[target_idx] = True
 
             # Try to prompt the user for the next unplaced markup
             if next_idx is not None and self.bound_task.config.chain_placement:
