@@ -58,8 +58,9 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
 
             self.output_dir = prompt.get_output()
 
-        if self.output_dir is None:
-            raise ValueError("Cannot initialize task without an output directory!")
+            # If the user still didn't provide an output, end here
+            if self.output_dir is None:
+                raise ValueError("Cannot initialize task without an output directory!")
 
         # Initialize our GUI
         self.gui = RapidMarkupGUI(self)
