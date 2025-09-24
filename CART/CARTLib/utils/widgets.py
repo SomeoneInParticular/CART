@@ -191,7 +191,6 @@ class CARTSegmentationEditorWidget(
             editor_node = self.scene.CreateNodeByClass(self.SEGMENT_EDITOR_NODE_KEY)
             editor_node.UnRegister(None)
             editor_node.SetSingletonTag(self.tag)
-            # Update ourselves to use this editor node
             self.scene.AddNode(editor_node)
 
         # Update ourselves to use this editor node
