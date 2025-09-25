@@ -8,7 +8,7 @@ import slicer
 from slicer.i18n import tr as _
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-from CARTLib.utils.widgets import CARTSegmentationEditorWidget
+from CARTLib.utils.widgets import CARTSegmentationEditorWidget, showSuccessPrompt, showErrorPrompt
 from CARTLib.utils.layout import Orientation
 from CARTLib.utils.config import ProfileConfig
 from CARTLib.utils.task import cart_task
@@ -400,20 +400,12 @@ class MultiContrastSegmentationEvaluationGUI:
 
     def saveCompletePrompt(self, err_msg: Optional[str]) -> None:
         if err_msg is None:
-            msg = qt.QMessageBox()
-            msg.setWindowTitle("Success!")
-
-            # Get success message from the output manager (now includes CSV log info)
             success_message = self.bound_task.output_manager.get_success_message(
                 self.bound_task.data_unit
             )
-            msg.setText(success_message)
-            msg.exec()
+            showSuccessPrompt(success_message)
         else:
-            errBox = qt.QErrorMessage()
-            errBox.setWindowTitle("ERROR!")
-            errBox.showMessage(err_msg)
-            errBox.exec()
+            showErrorPrompt(err_msg)
 
     ## GUI SYNCHRONIZATION ##
     def enter(self) -> None:

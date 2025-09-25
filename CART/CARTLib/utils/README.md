@@ -13,6 +13,7 @@ This package contains a number of utilities or structures which have a common en
   * [Manual I/O Handling](#manual-io-handling)
 * [Slicer Layout Handling](#slicer-layout-handling)
 * [Task Registration](#task-registration)
+* [Widgets](#widgets)
 
 ## BIDS Management
 
@@ -153,6 +154,10 @@ The contents of the `widgets.py` file are QT widget elements which fall into one
 * Widgets which interact directly with CART itself in a standardized way
 
 Both can be re-used within your custom tasks as you see fit, or sub-classed further to extend/revise their behaviour.
+
+### Success/Error Prompts
+
+The functions `showSuccessPrompt` and `showErrorPrompt` provide a standardized way to show a success/error message to the user. While our example task's mostly use to this provide confirmation that an attempt to save a file was successful (or not), they can be used for any context where you want the user to know something ran successfully (or not).
 
 ### CARTSegmentationEditorWidget
 

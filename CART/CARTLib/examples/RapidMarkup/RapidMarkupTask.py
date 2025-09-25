@@ -6,6 +6,7 @@ import slicer
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.utils.config import ProfileConfig
 from CARTLib.utils.task import cart_task
+from CARTLib.utils.widgets import showSuccessPrompt
 from slicer.i18n import tr as _
 
 from RapidMarkupConfig import RapidMarkupConfig
@@ -264,9 +265,17 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
             self.gui.update(data_unit)
 
     def save(self) -> Optional[str]:
+        # We can only save if we have something to save!
         if not self.data_unit:
             raise ValueError("Cannot save, nothing to save!")
-        self.output_manager.save_markups(self.data_unit)
+        # Delegate to the output manager to save the file
+        result_msg = self.output_manager.save_markups(self.data_unit)
+        # Log the result to console
+        print(result_msg)
+        # If we have a GUI, prompt the user as well
+        if self.gui:
+            showSuccessPrompt(result_msg)
+
 
     def enter(self):
         if self.gui:

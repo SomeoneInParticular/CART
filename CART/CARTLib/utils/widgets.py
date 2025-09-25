@@ -3,13 +3,41 @@ from typing import Optional
 import ctk
 import qt
 import slicer
+from slicer.i18n import tr as _
 
 # The code below does actually work, but the Slicer widgets are only added
 #  to the namespace after slicer boots, hence the error suppression
 # noinspection PyUnresolvedReferences
 import qSlicerSegmentationsModuleWidgetsPythonQt
 
+## Standardized Prompts ##
+def showSuccessPrompt(msg: str, parent_widget: Optional[qt.QWidget] = None):
+    """
+    Show a standardized QT prompt for something being successful.
 
+    Blocks interactions until closed (modal); you should provide a
+    parent widget to "block" to avoid cross-modal blocking if possible
+    """
+    # Build the prompt itself
+    msgPrompt = qt.QMessageBox(parent_widget)
+    msgPrompt.setWindowTitle(_("SUCCESS!"))
+
+    # Display the requested text within it, and show it to the user
+    msgPrompt.setText(msg)
+    msgPrompt.exec()
+
+
+def showErrorPrompt(msg: str, parent_widget: Optional[qt.QWidget]):
+    # Build the prompt itself
+    errBox = qt.QErrorMessage(parent_widget)
+    errBox.setWindowTitle(_("ERROR!"))
+
+    # Display the requested text within it, and show it to the user
+    errBox.showMessage(msg)
+    errBox.exec()
+
+
+## CART-Tuned Segmentation Editor ##
 class _NodeComboBoxProxy(qt.QComboBox):
     """
     A combobox widget which delegates to a proxy `qMRMLNodeComboBox` to run operations

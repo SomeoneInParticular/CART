@@ -111,7 +111,7 @@ class RapidMarkupOutputManager:
         return self._markup_output_dir
 
     ## I/O ##
-    def save_markups(self, data_unit: RapidMarkupUnit):
+    def save_markups(self, data_unit: RapidMarkupUnit) -> str:
         # Get the markup node from the data unit
         markup_node = data_unit.markup_node
 
@@ -135,3 +135,11 @@ class RapidMarkupOutputManager:
             writer = csv.DictWriter(fp, fieldnames=self.LOG_HEADERS)
             writer.writeheader()
             writer.writerows(self.csv_log.values())
+
+        # Return a success message
+        result_msg = (
+            f"Markups saved to {str(markup_output_file.resolve())}."
+            f"\n\n"
+            f"Status logged to {str(self.csv_log_file.resolve())}."
+        )
+        return result_msg
