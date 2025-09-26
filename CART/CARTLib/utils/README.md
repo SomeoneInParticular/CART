@@ -89,7 +89,23 @@ You can also create a "blank" segmentation using the `create_empty_segmentation_
 
 #### Markups I/O
 
-Supports markups stored in the Slicer `.json` format; load with `load_markups`, save with `save_markups_to_json`. What is loaded/saved depends on the type of markup contained within the file; see [the official documentation](https://slicer.readthedocs.io/en/latest/user_guide/modules/markups.html) for more details.
+Supports markups stored in both the `.mrk.json` and `.nii` formats. While both formats can be loaded with `load_markups`, markups have two save functions: `save_markups_to_json` (which saves the markups in Slicer's `.mrk.json` format) and `save_markups_to_nifti` (which saves the markups into `.nii` label file format).
+
+For the `.mrk.json` format, what is loaded/saved depends on the type of markup contained within the file; see [the official documentation](https://slicer.readthedocs.io/en/latest/user_guide/modules/markups.html) for more details.
+
+The `.nii`, being a [NiFTI](https://nifti.nimh.nih.gov/nifti-1/) based format, comes with several limitations:
+
+  * Can only store positional point lists.
+  * Label information for each point is not conserved in the `.nii` file; instead, it is saved in the `.json` sidecar, which must be parsed alongside the `.nii` file to point labels.
+  * Positions are IJK voxel-bound (that is, all markups must are rounded to the nearest voxel position, and cannot exist outside those positions).
+  * Only one point can exist in the same IJK co-ordinate; placing multiple in the same position will result in them over-writing each other.
+  * Cannot store label ordering information; `.nii` files loaded using `load_markup` will be organized in the order they were found by `numpy` when finding non-zero label values.
+
+#### Sidecars
+
+Sidecar files are built to store data that can't be stored in the "main" file, but should be both associated with it and readily available. To aid with this, CART provides a suite of JSON sidecar utilities, which can find (`find_json_sidecar_path`), save (`save_json_sidecar`), and load (`load_json_sidecar`) data to a sidecar. 
+
+To use them, provide a path to the file the sidecar should be associated with. In the case of saving, you should also provide the information you want stored, formatted into a dictionary compatible with [Python's `json` library](https://docs.python.org/3/library/json.html).
 
 #### Node Grouping
 
