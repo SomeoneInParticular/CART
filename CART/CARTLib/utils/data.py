@@ -67,6 +67,7 @@ def load_segmentation(path: Path):
     # Return the result
     return segment_node
 
+
 def load_markups(path: Path) -> list[slicer.vtkMRMLMarkupsFiducialNode]:
     # If the path points to a NiFTI file, load it using our custom loader
     if ".nii" in path.suffixes:
