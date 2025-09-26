@@ -1,4 +1,6 @@
 import itertools
+from datetime import datetime
+import json
 from pathlib import Path
 from typing import Optional, Any
 
@@ -368,6 +370,55 @@ def save_markups_to_nifti(markup_node, reference_volume, path: Path):
         # Ensure that, no matter what, the segmentation node is removed
         if markup_segment_node:
             slicer.mrmlScene.RemoveNode(markup_segment_node)
+
+
+## SIDECAR FILES ##
+def find_json_sidecar_path(main_file_path: Path) -> Path:
+    """
+    Generate a path to where the JSON sidecar for a given file would be.
+
+    Note that YOU are responsible for checking whether the file exists
+    or not, and handling the result appropriately.
+    """
+    # Identify where the JSON sidecar should be
+    sidecar_fname = main_file_path.name.split(main_file_path.suffixes[0])[0] + ".json"
+    sidecar_path = main_file_path.parent / sidecar_fname
+
+    # Return the result
+    return sidecar_path
+
+
+def load_json_sidecar(main_file_path: Path) -> Optional[dict]:
+    """
+    Tries to load the contents of a JSON sidecar associated with
+    the passed file.
+
+    Returns None if the file does not exist, or was a directory.
+    """
+    # Get the path to where the sidecar should be
+    sidecar_path = find_json_sidecar_path(main_file_path)
+
+    # If it doesn't exist, return None
+    if not sidecar_path.exists() or not sidecar_path.is_file():
+        return None
+
+    # Otherwise, try to load the contents of the file and return it
+    with open(sidecar_path, "r") as fp:
+        sidecar_data = json.load(fp)
+        return sidecar_data
+
+
+def save_json_sidecar(main_file_path: Path, sidecar_data: dict):
+    """
+    Tries to save the sidecar data into a JSON sidecar, sharing the same
+    file name and directory as the main file
+    """
+    # Get the path to where the sidecar should be
+    sidecar_path = find_json_sidecar_path(main_file_path)
+
+    # Otherwise, try to load the contents of the file and return it
+    with open(sidecar_path, 'w') as fp:
+        json.dump(sidecar_data, fp, indent=2)
 
 
 ## ORGANIZATION ##
