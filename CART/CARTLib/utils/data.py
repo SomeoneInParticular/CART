@@ -10,6 +10,7 @@ import slicer
 import vtk
 
 from CARTLib.core.DataUnitBase import DataUnitBase
+from CARTLib.utils.config import ProfileConfig
 from CARTLib.utils.layout import Orientation, LayoutHandler
 
 
@@ -137,6 +138,9 @@ def load_slicer_markups(path: Path) -> list[slicer.vtkMRMLMarkupsFiducialNode]:
     return markups_nodes
 
 
+NIFTI_SIDECAR_LABELS_KEY = "Labels"
+
+
 def load_nifti_markups(path: Path) -> slicer.vtkMRMLMarkupsFiducialNode:
     """
     Loads a set of markups from a NiFTI style binary label set.
@@ -210,18 +214,32 @@ def load_nifti_markups(path: Path) -> slicer.vtkMRMLMarkupsFiducialNode:
             # Return the result
             return ras_pos
 
-        # For each position in the nonzero map, add a new markup labl
+        # Load the label map from a JSON sidecar, if it exists
+        sidecar_data = load_json_sidecar(path)
+        label_map = None
+        if sidecar_data is not None:
+            label_map = {
+                int(k): v for k, v
+                in sidecar_data.get(NIFTI_SIDECAR_LABELS_KEY, {}).items()
+            }
+
+        # For each position in the nonzero map, add a new markup label
         for ijk_pos in np.transpose(nonzero_map):
-            # Get the value at this point; it will be our label
+            # Get the value at this point; it will determine our label
             val = volume_array[ijk_pos[0], ijk_pos[1], ijk_pos[2]]
 
             # Calculate the Voxel position into RAS co-ordinates
             ras_pos = _ijk_to_ras(ijk_pos)
 
+            # Determine the label for this markup
+            label = str(val)
+            if label_map is not None:
+                label = label_map.get(val, label)
+
             # Add a new markup label at this position
             markup_node.AddControlPointWorld(
                 (ras_pos[0], ras_pos[1], ras_pos[2]),
-                str(val)
+                label
             )
     except Exception as e:
         # If an error occurs, delete the markup node from the scene (if it exists)
@@ -276,17 +294,29 @@ def save_markups_to_json(markups_node, path: Path):
     slicer.util.saveNode(markups_node, str(path))
 
 
-def save_markups_to_nifti(markup_node, reference_volume, path: Path):
+def save_markups_to_nifti(
+        markup_node: "vtk.vtkMRMLMarkupsFiducialNode",
+        reference_volume: "vtk.vtkMRMLScalarVolumeNode",
+        path: Path,
+        profile: Optional[ProfileConfig] = None):
     """
-    Saves a set of markup labels to a NiFTI file. This format is BIDS compliant, but
-    has several caveats to its use:
+    Saves a set of markup labels to a NiFTI file.
+
+    This format is BIDS compliant, but has several caveats to its use:
         * Markups stored in NiFTI cannot support overlapping markup positions!
         * NiFTI cannot natively save the label names for each value within it
         * NiFTI can only save co-ordinates at IJK integer precision,
             unlike Slicer's JSON format (which tracks floating point RAS positions)
+        * Requires a reference volume to convert the markups RAS co-ordinates to
+            IJK voxel positions
 
-    We work around this via a `.json` sidecar, but this is a non-standard format that
-    WILL NOT BE RECOGNIZED in non-CART contexts!
+    We work around some of these limitations via a `.json` sidecar, but this is a
+    non-standard format that WILL NOT BE RECOGNIZED in non-CART contexts!
+
+    :param markup_node: The markup node whose contents should be saved
+    :param reference_volume: A reference volume, for converting RAS -> IJK co-ordinates
+    :param path: Path to a (presumably `.nii`) file where the data should be saved
+    :param profile: Profile config; used to build the JSON sidecar
     """
     # Build the RAS (world) -> IJK (voxel) transform function
     ras_to_kji_transform = vtk.vtkMatrix4x4()
@@ -338,6 +368,28 @@ def save_markups_to_nifti(markup_node, reference_volume, path: Path):
 
     markup_segment_node = None
     try:
+        # Initialize the JSON sidecar's contents
+        sidecar_data = {}
+        creation_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # If we have a user profile, add its contents to the GeneratedBy entry
+        if profile:
+            sidecar_data["GeneratedBy"] = [{
+                "Name": "CART",
+                "Profile": profile.label,
+                "Role": profile.role,
+                "Date": creation_time
+            }]
+        # Otherwise, just note that this was created by CART
+        else:
+            sidecar_data["GeneratedBy"] = [{
+                "Name": "CART",
+                "Date": creation_time
+            }]
+
+        # Add a map (dict) to track the label value -> label names in the sidecar
+        sidecar_labelmap = dict()
+        sidecar_data[NIFTI_SIDECAR_LABELS_KEY] = sidecar_labelmap
+
         # Initiate a segmentation node to place the markup labels into
         markup_segment_node = create_empty_segmentation_node(
             name="CART_OUTPUT_TMP",
@@ -345,7 +397,7 @@ def save_markups_to_nifti(markup_node, reference_volume, path: Path):
         )
 
         # Place segments into it, one per label
-        for label, pos_list in label_map.items():
+        for idx, (label, pos_list) in enumerate(label_map.items()):
             # Build the blank segment
             segment_id = markup_segment_node.GetSegmentation().AddEmptySegment("", label)
             segment_array = slicer.util.arrayFromSegmentBinaryLabelmap(
@@ -363,9 +415,14 @@ def save_markups_to_nifti(markup_node, reference_volume, path: Path):
                 segment_id,
                 reference_volume
             )
+            # Add the corresponding label to the sidecar's label map
+            sidecar_labelmap[int(idx+1)] = label
 
         # Save the segmentation to the designated path
         save_segmentation_to_nifti(markup_segment_node, reference_volume, path)
+
+        # Save the sidecar alongside it
+        save_json_sidecar(path, sidecar_data)
     finally:
         # Ensure that, no matter what, the segmentation node is removed
         if markup_segment_node:
