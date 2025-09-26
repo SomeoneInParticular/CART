@@ -144,7 +144,7 @@ class RapidMarkupOutputManager:
                 path=markup_output_file
             )
         # Otherwise, save in our "custom" NiFTI format w/ sidecar
-        elif self.output_format == self.OutputFormat.json:
+        elif self.output_format == self.OutputFormat.nifti:
             markup_output_file = self.markup_output_dir / f"{data_unit.uid}.nii.gz"
             save_markups_to_nifti(
                 markup_node=markup_node,
