@@ -1,6 +1,7 @@
 import csv
 from datetime import datetime
 from enum import Enum
+from functools import cached_property
 from pathlib import Path
 from typing import Optional
 
@@ -44,19 +45,18 @@ class RapidMarkupOutputManager:
         :param profile: The configuration for the current profile
         :param output_dir: Root path where all output should be placed
         """
+        # We cannot make an output manager w/o an output directory!
         if not output_dir:
             raise ValueError("Cannot create a OutputManager without an output directory!")
 
+        # If the user pass None explicitly, fall back to .json format
+        if output_format is None:
+            output_format = self.OutputFormat.json
+
+        # Core attributes
         self.profile = profile
         self.output_dir = output_dir
         self.output_format = output_format
-
-        # CSV logging parameters
-        self._csv_log_file: Optional[Path] = None
-        self._csv_log: Optional[dict[tuple[str, str], dict[str, str]]] = None
-
-        # Markup output path
-        self._markup_output_dir: Optional[Path] = None
 
     ## PROPERTIES ##
     @property
@@ -65,34 +65,43 @@ class RapidMarkupOutputManager:
         return self.profile.label
 
     @property
-    def csv_log_file(self) -> Path:
-        """
-        This is a property for two reasons:
-         * Ensures that it cannot be re-written post-initialization, and
-         * Ensure the folders on the filesystem are only created once,
-           the first time they're needed
-        """
-        # If we don't have a path yet, determine where it should be
-        if self._csv_log_file is None:
-            # The log is just placed within the output directory
-            csv_path = self.output_dir / f"cart_markup.csv"
-            self._csv_log_file = csv_path
-        return self._csv_log_file
+    def output_dir(self) -> Path:
+        return self._output_dir
+
+    @output_dir.setter
+    def output_dir(self, new_path: Path):
+        # Update our output directory
+        self._output_dir = new_path
+
+        # Invalidate associated caches, if they exist
+        if hasattr(self, "csv_log"):
+            del self.csv_log
+        if hasattr(self, "markup_output_dir"):
+            del self.markup_output_dir
 
     @property
+    def csv_log_file(self) -> Path:
+        """
+        Where the CSV log should be saved too.
+
+        Read-only, as it's tightly associated with the output directory.
+        """
+        return self.output_dir / f"cart_markup.csv"
+
+    @cached_property
     def csv_log(self) -> dict[tuple[str, str], dict[str, str]]:
         """
-        Same reasons as above; defer loading the data from the CSV until we
-        need to
+        Cached contents of the CSV log file currently monitored by this
+        output manager.
+
+        Cached and loaded lazily to prevent each and every change
+        in the output directory from creating files all over the place
+        (or, worse, loading large CSV logs immediately every single time)
         """
-        # If we already have contents loaded into memory, just use that
-        if self._csv_log is not None:
-            return self._csv_log
-
         # If not, initialize a blank CSV file
-        self._csv_log = dict()
+        csv_log = dict()
 
-        # If a CSV file already exists, load it into memory
+        # If a CSV log already exists in our output directory, load its contents
         if self.csv_log_file.exists():
             with open(self.csv_log_file) as fp:
                 reader = csv.DictReader(fp)
@@ -104,18 +113,22 @@ class RapidMarkupOutputManager:
                         continue
                     # Generate a UID + profile pair to act as our key
                     profile = row.get(self.PROFILE_KEY, None)
-                    self._csv_log[(uid, profile)] = row
+                    csv_log[(uid, profile)] = row
 
-        return self._csv_log
+        return csv_log
 
-    @property
+    @cached_property
     def markup_output_dir(self) -> Path:
-        # If we don't have an output for our markups yet, create one
-        if self._markup_output_dir is None:
-            # Determine the path and create the requisite folders
-            self._markup_output_dir = self.output_dir / self.profile_label
-            self._markup_output_dir.mkdir(parents=True, exist_ok=True)
-        return self._markup_output_dir
+        """
+        Cached property which, when requested, both finds AND creates
+        the path where the markup output(s) should be placed.
+        """
+        # Determine the path and create the requisite folders
+        markup_output_dir = self._output_dir / self.profile_label
+        markup_output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Return the result for caching
+        return markup_output_dir
 
     ## I/O ##
     def save_markups(self, data_unit: RapidMarkupUnit) -> str:
@@ -153,7 +166,7 @@ class RapidMarkupOutputManager:
             self.UID_KEY: data_unit.uid,
             self.PROFILE_KEY: self.profile_label,
             self.TIMESTAMP_KEY: timestamp,
-            self.OUTPUT_KEY: str(self.output_dir.resolve()),
+            self.OUTPUT_KEY: str(self._output_dir.resolve()),
             self.VERSION_KEY: VERSION
         }
 

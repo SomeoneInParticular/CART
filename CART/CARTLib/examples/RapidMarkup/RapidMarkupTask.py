@@ -29,6 +29,7 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         self.untracked_markups: dict[str, list[str]] = {}
 
         # Output management
+        self._output_format: Optional[RapidMarkupOutputManager.OutputFormat] = None
         self._output_dir: Optional[Path] = None
         self._output_manager: Optional[RapidMarkupOutputManager] = None
 
@@ -77,9 +78,6 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         # Enter the GUI
         self.gui.enter()
 
-        # Build the output manager
-        self._output_manager = None
-
         # Update our config with this annotation set and save it
         self.config.last_used_markups = self.markup_labels
         self.config.last_used_output = self.output_dir
@@ -97,29 +95,44 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
     @output_dir.setter
     def output_dir(self, new_path: Path):
         """
-        Made this a property to ensure that it isn't overridden by an
-        invalid directory; also notifies the user that this occurred
-        (via GUI prompt if available) so that they can respond
-        appropriately
+        This setter handles a few things:
+          * Ensures the directory is valid before overwriting it
+          * Invalidates relevant cached values
         """
-        # If the path exists and is valid, set it and end
-        if new_path and new_path.exists() and new_path.is_dir():
-            self._output_dir = new_path
-            self._output_manager = None
+        # if the path doesn't exist, or is invalid, notify the user and end
+        if not (new_path and new_path.exists() and new_path.is_dir()):
+            self.on_bad_output()
             return
-        # Otherwise, update the user so that they may respond appropriately
-        self.on_bad_output()
+
+        # Update our output directory directly
+        self._output_dir = new_path
+
+        # Update the output manager's directory to match, if it exists
+        if self._output_manager:
+            self.output_manager.output_dir = new_path
+
+    @property
+    def output_format(self) -> RapidMarkupOutputManager.OutputFormat:
+        return self._output_format
+
+    @output_format.setter
+    def output_format(self, new_format: RapidMarkupOutputManager.OutputFormat):
+        # Update our own format
+        self._output_format = new_format
+
+        # Update the output manager's format to match, if it exists
+        if self._output_manager:
+            self.output_manager.output_format = new_format
 
     @property
     def output_manager(self):
-        # If the output manager hasn't been generated yet or was reset,
-        # and we have an output directory, create a new one
+        # Pseudo-cached read-only property, allowing for lazy generation
         if not self._output_manager:
             self._output_manager = RapidMarkupOutputManager(
                 self.profile,
-                self.output_dir
+                self.output_dir,
+                self.output_format
             )
-
         return self._output_manager
 
     ## Unit Management ##
@@ -275,7 +288,6 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         # If we have a GUI, prompt the user as well
         if self.gui:
             showSuccessPrompt(result_msg)
-
 
     def enter(self):
         if self.gui:
