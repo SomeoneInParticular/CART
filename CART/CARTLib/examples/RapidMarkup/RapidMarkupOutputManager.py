@@ -1,10 +1,11 @@
 import csv
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 from CARTLib.utils.config import ProfileConfig
-from CARTLib.utils.data import save_markups_to_json
+from CARTLib.utils.data import save_markups_to_json, save_markups_to_nifti, load_markups
 
 from RapidMarkupUnit import RapidMarkupUnit
 
@@ -12,6 +13,10 @@ VERSION = "0.0.1"
 
 
 class RapidMarkupOutputManager:
+
+    class OutputFormat(Enum):
+        json = 0
+        nifti = 1
 
     UID_KEY = "uid"
     PROFILE_KEY = "profile"
@@ -30,7 +35,8 @@ class RapidMarkupOutputManager:
     def __init__(
         self,
         profile: ProfileConfig,
-        output_dir: Path
+        output_dir: Path,
+        output_format: OutputFormat = OutputFormat.json
     ):
         """
         Initialize the output manager.
@@ -43,6 +49,7 @@ class RapidMarkupOutputManager:
 
         self.profile = profile
         self.output_dir = output_dir
+        self.output_format = output_format
 
         # CSV logging parameters
         self._csv_log_file: Optional[Path] = None
@@ -115,9 +122,29 @@ class RapidMarkupOutputManager:
         # Get the markup node from the data unit
         markup_node = data_unit.markup_node
 
-        # Save it to the Slicer JSON format
-        markup_output_file = self.markup_output_dir / f"{data_unit.uid}.mrk.json"
-        save_markups_to_json(markup_node, markup_output_file)
+        # If the output format is JSON, save it using Slicer's JSON formatting
+        if self.output_format == self.OutputFormat.json:
+            # Save it to the Slicer JSON format
+            markup_output_file = self.markup_output_dir / f"{data_unit.uid}.mrk.json"
+            save_markups_to_json(
+                markups_node=markup_node,
+                path=markup_output_file
+            )
+        # Otherwise, save in our "custom" NiFTI format w/ sidecar
+        elif self.output_format == self.OutputFormat.json:
+            markup_output_file = self.markup_output_dir / f"{data_unit.uid}.nii.gz"
+            save_markups_to_nifti(
+                markup_node=markup_node,
+                reference_volume=data_unit.primary_volume_node,
+                path=markup_output_file,
+                profile=self.profile
+            )
+        # If the user asked to save to an invalid output format,
+        # yell at them for it and end.
+        else:
+            raise ValueError(
+                f"Could not save to format '{self.output_format}', was not a valid format."
+            )
 
         # Add/replace the entry in our CSV log with one representing this file
         new_entry_key = (data_unit.uid, self.profile_label)
