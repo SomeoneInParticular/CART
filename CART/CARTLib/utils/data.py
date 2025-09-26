@@ -333,37 +333,40 @@ def save_markups_to_nifti(markup_node, reference_volume, path: Path):
         # Track the result
         map_entry.append(markup_ijk_pos)
 
-    # Initiate a segmentation node to place the markup labels into
-    markup_segment_node = create_empty_segmentation_node(
-        name="CART_OUTPUT_TMP",
-        reference_volume=reference_volume
-    )
-
-    # Place segments into it, one per label
-    for label, pos_list in label_map.items():
-        # Build the blank segment
-        segment_id = markup_segment_node.GetSegmentation().AddEmptySegment("", label)
-        segment_array = slicer.util.arrayFromSegmentBinaryLabelmap(
-            markup_segment_node,
-            segment_id,
-            reference_volume
-        )
-        # Mark the corresponding positions in the segment
-        for (i, j, k) in pos_list:
-            segment_array[i, j, k] = 1
-        # Update the segmentation using the updated segment array
-        slicer.util.updateSegmentBinaryLabelmapFromArray(
-            segment_array,
-            markup_segment_node,
-            segment_id,
-            reference_volume
+    markup_segment_node = None
+    try:
+        # Initiate a segmentation node to place the markup labels into
+        markup_segment_node = create_empty_segmentation_node(
+            name="CART_OUTPUT_TMP",
+            reference_volume=reference_volume
         )
 
-    # Save the segmentation to the designated path
-    save_segmentation_to_nifti(markup_segment_node, reference_volume, path)
+        # Place segments into it, one per label
+        for label, pos_list in label_map.items():
+            # Build the blank segment
+            segment_id = markup_segment_node.GetSegmentation().AddEmptySegment("", label)
+            segment_array = slicer.util.arrayFromSegmentBinaryLabelmap(
+                markup_segment_node,
+                segment_id,
+                reference_volume
+            )
+            # Mark the corresponding positions in the segment
+            for (i, j, k) in pos_list:
+                segment_array[i, j, k] = 1
+            # Update the segmentation using the updated segment array
+            slicer.util.updateSegmentBinaryLabelmapFromArray(
+                segment_array,
+                markup_segment_node,
+                segment_id,
+                reference_volume
+            )
 
-    # Remove the temporary segment node to avoid polluting the scene
-    slicer.mrmlScene.RemoveNode(markup_segment_node)
+        # Save the segmentation to the designated path
+        save_segmentation_to_nifti(markup_segment_node, reference_volume, path)
+    finally:
+        # Ensure that, no matter what, the segmentation node is removed
+        if markup_segment_node:
+            slicer.mrmlScene.RemoveNode(markup_segment_node)
 
 
 ## ORGANIZATION ##
