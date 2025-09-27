@@ -4,8 +4,9 @@ from typing import Optional
 import qt
 from slicer.i18n import tr as _
 
-
 from CARTLib.utils.config import DictBackedConfig, ConfigDialog
+
+from RapidMarkupOutputManager import RapidMarkupOutputManager
 
 
 class RapidMarkupConfigDialog(ConfigDialog["RapidMarkupConfig"]):
@@ -20,8 +21,41 @@ class RapidMarkupConfigDialog(ConfigDialog["RapidMarkupConfig"]):
         # General window properties
         self.setWindowTitle(_("Rapid Markup Configuration"))
 
+        # Build the output format checkbox
+        self._buildFormatComboBox(layout)
+
         # Build checkboxes for the GUI
         self._buildCheckboxes(layout)
+
+    def _buildFormatComboBox(self, layout: qt.QFormLayout):
+        # Initialize the widgets
+        comboBox = qt.QComboBox()
+        comboBoxLabel = qt.QLabel(_("Output Format:"))
+        comboBoxLabel.setToolTip(_(
+            "'json': Save output to Slicer's native JSON-based markup format."
+            "\n\n"
+            "'nifti': Saves markups as a NiFTI-formatted label map."
+        ))
+
+        OutputFormat = RapidMarkupOutputManager.OutputFormat
+        for v in OutputFormat:
+            comboBox.addItem(v.name)
+
+        # Set the active index to match the current config's value
+        comboBox.setCurrentIndex(self.bound_config.output_format.value)
+
+        # When the index changes, chane the config's value to match
+        def onIndexChanged(new_index: int):
+            new_val = OutputFormat(new_index)
+            self.bound_config.output_format = new_val
+            print("=" * 100)
+            print(new_val)
+            print(new_val.value)
+            print("=" * 100)
+        comboBox.currentIndexChanged.connect(onIndexChanged)
+
+        # Add them to the layout
+        layout.addRow(comboBoxLabel, comboBox)
 
     def _buildCheckboxes(self, layout: qt.QFormLayout):
         # Checkbox for automated markup placement start
@@ -154,6 +188,21 @@ class RapidMarkupConfig(DictBackedConfig):
     @remove_from_scene.setter
     def remove_from_scene(self, new_val: bool):
         self._backing_dict[self.REMOVE_FROM_SCENE] = new_val
+        self.has_changed = True
+
+    OUTPUT_FORMAT = "output_format"
+
+    @property
+    def output_format(self) -> RapidMarkupOutputManager.OutputFormat:
+        return RapidMarkupOutputManager.OutputFormat(self.get_or_default(
+            self.OUTPUT_FORMAT,
+            RapidMarkupOutputManager.OutputFormat.json
+        ))
+
+    @output_format.setter
+    def output_format(self, new_val: RapidMarkupOutputManager.OutputFormat):
+        json_val = new_val.value
+        self._backing_dict[self.OUTPUT_FORMAT] = json_val
         self.has_changed = True
 
     ## Utils ##

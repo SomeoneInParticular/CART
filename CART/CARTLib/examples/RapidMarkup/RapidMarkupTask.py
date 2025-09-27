@@ -113,12 +113,12 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
 
     @property
     def output_format(self) -> RapidMarkupOutputManager.OutputFormat:
-        return self._output_format
+        return self.config.output_format
 
     @output_format.setter
     def output_format(self, new_format: RapidMarkupOutputManager.OutputFormat):
         # Update our own format
-        self._output_format = new_format
+        self.config.output_format = new_format
 
         # Update the output manager's format to match, if it exists
         if self._output_manager:
@@ -129,9 +129,8 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         # Pseudo-cached read-only property, allowing for lazy generation
         if not self._output_manager:
             self._output_manager = RapidMarkupOutputManager(
-                self.profile,
-                self.output_dir,
-                self.output_format
+                self.config,
+                self.output_dir
             )
         return self._output_manager
 

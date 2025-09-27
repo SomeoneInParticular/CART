@@ -3,15 +3,19 @@ from datetime import datetime
 from enum import Enum
 from functools import cached_property
 from pathlib import Path
-from typing import Optional
 
 from CARTLib.utils.config import ProfileConfig
-from CARTLib.utils.data import save_markups_to_json, save_markups_to_nifti, load_markups
+from CARTLib.utils.data import save_markups_to_json, save_markups_to_nifti
 
 from RapidMarkupUnit import RapidMarkupUnit
 
 VERSION = "0.0.1"
 
+# Type hint guard; only risk the cyclic import if type hints are running
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    # noinspection PyUnusedImports
+    from RapidMarkupConfig import RapidMarkupConfig
 
 class RapidMarkupOutputManager:
 
@@ -35,34 +39,38 @@ class RapidMarkupOutputManager:
 
     def __init__(
         self,
-        profile: ProfileConfig,
-        output_dir: Path,
-        output_format: OutputFormat = OutputFormat.json
+        config: "RapidMarkupConfig",
+        output_dir: Path
     ):
         """
         Initialize the output manager.
 
-        :param profile: The configuration for the current profile
+        :param config: The current configuration instance for the task
         :param output_dir: Root path where all output should be placed
         """
         # We cannot make an output manager w/o an output directory!
         if not output_dir:
             raise ValueError("Cannot create a OutputManager without an output directory!")
 
-        # If the user pass None explicitly, fall back to .json format
-        if output_format is None:
-            output_format = self.OutputFormat.json
-
         # Core attributes
-        self.profile = profile
+        self.config = config
         self.output_dir = output_dir
-        self.output_format = output_format
 
     ## PROPERTIES ##
     @property
+    def profile_config(self) -> ProfileConfig:
+        """
+        Wrapper for accessing the parent (profile) config; allows us to
+        suppress the "incorrect type" warning once, rather than everywhere
+        this is needed.
+        """
+        # noinspection PyTypeChecker
+        return self.config.parent_config
+
+    @property
     def profile_label(self) -> str:
         # Simple alias to sidestep a common argument chain
-        return self.profile.label
+        return self.profile_config.label
 
     @property
     def output_dir(self) -> Path:
@@ -130,6 +138,11 @@ class RapidMarkupOutputManager:
         # Return the result for caching
         return markup_output_dir
 
+    @property
+    def output_format(self) -> OutputFormat:
+        # Alias for ease of access
+        return self.config.output_format
+
     ## I/O ##
     def save_markups(self, data_unit: RapidMarkupUnit) -> str:
         # Get the markup node from the data unit
@@ -146,11 +159,12 @@ class RapidMarkupOutputManager:
         # Otherwise, save in our "custom" NiFTI format w/ sidecar
         elif self.output_format == self.OutputFormat.nifti:
             markup_output_file = self.markup_output_dir / f"{data_unit.uid}.nii.gz"
+            # noinspection PyTypeChecker
             save_markups_to_nifti(
                 markup_node=markup_node,
                 reference_volume=data_unit.primary_volume_node,
                 path=markup_output_file,
-                profile=self.profile
+                profile=self.profile_config
             )
         # If the user asked to save to an invalid output format,
         # yell at them for it and end.
