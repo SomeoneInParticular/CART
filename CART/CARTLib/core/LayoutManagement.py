@@ -12,7 +12,9 @@ from enum import auto, Flag
 from functools import cache
 from typing import Optional
 
+import qt
 import slicer
+from slicer.i18n import tr as _
 
 
 ## Orientation Helpers ##
@@ -349,3 +351,45 @@ class LayoutHandler:
         # Clear all slice nodes from the MRML scene
         for n in self._slice_node_map.values():
             slicer.mrmlScene.RemoveNode(n)
+
+
+## Layout GUI ##
+class OrientationButtonArrayWidget(qt.QWidget):
+    def __init__(self, bound_handler: LayoutHandler, parent: qt.QWidget = None):
+        super().__init__(parent)
+
+        # Track the bound handler for later
+        self.bound_handler = bound_handler
+
+        # Create a layout for everything
+        layout = qt.QVBoxLayout()
+        self.setLayout(layout)
+
+        # Add a label denoting that this is the layout manager
+        orientationLabel = qt.QLabel(_("Orientation"))
+        layout.addWidget(orientationLabel)
+
+        # Build our list of buttons
+        self._initOrientationButtons(layout)
+
+    def _initOrientationButtons(self, layout: qt.QLayout):
+        """
+        Build the trio of toggle-able orientation buttons
+        for this layout GUI.
+        """
+        # Create a widget to bundle them all in
+        panelWidget = qt.QWidget()
+        panelLayout = qt.QHBoxLayout(panelWidget)
+
+        # Remove widget padding, as it looks bad
+        panelLayout.setContentsMargins(0, 0, 0, 0)
+
+        # For each orientation, create a button
+        for o in Orientation.TRIO:
+            label = o.slicer_node_label()
+            btn = qt.QPushButton(label)
+            btn.setCheckable(True)
+            panelLayout.addWidget(btn)
+
+        # Add the panel widget to the GUI
+        layout.addWidget(panelWidget)

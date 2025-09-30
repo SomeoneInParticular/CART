@@ -12,10 +12,11 @@ from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
 
+from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.DataUnitBase import DataUnitBase
+from CARTLib.core.LayoutManagement import OrientationButtonArrayWidget
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-from CARTLib.core.CohortGenerator import CohortGeneratorWindow
 from CARTLib.utils.config import GLOBAL_CONFIG, ProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY, initialize_tasks
 
@@ -161,6 +162,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Case Iterator UI
         self.buildCaseIteratorUI(self.layout)
 
+        ## Task Interaction ##
         # Add a (currently empty) collapsable tab, in which the Task GUI will be placed later
         taskGUI = ctk.ctkCollapsibleButton()
 
@@ -176,18 +178,21 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Not the best translation, but it'll do...
         taskGUI.text = _("Task Steps")
 
-        # Using a stacked layout, in preparation for future multitask setups
-        qt.QStackedLayout(taskGUI)
+        # Generate a layout for the Task part of the GUI
+        qt.QVBoxLayout(taskGUI)
 
+        # Add the GUI to our overall layout, and track it for later
         self.layout.addWidget(taskGUI)
         self.taskGUI = taskGUI
+
+        # Add the universal orientation widget to the top of the task GUI
+        self.buildLayoutPanel()
 
         # Add a vertical "stretch" at the bottom, forcing everything to the top;
         #  now it doesn't look like garbage!
         self.layout.addStretch()
 
-        # Connections
-
+        ## Connections ##
         # These connections ensure that we update parameter node when scene is closed
         self.addObserver(
             slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose
@@ -519,6 +524,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.nextIncompleteButton = nextIncompleteButton
 
         return buttonLayout
+
+    def buildLayoutPanel(self):
+        layoutPanel = OrientationButtonArrayWidget(None)
+        self.taskGUI.layout().addWidget(layoutPanel)
 
     ## Connected Functions ##
 
