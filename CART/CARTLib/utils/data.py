@@ -11,7 +11,7 @@ import vtk
 
 from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.utils.config import ProfileConfig
-from CARTLib.utils.layout import Orientation, LayoutHandler
+from CARTLib.core.LayoutManagement import Orientation, LayoutHandler
 
 
 ## LOADING ##

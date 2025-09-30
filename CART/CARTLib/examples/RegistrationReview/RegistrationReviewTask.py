@@ -8,7 +8,7 @@ import qt
 from slicer.i18n import tr as _
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-from CARTLib.utils.layout import Orientation
+from CARTLib.core.LayoutManagement import Orientation
 from CARTLib.utils.task import cart_task
 
 from RegistrationReviewDataUnit import RegistrationReviewDataUnit
