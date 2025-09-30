@@ -710,14 +710,14 @@ class CARTStandardUnit(DataUnitBase):
         # Layout manager for this data unit; as it has MRML nodes, it needs to be
         # cleaned up on a per-unit basis.
         self.layout_handler: LayoutHandler = LayoutHandler(
-            list(self.volume_nodes.values()),
+            volume_nodes=list(self.volume_nodes.values()),
             primary_volume_node=self.primary_volume_node,
             orientation=self.DEFAULT_ORIENTATION,
         )
 
     def set_orientation(self, ori: Orientation):
         # Update our layout to match
-        self.layout_handler.set_orientation(ori)
+        self.layout_handler.orientation = ori
 
     def to_dict(self) -> dict[str, str]:
         """Serialize back to case_data format."""

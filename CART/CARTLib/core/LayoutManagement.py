@@ -132,7 +132,7 @@ class LayoutHandler:
         volume_nodes: list[slicer.vtkMRMLVolumeNode],
         primary_volume_node: Optional[slicer.vtkMRMLVolumeNode] = None,
         orientation: Orientation = Orientation.AXIAL,
-        horizontal_layout: bool = True,
+        horizontal_volumes: bool = True,
         foreground_opacity: float = 1.0,
     ):
         """
@@ -149,15 +149,13 @@ class LayoutHandler:
         :param foreground_opacity: The opacity for foreground volumes when primary is background.
         """
         # Attributes
-        self.volume_nodes = volume_nodes
-        self.primary_volume_node = primary_volume_node or (
+        self._tracked_volumes = volume_nodes
+        self._primary_volume_node = primary_volume_node or (
             volume_nodes[0] if volume_nodes else None
         )
-        self.orientation = orientation
-        self.horizontal_layout = horizontal_layout
-        self.foreground_opacity = foreground_opacity
-
-        # Pseudo-cached XML layout; use `layout` instead
+        self._orientation = orientation
+        self._horizontal_volumes = horizontal_volumes
+        self._foreground_opacity = foreground_opacity
         self._layout: Optional[str] = None
 
         # Tracked map of view names -> volume and orientation tuples
@@ -168,7 +166,7 @@ class LayoutHandler:
         # Tracked map of slice nodes, for re-use and clean-up
         self._slice_node_map: dict[str, slicer.vtkMRMLSliceNode] = dict()
 
-    ## Layout Handlers ##
+    ## Properties ##
     @property
     def layout(self) -> str:
         """
@@ -183,10 +181,75 @@ class LayoutHandler:
             self.rebuild_layout()
         return self._layout
 
+    @property
+    def tracked_volumes(self):
+        return self._tracked_volumes
+
+    @tracked_volumes.setter
+    def tracked_volumes(self, new_volumes):
+        # Update our list of tracked volumes
+        self._tracked_volumes = new_volumes
+
+        # If the old primary volume isn't in the list,
+        # make the first volume in the list our new primary
+        if not self._primary_volume_node in new_volumes:
+            self._primary_volume_node = new_volumes[0] if new_volumes else None
+
+        # Invalidate the current layout
+        self._layout = None
+
+    @property
+    def primary_volume_node(self):
+        return self._primary_volume_node
+
+    @primary_volume_node.setter
+    def primary_volume_node(self, new_volume):
+        # Set the primary volume to this new volume
+        self._primary_volume_node = new_volume
+
+        # If the volume wasn't already tracked, track it
+        if not new_volume in self._tracked_volumes:
+            self._tracked_volumes.append(new_volume)
+
+        # Invalidate the current layout
+        self._layout = None
+
+    @property
+    def orientation(self):
+        return self._orientation
+
+    @orientation.setter
+    def orientation(self, new_orientation: Orientation):
+        # Special case; only invalidate the layout if the new orientation is different.
+        if new_orientation != self._orientation:
+            self._orientation = new_orientation
+            self._layout = None
+
+    @property
+    def horizontal_volumes(self) -> bool:
+        return self._horizontal_volumes
+
+    @horizontal_volumes.setter
+    def horizontal_volumes(self, new_val: bool):
+        if new_val != self._horizontal_volumes:
+            self._horizontal_volumes = new_val
+            self._layout = None
+
+    @property
+    def vertical_volumes(self) -> bool:
+        return not self._horizontal_volumes
+
+    @vertical_volumes.setter
+    def vertical_volumes(self, new_val: bool):
+        if new_val == self._horizontal_volumes:
+            self._horizontal_volumes = not new_val
+            self._layout = None
+
+    ## Layout Handlers ##
     def rebuild_layout(self):
         # Determine how we will lay out our volumes (and each of their views)
-        volume_layout = "horizontal" if self.horizontal_layout else "vertical"
-        orient_layout = "vertical" if self.horizontal_layout else "horizontal"
+        volume_layout = "horizontal" if self.horizontal_volumes else "vertical"
+        orientation_layout = "horizontal" if self.vertical_volumes else "vertical"
 
         # Begin building the layout XML
         layout_xml = f'<layout type="{volume_layout}">'
@@ -196,9 +259,9 @@ class LayoutHandler:
 
         # Keep track of a color index interator to update through these loops
         color_idx = 1
-        for v in self.volume_nodes:
+        for v in self.tracked_volumes:
             # Add a sub-layout for each volume node's orientations
-            layout_xml += f' <item> <layout type="{orient_layout}">\n'
+            layout_xml += f' <item> <layout type="{orientation_layout}">\n'
             for o in self.orientation:
                 # Set up our parameters to build the XML entry
                 ori = o.slicer_node_label()
@@ -264,7 +327,7 @@ class LayoutHandler:
                 # If the current volume is different from primary, set it as foreground
                 if vol_node != self.primary_volume_node:
                     composite_node.SetForegroundVolumeID(vol_node.GetID())
-                    composite_node.SetForegroundOpacity(self.foreground_opacity)
+                    composite_node.SetForegroundOpacity(self._foreground_opacity)
                 else:
                     # If it's the primary volume view, no foreground needed
                     composite_node.SetForegroundVolumeID("")
@@ -291,50 +354,6 @@ class LayoutHandler:
 
         # Snap everything to IJK
         snap_all_to_ijk()
-
-    def set_foreground_opacity(self, opacity: float):
-        """
-        Update the foreground opacity for all views and refresh the display.
-
-        :param opacity: New opacity value (0.0 to 1.0)
-        """
-        self.foreground_opacity = max(0.0, min(1.0, opacity))
-
-        # Update all existing composite nodes
-        layout_manager = slicer.app.layoutManager()
-        for view_name in self._view_name_map.keys():
-            slice_widget = layout_manager.sliceWidget(view_name)
-            if slice_widget:
-                composite_node = slice_widget.mrmlSliceCompositeNode()
-                if composite_node and composite_node.GetForegroundVolumeID():
-                    composite_node.SetForegroundOpacity(self.foreground_opacity)
-
-    def set_primary_volume(self, primary_volume_node: slicer.vtkMRMLVolumeNode):
-        """
-        Update the primary volume node and refresh the layout.
-
-        :param primary_volume_node: New primary volume node to use as background
-        """
-        self.primary_volume_node = primary_volume_node
-        # Reapply the layout to update all views
-        self.apply_layout()
-
-    def _invalidates_layout(func):
-        """
-        Decorator which denotes that the current layout ceases to be valid when the
-        decorated function is called.
-        """
-
-        def wrapper(self, *args, **kwargs):
-            self._layout = None
-            func(self, *args, **kwargs)
-
-        return wrapper
-
-    ## Orientation Handling ##
-    @_invalidates_layout
-    def set_orientation(self, new_ori: Orientation):
-        self.orientation = new_ori
 
     ## XML Helpers ##
     def _build_viewer_entry(self, name: str, orientation: str, color: str):
