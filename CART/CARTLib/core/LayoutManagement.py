@@ -396,7 +396,7 @@ class OrientationButtonArrayWidget(qt.QWidget):
         orientationLabel = qt.QLabel(_("Orientation"))
         layout.addWidget(orientationLabel)
 
-        # Build our list of buttons
+        # Build our set of buttons
         self.buttonList: list[tuple[Orientation, qt.QPushButton]] = self._initOrientationButtons(layout)
 
         # The layout handler this is bound too, if any
@@ -440,6 +440,28 @@ class OrientationButtonArrayWidget(qt.QWidget):
 
         # Add the panel widget to the GUI
         layout.addWidget(panelWidget)
+
+        # Add a button which checks all the other buttons (all orientations)
+        allButton = qt.QPushButton(_("ALL"))
+        allButton.setToolTip(_(
+            "Show all orientations simultaneously."
+        ))
+
+        # When the button is pressed, ensure all the orientation buttons get pressed
+        def onAllPressed():
+            # Update the layout
+            self._bound_handler.orientation = Orientation.TRIO
+            self._bound_handler.apply_layout()
+
+            # Press each button
+            for __, btn in buttonList:
+                btn.blockSignals(True)
+                btn.checked = True
+                btn.blockSignals(False)
+        allButton.clicked.connect(onAllPressed)
+
+        # Add it to the layout as well
+        layout.addWidget(allButton)
 
         # Return the button map for later user
         return buttonList
