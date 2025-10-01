@@ -427,6 +427,11 @@ class OrientationButtonArrayWidget(qt.QWidget):
             # Make it check-able
             btn.setCheckable(True)
 
+            # Add a function to it
+            btn.clicked.connect(
+                lambda val, ori=o: self.setOrientationShown(ori, val)
+            )
+
             # Add it to the panel
             panelLayout.addWidget(btn)
 
@@ -439,6 +444,24 @@ class OrientationButtonArrayWidget(qt.QWidget):
         # Return the button map for later user
         return buttonList
 
+    @property
+    def current_orientation(self) -> Orientation:
+        # If we don't have a bound handler, we don't have an orientation
+        if not self._bound_handler:
+            return None
+
+        # Get the current orientation of the bound layout handler
+        return self._bound_handler.orientation
+
+    @current_orientation.setter
+    def current_orientation(self, new_orientation: Orientation):
+        # Update the handler's orientation
+        self._bound_handler.orientation = new_orientation
+
+        # Update our buttons to match
+        for o, btn in self.buttonList:
+            btn.checked = o in new_orientation
+
     def changeLayoutHandler(self, new_handler: LayoutHandler):
         # Track the data unit
         self._bound_handler = new_handler
@@ -446,3 +469,13 @@ class OrientationButtonArrayWidget(qt.QWidget):
         # Update our state to match the handlers
         for o, btn in self.buttonList:
             btn.checked = o in new_handler.orientation
+
+    def setOrientationShown(self, orientation: Orientation, val: bool):
+        # Update the current orientation value
+        if val:
+            self.current_orientation = self.current_orientation | orientation
+        else:
+            self.current_orientation = self.current_orientation &~ orientation
+
+        # Apply the new layout
+        self._bound_handler.apply_layout()
