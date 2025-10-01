@@ -874,7 +874,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 # Confirm we have a next case to step into first
                 if not self.logic.has_next_case():
                     self.showErrorPopup(
-                        "No Prior Case",
+                        "No Next Case",
                         "You somehow requested the next case, despite there being none!"
                     )
                     return
