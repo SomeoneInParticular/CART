@@ -158,7 +158,7 @@ class DataUnitBase(ABC):
         self.focus_lost()
 
         # If we have a layout handler, have it clean up after itself
-        if self.layout_handler:
+        if self._layout_handler:
             self.layout_handler.clean()
 
     ## Dunder Methods ##
