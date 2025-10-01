@@ -488,13 +488,34 @@ class OrientationButtonArrayWidget(ctk.ctkCollapsibleGroupBox):
         for o, btn in self.buttonList:
             btn.checked = o in new_orientation
 
-    def changeLayoutHandler(self, new_handler: LayoutHandler):
-        # Track the data unit
-        self._bound_handler = new_handler
+    def changeLayoutHandler(
+        self,
+        new_handler: LayoutHandler,
+        transfer_layout_settings: bool = True
+    ):
+        """
+        Swap the layout handler that the widget should bind too
 
-        # Update our state to match the handlers
-        for o, btn in self.buttonList:
-            btn.checked = o in new_handler.orientation
+        :param new_handler: The new handler that should be used
+        :param transfer_layout_settings: If True, the new handler's layout
+            settings are changed to match the (current) handler's
+            before we swap over. If False, the widget is synced to
+            the new handler's settings instead, leaving its layout
+            untouched.
+        """
+        # If this is the first layout we're receiving, OR the user doesn't want
+        # layout settings transferred, update ourselves to match the new handler.
+        if not (transfer_layout_settings and self._bound_handler is not None):
+            for o, btn in self.buttonList:
+                btn.blockSignals(True)
+                btn.checked = o in new_handler.orientation
+                btn.blockSignals(False)
+        # Otherwise, update the new handler's orientation to match our own
+        else:
+            new_handler.orientation = self.current_orientation
+
+        # Track the new data handler
+        self._bound_handler = new_handler
 
     def setOrientationShown(self, orientation: Orientation, val: bool):
         # Update the current orientation value

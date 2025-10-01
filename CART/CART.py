@@ -969,8 +969,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.confirmButton.setEnabled(True)
 
     def updateLayout(self, data_unit: DataUnitBase):
-        # Update our layout to match the new state
+        # Update our layout GUI to use the new handler
         self.layoutPanel.changeLayoutHandler(data_unit.layout_handler)
+        # Apply the new layout to Slicer's view
         data_unit.layout_handler.apply_layout()
 
     def _loadingTaskPrompt(self):
