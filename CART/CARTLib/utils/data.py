@@ -707,14 +707,6 @@ class CARTStandardUnit(DataUnitBase):
 
         self.is_complete = case_data.get(self.COMPLETED_KEY, False)
 
-        # Layout manager for this data unit; as it has MRML nodes, it needs to be
-        # cleaned up on a per-unit basis.
-        self.layout_handler: LayoutHandler = LayoutHandler(
-            volume_nodes=list(self.volume_nodes.values()),
-            primary_volume_node=self.primary_volume_node,
-            orientation=self.DEFAULT_ORIENTATION,
-        )
-
     def set_orientation(self, ori: Orientation):
         # Update our layout to match
         self.layout_handler.orientation = ori
@@ -727,8 +719,22 @@ class CARTStandardUnit(DataUnitBase):
         output[self.COMPLETED_KEY] = self.is_complete
         return output
 
+    @property
+    def layout_handler(self) -> LayoutHandler:
+        # If we don't have a layout handler yet, generate one
+        if not self._layout_handler:
+            self._layout_handler = LayoutHandler(
+                volume_nodes=list(self.volume_nodes.values()),
+                primary_volume_node=self.primary_volume_node,
+                orientation=self.DEFAULT_ORIENTATION,
+            )
+        return self._layout_handler
+
     def focus_gained(self) -> None:
         """Show all volumes and segmentation when this unit gains focus."""
+        # Call the super function
+        super().focus_gained()
+
         # Reveal all the data nodes again
         for node in itertools.chain(
             self.volume_nodes.values(),
@@ -743,6 +749,10 @@ class CARTStandardUnit(DataUnitBase):
 
     def focus_lost(self) -> None:
         """Hide all volumes and segmentation when focus is lost."""
+        # Call the super function
+        super().focus_lost()
+
+        # Hide all data nodes again
         for node in itertools.chain(
             self.volume_nodes.values(),
             self.segmentation_nodes.values(),
@@ -761,9 +771,6 @@ class CARTStandardUnit(DataUnitBase):
         # If we are bound to a subject, remove it from the scene
         if self.subject_id is not None:
             self.hierarchy_node.RemoveItem(self.subject_id)
-
-        # Ensure the layout handler is cleaned up as well
-        self.layout_handler.clean()
 
     def validate(self) -> None:
         """

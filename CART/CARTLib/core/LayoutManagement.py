@@ -143,10 +143,13 @@ class LayoutHandler:
         :param primary_volume_node: The primary volume node to use as background in all views.
             If None, the first volume node is used as primary.
         :param orientation: The orientation(s) that the layout should account for.
-        :param horizontal_layout: Whether the views for each volume node should be laid
+        :param horizontal_volumes: Whether the views for each volume node should be laid
             out horizontally (left-to-right). If false, they are displayed vertically
-            (top-to-bottom) instead.
-        :param foreground_opacity: The opacity for foreground volumes when primary is background.
+            (top-to-bottom) instead. Note that the orientations are always laid out in the
+            opposite order; if volumes are laid out horizontally, orientations are laid
+            out vertically, and vice versa.
+        :param foreground_opacity: The opacity for foreground volumes;
+            only used when the primary volume is made to be the background.
         """
         # Attributes
         self._tracked_volumes = volume_nodes
@@ -247,6 +250,10 @@ class LayoutHandler:
 
     ## Layout Handlers ##
     def rebuild_layout(self):
+        # If we don't have any tracked volumes yet, raise an error
+        if not self.tracked_volumes:
+            raise ValueError("This layout manager has no volumes to lay out!")
+
         # Determine how we will lay out our volumes (and each of their views)
         volume_layout = "horizontal" if self.horizontal_volumes else "vertical"
         orientation_layout = "horizontal" if self.vertical_volumes else "vertical"
