@@ -409,6 +409,18 @@ class ProfileConfig(DictBackedConfig):
         self._backing_dict[self.SAVE_ON_ITER_KEY] = new_val
         self.has_changed = True
 
+    ## Retain Layout Between Cases ##
+    RETAIN_LAYOUT_KEY = "retain_layout"
+
+    @property
+    def retain_layout(self) -> bool:
+        return self.get_or_default(self.RETAIN_LAYOUT_KEY, True)
+
+    @retain_layout.setter
+    def retain_layout(self, new_val: bool):
+        self._backing_dict[self.RETAIN_LAYOUT_KEY] = new_val
+        self.has_changed = True
+
     ## Sub-Configurations ##
     SUB_CONFIGS_KEY = "sub_config"
 
@@ -763,33 +775,17 @@ class ProfileConfigDialog(ConfigDialog[ProfileConfig]):
         # General window properties
         self.setWindowTitle("CART Configuration")
 
+        # Build the widget for the user's role
+        self._roleWidget(layout)
+
         # Build the widget for the Iterative Save attribute
         self._iterSaveWidget(layout)
 
-        self._roleWidget(layout)
+        # Build the widget for whether user layout preservation
+        self._layoutSettingsWidget(layout)
 
-    def _iterSaveWidget(self, layout):
-        # Add a checkbox for the state of autosaving
-        iterSaveCheck = qt.QCheckBox()
-        iterSaveLabel = qt.QLabel("Save on Iteration:")
-        iterSaveLabel.setToolTip(
-            "If checked, the Task will try to save when you change cases automatically."
-        )
 
-        # Synchronize to our bound config
-        iterSaveCheck.setChecked(self.bound_config.save_on_iter)
-
-        # Update the config's state when it changes
-        def setSaveOnIter(new_state: bool):
-            self.bound_config.save_on_iter = bool(new_state)
-        iterSaveCheck.stateChanged.connect(setSaveOnIter)
-
-        # Add it to our layout
-        layout.addRow(iterSaveLabel, iterSaveCheck)
-        # Track it for later synchronization
-        self.iterSaveCheck = iterSaveCheck
-
-    def _roleWidget(self, layout):
+    def _roleWidget(self, layout: qt.QFormLayout):
         # Add a combobox that lets the user select a profile's role
         roleComboBox = qt.QComboBox()
         roleLabel = qt.QLabel("Role:")
@@ -811,15 +807,64 @@ class ProfileConfigDialog(ConfigDialog[ProfileConfig]):
         # Track it for later synchronization
         self.roleComboBox = roleComboBox
 
-    def sync(self):
-        # Iterative save checkbox
-        self.iterSaveCheck.setChecked(self.bound_config.save_on_iter)
+    def _iterSaveWidget(self, layout: qt.QFormLayout):
+        # Add a checkbox for the state of autosaving
+        iterSaveCheck = qt.QCheckBox()
+        iterSaveLabel = qt.QLabel("Save on Iteration:")
+        iterSaveLabel.setToolTip(
+            "If checked, the Task will try to save when you change cases automatically."
+        )
 
+        # Synchronize to our bound config
+        iterSaveCheck.setChecked(self.bound_config.save_on_iter)
+
+        # Update the config's state when it changes
+        def setSaveOnIter(new_state: bool):
+            self.bound_config.save_on_iter = bool(new_state)
+        iterSaveCheck.stateChanged.connect(setSaveOnIter)
+
+        # Add it to our layout
+        layout.addRow(iterSaveLabel, iterSaveCheck)
+        # Track it for later synchronization
+        self.iterSaveCheck = iterSaveCheck
+
+    def _layoutSettingsWidget(self, layout: qt.QFormLayout):
+        # Add a checkbox for the state of autosaving
+        layoutPreserveCheck = qt.QCheckBox()
+        layoutPreserveLabel = qt.QLabel("Retain Layout Across Cases:")
+        layoutPreserveLabel.setToolTip(
+            "If checked, the layout settings (shown orientations and presentation style) "
+            "will be retained when the current case is changed. Otherwise, the settings "
+            "are reset to default when the case changes."
+        )
+
+        # Synchronize to our bound config
+        layoutPreserveCheck.setChecked(self.bound_config.retain_layout)
+
+        # Update the config's state when it changes
+        def setRetainLayout(new_state: bool):
+            self.bound_config.retain_layout = bool(new_state)
+
+        layoutPreserveCheck.stateChanged.connect(setRetainLayout)
+
+        # Add it to our layout
+        layout.addRow(layoutPreserveLabel, layoutPreserveCheck)
+        # Track it for later synchronization
+        self.layoutPreserveCheck = layoutPreserveCheck
+
+    def sync(self):
+        # TODO: Iteratively build this via a function list, which can be
+        #  registered too during widget init instead.
         # Role selection combobox
         self.roleComboBox.clear()
         self.roleComboBox.addItems(self.bound_config.valid_roles)
         self.roleComboBox.currentText = self.bound_config.role
 
+        # Iterative save checkbox
+        self.iterSaveCheck.setChecked(self.bound_config.save_on_iter)
+
+        # Retain layout checkbox
+        self.layoutPreserveCheck.setChecked(self.bound_config.retain_layout)
 
 # The location of the config file for this installation of CART.
 MAIN_CONFIG = Path(__file__).parent.parent.parent / "configuration.json"
