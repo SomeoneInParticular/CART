@@ -526,8 +526,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         return buttonLayout
 
     def buildLayoutPanel(self):
-        layoutPanel = OrientationButtonArrayWidget(None)
-        self.taskGUI.layout().addWidget(layoutPanel)
+        self.layoutPanel = OrientationButtonArrayWidget()
+        self.taskGUI.layout().addWidget(self.layoutPanel)
 
     ## Connected Functions ##
 
@@ -887,10 +887,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 self.unHighlightRow(self.logic.data_manager.current_case_index)
 
                 # Step into the next case
-                self.logic.next_case(skip_complete)
+                newUnit = self.logic.next_case(skip_complete)
 
                 # Update our GUI to match the new state
                 self.updateIteratorGUI()
+
+                # Update our layout to match the new state
+                self.updateLayout(newUnit)
 
                 # Close the loading prompt
                 loadingPrompt.done(qt.QDialog.Accepted)
@@ -919,7 +922,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 self.unHighlightRow(self.logic.data_manager.current_case_index)
 
                 # Step into the previous case
-                self.logic.previous_case(skip_complete)
+                newUnit = self.logic.previous_case(skip_complete)
+
+                # Update our layout with the new unit's contents
+                self.updateLayout(newUnit)
 
                 # Update our GUI to match the new state
                 self.updateIteratorGUI()
@@ -961,6 +967,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If the logic says we're ready to start, enable the "confirm" button
         if self.logic.is_ready():
             self.confirmButton.setEnabled(True)
+
+    def updateLayout(self, data_unit: DataUnitBase):
+        # Update our layout to match the new state
+        self.layoutPanel.changeLayoutHandler(data_unit.layout_handler)
+        data_unit.layout_handler.apply_layout()
 
     def _loadingTaskPrompt(self):
         prompt = qt.QDialog()
@@ -1012,7 +1023,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 #  segmentation review) will either load configurations and/or prompt the
                 #  user for things required to determine whether a task is "complete" or
                 #  not for a given case.
-                self.logic.load_initial_unit()
+                data_unit = self.logic.load_initial_unit()
+
+                # Update our layout with the new unit
+                self.updateLayout(data_unit)
 
                 # Load the cohort csv data into the table, if it wasn't already
                 self.updateCohortTable()
@@ -1440,7 +1454,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         #  properly
         self.enter()
 
-    def load_initial_unit(self):
+    def load_initial_unit(self) -> DataUnitBase:
         """
         Attempts to load the first data unit into memory and update our task with it
         """
@@ -1449,6 +1463,9 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # TODO: Add a configuration option for skipping to first incomplete unit
         # data_unit = self.data_manager.first_incomplete(self.current_task_instance)
         self.current_task_instance.receive(data_unit)
+
+        # Return this data unit so the GUI can utilize it
+        return data_unit
 
     def enter(self):
         """

@@ -381,11 +381,12 @@ class LayoutHandler:
 
 ## Layout GUI ##
 class OrientationButtonArrayWidget(qt.QWidget):
-    def __init__(self, bound_handler: LayoutHandler, parent: qt.QWidget = None):
+    def __init__(self, parent: qt.QWidget = None):
+        """
+        Generate a new button array for managing which orientations
+        should be displayed in Slicer for the current data unit.
+        """
         super().__init__(parent)
-
-        # Track the bound handler for later
-        self.bound_handler = bound_handler
 
         # Create a layout for everything
         layout = qt.QVBoxLayout()
@@ -396,12 +397,18 @@ class OrientationButtonArrayWidget(qt.QWidget):
         layout.addWidget(orientationLabel)
 
         # Build our list of buttons
-        self._initOrientationButtons(layout)
+        self.buttonList: list[tuple[Orientation, qt.QPushButton]] = self._initOrientationButtons(layout)
 
-    def _initOrientationButtons(self, layout: qt.QLayout):
+        # The layout handler this is bound too, if any
+        self._bound_handler: Optional[LayoutHandler] = None
+
+    def _initOrientationButtons(self, layout: qt.QLayout) -> list[tuple[Orientation, qt.QPushButton]]:
         """
         Build the trio of toggle-able orientation buttons
         for this layout GUI.
+
+        Tracks the buttons associated with each orientation
+        in a map for later reference.
         """
         # Create a widget to bundle them all in
         panelWidget = qt.QWidget()
@@ -411,11 +418,31 @@ class OrientationButtonArrayWidget(qt.QWidget):
         panelLayout.setContentsMargins(0, 0, 0, 0)
 
         # For each orientation, create a button
+        buttonList = list()
         for o in Orientation.TRIO:
+            # Build the widgets itself
             label = o.slicer_node_label()
             btn = qt.QPushButton(label)
+
+            # Make it check-able
             btn.setCheckable(True)
+
+            # Add it to the panel
             panelLayout.addWidget(btn)
+
+            # Track it for later
+            buttonList.append((o, btn))
 
         # Add the panel widget to the GUI
         layout.addWidget(panelWidget)
+
+        # Return the button map for later user
+        return buttonList
+
+    def changeLayoutHandler(self, new_handler: LayoutHandler):
+        # Track the data unit
+        self._bound_handler = new_handler
+
+        # Update our state to match the handlers
+        for o, btn in self.buttonList:
+            btn.checked = o in new_handler.orientation
