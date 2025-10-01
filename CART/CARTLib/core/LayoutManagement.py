@@ -12,6 +12,7 @@ from enum import auto, Flag
 from functools import cache
 from typing import Optional
 
+import ctk
 import qt
 import slicer
 from slicer.i18n import tr as _
@@ -380,13 +381,16 @@ class LayoutHandler:
 
 
 ## Layout GUI ##
-class OrientationButtonArrayWidget(qt.QWidget):
-    def __init__(self, parent: qt.QWidget = None):
+class OrientationButtonArrayWidget(ctk.ctkCollapsibleGroupBox):
+    def __init__(self, title: str = _("Volume Layout"), parent: qt.QWidget = None):
         """
         Generate a new button array for managing which orientations
         should be displayed in Slicer for the current data unit.
         """
         super().__init__(parent)
+
+        # Change the title to match the requested one
+        self.setTitle(title)
 
         # Create a layout for everything
         layout = qt.QVBoxLayout()
