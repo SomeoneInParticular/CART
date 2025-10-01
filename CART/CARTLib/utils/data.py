@@ -707,10 +707,6 @@ class CARTStandardUnit(DataUnitBase):
 
         self.is_complete = case_data.get(self.COMPLETED_KEY, False)
 
-    def set_orientation(self, ori: Orientation):
-        # Update our layout to match
-        self.layout_handler.orientation = ori
-
     def to_dict(self) -> dict[str, str]:
         """Serialize back to case_data format."""
         output = {key: self.case_data[key] for key in self.volume_keys}
