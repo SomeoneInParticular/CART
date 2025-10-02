@@ -250,6 +250,15 @@ class LayoutHandler:
             self._layout = None
 
     ## Layout Handlers ##
+    def match_layout_settings_with(self, other_handler: "LayoutHandler"):
+        """
+        Copies the layout settings used by another handler;
+        used to simulate settings being shared across multiple handlers
+        (i.e. the per data-unit handlers)
+        """
+        self.orientation = other_handler.orientation
+        self.horizontal_volumes = other_handler.horizontal_volumes
+
     def rebuild_layout(self):
         # If we don't have any tracked volumes yet, raise an error
         if not self.tracked_volumes:
@@ -464,8 +473,26 @@ class OrientationButtonArrayWidget(ctk.ctkCollapsibleGroupBox):
                 btn.blockSignals(False)
         allButton.clicked.connect(onAllPressed)
 
-        # Add it to the layout as well
-        layout.addWidget(allButton)
+        # Add a button to transpose the layout
+        transposeButton = qt.QPushButton(_("TRANSPOSE"))
+        transposeButton.setToolTip(_(
+            "Flip the view diagonally (volumes left-to-right -> top-to-bottom, "
+            "and vice versa)"
+        ))
+
+        # When the button is pressed, flip the view along its diagonal
+        def onTransposePressed():
+            self.horizontal_volumes = not self.horizontal_volumes
+            self._bound_handler.apply_layout()
+        transposeButton.clicked.connect(onTransposePressed)
+
+        # Add the buttons together, side-by-side
+        buttonPanel = qt.QHBoxLayout()
+        buttonPanel.addWidget(allButton)
+        buttonPanel.addWidget(transposeButton)
+
+        # Add that panel to the main layout
+        layout.addLayout(buttonPanel)
 
         # Return the button map for later user
         return buttonList
@@ -487,6 +514,14 @@ class OrientationButtonArrayWidget(ctk.ctkCollapsibleGroupBox):
         # Update our buttons to match
         for o, btn in self.buttonList:
             btn.checked = o in new_orientation
+
+    @property
+    def horizontal_volumes(self) -> bool:
+        return self._bound_handler.horizontal_volumes
+
+    @horizontal_volumes.setter
+    def horizontal_volumes(self, new_val: bool):
+        self._bound_handler.horizontal_volumes = new_val
 
     def changeLayoutHandler(
         self,
@@ -512,7 +547,7 @@ class OrientationButtonArrayWidget(ctk.ctkCollapsibleGroupBox):
                 btn.blockSignals(False)
         # Otherwise, update the new handler's orientation to match our own
         else:
-            new_handler.orientation = self.current_orientation
+            new_handler.match_layout_settings_with(self._bound_handler)
 
         # Track the new data handler
         self._bound_handler = new_handler
