@@ -560,7 +560,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Rebuild the GUI to match
         self.sync_with_logic()
-        print(self.logic.config.backing_dict)
 
         # Update the button states to match our current state
         self.updateButtons()
