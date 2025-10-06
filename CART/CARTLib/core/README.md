@@ -7,13 +7,26 @@ The files within this directory contain the components that nearly (if not all) 
 
 ## Table of Contents
 
+* [Cohort Generation](#cohort-generation)
+* [Data Management](#data-management)
 * [Slicer Layout Handling](#slicer-layout-handling)
   * [The Orientation Flag](#the-orientation-flag)
   * [`LayoutHandler`](#the-layouthandler)
+* [Task Creation](#task-creation)
+
+## Cohort Generation
+
+`CohortGenerator.py` holds code responsible for automatically generating cohort files based on the contents of a directory. There is realistically no need to subclass or override any code within this file as a user, but it is made available for reference purposes.
+
+Currently only supports BIDS-like datasets, but will be expanded to support other data structures soon!
+
+## Data Management
+
+`DataManager.py` and `DataUnitBase.py` define how cases are iterated and loaded, respectively. If you are making your own custom task(s), you don't need to worry about the contents of `DataManager.py`; instead, just subclass the `DataUnitBase` class to implement any data loading functionality you would like, and return the resulting class as part of your task's `getDataUnitFactories` function.
 
 ## Slicer Layout Handling
 
-The contents of `LayoutManagement.py` are for handling how the nodes in a given case should be displayed to the user in the Slicer viewer. For the most part, CART handles this for you (via a unified orientation selection widget and `LayoutHandler` instance), but you can interact with and/or subclass each of these to enable customized layouts for your task.
+The contents of `LayoutManagement.py` are for handling how the nodes in a given case should be displayed to the user in the Slicer viewer. For the most part, CART handles this for you (via a unified orientation selection widget and `LayoutHandler` instance), but you can interact with and/or subclass each of these to enable customized layouts for your task (see [Task Creation](#task-creation) below).
 
 ### The Orientation Flag
 
@@ -47,3 +60,16 @@ The `LayoutHandler` class is responsible for determining the best layout to disp
 It can then "apply" its layout to the Slicer scene; for the default handler, this results in 1 panel per combination of volume node and orientation (Axial, Sagittal, and/or Coronal). 
 
 You can change the orientation post-init with the `set_orientation` function; this invalidates the current layout XML, and will require it be re-applied manually for the changes to take effect in Slicer.
+
+## Task Creation
+
+The basis of any custom task's you want to implement. To ensure compatability with CART, ensure that all logic and GUI elements are placed within a subclass of the `TaskBaseClass` abstract class. If you are using a modern IDE, it should then ask you to implement a number of methods; the requirements of each method are detailed in their respective function documentation. 
+
+A rough guide for what needs to be done can be found below:
+
+* Define how the contents of a cohort case should be parsed, and the results loaded into Slicer, via defining at least one `DataUnitFactory` and returning it with the class's `getDataUnitFactories`.
+  * The easiest way to create a `DataUnitFactory` is to subclass the `DataUnitBase` class (discussed in [Data Management](#data-management)) and place it within the map.
+* Ensure any GUI elements are built and connected within the `setup` function of your class.
+* Determine how the task should synchronize/update itself when a new case is loaded through the `recieve` function.
+* Define how the task's contents should be saved when requested (either by the user explicitly saving, or when one of CART's auto-saving methods is applied)
+* If your tasks do anything which should be handled when Slicer starts CART with your task loaded, unloads the CART module, or when Slicer is about to close, you should override the `enter`, `exit`, and `cleanup` methods, respectively.
