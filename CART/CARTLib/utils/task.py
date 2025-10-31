@@ -99,8 +99,10 @@ def initialize_tasks():
     examples_path = Path(__file__).parent.parent / "examples"
     segment_eval_task_path = examples_path / "MultiContrastSegmentation/MultiContrastSegmentationEvaluationTask.py"
     registration_review_path = examples_path / "RegistrationReview/RegistrationReviewTask.py"
+    generic_classification_path = examples_path / "GenericClassification/GenericClassificationTask.py"
     rapid_markup_path = examples_path / "RapidMarkup/RapidMarkupTask.py"
 
     task_from_file(segment_eval_task_path)
+    task_from_file(generic_classification_path)
     task_from_file(registration_review_path)
     task_from_file(rapid_markup_path)
