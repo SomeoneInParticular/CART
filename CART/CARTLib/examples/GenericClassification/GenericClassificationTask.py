@@ -41,10 +41,6 @@ class GenericClassificationTask(TaskBaseClass[GenericClassificationUnit]):
         # Currently registered classes, including their description
         self.class_map: dict[str, str] = dict()
 
-        # TMP
-        for i in range(50):
-            self.class_map[str(i)] = f"Dummy Text for {i}"
-
     @property
     def classes(self) -> list[str]:
         return list(self.class_map.keys())

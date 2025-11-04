@@ -21,10 +21,7 @@ class GenericClassificationUnit(CARTStandardUnit):
         super().__init__(case_data, data_path, scene)
 
         # Current classifications for this case
-        # TODO: Remove this dummy code for later additions
-        self._classes: set[str] = set([
-            str(i) for i in range(0, 20, 2)
-        ])
+        self._classes: set[str] = set()
 
         # Other remarks for this case
         self.remarks: str = ""

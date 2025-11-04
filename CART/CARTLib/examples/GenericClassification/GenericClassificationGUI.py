@@ -12,6 +12,103 @@ if TYPE_CHECKING:
     from GenericClassificationTask import GenericClassificationTask
 
 
+class NewClassDialog(qt.QDialog):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Add New Class")
+
+        self._build_ui()
+
+    def _build_ui(self):
+        # Create a simple VBox layout
+        layout = qt.QVBoxLayout(self)
+
+        # Add a small text widget for the class name
+        self._buildClassEntry(layout)
+
+        # Add a large text widget for the (optional) description
+        self._buildDescEntry(layout)
+
+        # Add button panel
+        self._addButtons(layout)
+
+    def _buildDescEntry(self, layout):
+        descLabel = qt.QLabel("Description:")
+        self.descEntry = qt.QTextEdit()
+        self.descEntry.placeholderText = \
+            "Optional. Will become the tooltip to the list entry if given."
+        layout.addWidget(descLabel)
+        layout.addWidget(self.descEntry)
+
+    def _buildClassEntry(self, layout):
+        classLabel = qt.QLabel("Class Name:")
+        self.classEntry = qt.QLineEdit()
+        self.classEntry.placeholderText = \
+            "Required. The name of this classification."
+        layout.addWidget(classLabel)
+        layout.addWidget(self.classEntry)
+
+    def _addButtons(self, layout):
+        # The button box itself
+        buttonBox = qt.QDialogButtonBox()
+        buttonBox.setStandardButtons(
+            qt.QDialogButtonBox.Cancel | qt.QDialogButtonBox.Ok
+        )
+
+        # Function to map the button press to our functionality
+        def onButtonPressed(button: qt.QPushButton):
+            # Get the role of the button
+            button_role = buttonBox.buttonRole(button)
+            # Match it to our corresponding function
+            # TODO: Replace this with a `match` statement when porting to Slicer 5.9
+            if button_role == qt.QDialogButtonBox.AcceptRole:
+                self.onConfirm()
+            elif button_role == qt.QDialogButtonBox.RejectRole:
+                self.onCancel()
+            else:
+                raise ValueError("Pressed a button with an invalid role somehow...")
+
+        buttonBox.clicked.connect(onButtonPressed)
+
+        layout.addWidget(buttonBox)
+
+    @property
+    def class_name(self):
+        return self.classEntry.text
+
+    @property
+    def description(self):
+        return self.descEntry.toPlainText()
+
+    def onConfirm(self):
+        if not self.class_name:
+            # Show a warning message and do nothing
+            msg = qt.QMessageBox()
+            msg.setWindowTitle("Missing Name")
+            msg.setText("Cannot register a classification without it having a name!")
+            msg.exec()
+        else:
+            self.accept()
+
+    def onCancel(self):
+        # If we have any content, confirm we want to exit first
+        if self.class_name or self.description:
+            msg = qt.QMessageBox()
+            msg.setWindowTitle("Are you sure?")
+            msg.setText("You are about to exit without registering the class details you have entered. "
+                        "Are you sure?")
+            msg.setStandardButtons(
+                qt.QMessageBox.Yes | qt.QMessageBox.No
+            )
+            result = msg.exec()
+            # If the user backs out, return early to do nothing.
+            if result != qt.QMessageBox.Yes:
+                return
+        # Otherwise, exit the program with a "rejection" signal
+        self.reject()
+
+
 class GenericClassificationGUI:
     def __init__(self, bound_task: "GenericClassificationTask"):
         # The task (logic) this GUI should be bound too
@@ -45,13 +142,27 @@ class GenericClassificationGUI:
         addButton.setText("Add New Class")
 
         # When the button is pressed, generate the new class prompt
-        def addNewClass():
-            # TODO: Create a UI prompt instead
-            with self.block_signals():
-                self.addNewClass(str(len(self.bound_task.class_map)), "New!")
+        def promptNewClass():
+            # Show a prompt asking for a new class entry
+            newClassDialog = NewClassDialog()
+            accepted = newClassDialog.exec()
+
+            # If the prompt was confirmed, try to add the new class
+            if accepted:
+                # Raise an error if the class already exists
+                if (class_name := newClassDialog.class_name) in self.bound_task.class_map.keys():
+                    raise ValueError(
+                        f"Cannot add class {class_name}; a class with that name "
+                        f"was already registered!"
+                    )
+                with self.block_signals():
+                    self.addNewClass(
+                        class_name,
+                        newClassDialog.description
+                    )
 
         addButton.clicked.connect(
-            addNewClass
+            promptNewClass
         )
 
         # Add it to our layout
@@ -136,10 +247,9 @@ class GenericClassificationGUI:
             qt.Qt.Unchecked
         )
 
-        # Make its tooltip the description
-        if not desc:
-            desc = f"Default description for {label}"
-        newEntry.setToolTip(desc)
+        # Make its tooltip the description, if one was provided
+        if desc:
+            newEntry.setToolTip(desc)
 
         # Return the new entry for further processing
         return newEntry
