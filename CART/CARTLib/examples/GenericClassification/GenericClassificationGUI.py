@@ -24,6 +24,9 @@ class GenericClassificationGUI:
         # Initialize the layout
         formLayout = qt.QFormLayout()
 
+        # Build the button panel
+        self._setupButtonPanel(formLayout)
+
         # Build the combobox
         self._setupCheckboxList(formLayout)
 
@@ -33,10 +36,13 @@ class GenericClassificationGUI:
         # Return the layout
         return formLayout
 
-    def _setupCheckboxList(self, layout: qt.QFormLayout):
+    def _setupButtonPanel(self, layout: qt.QFormLayout):
+        # Sub-layout to make the buttons equally sized
+        subLayout = qt.QHBoxLayout()
+
         # Add an "addition" button
         addButton = qt.QPushButton()
-        addButton.setText("New Classification")
+        addButton.setText("Add New Class")
 
         # When the button is pressed, generate the new class prompt
         def addNewClass():
@@ -49,8 +55,28 @@ class GenericClassificationGUI:
         )
 
         # Add it to our layout
-        layout.addWidget(addButton)
+        subLayout.addWidget(addButton)
 
+        # Add a "Drop" button, allowing existing classes to be removed
+        dropButton = qt.QPushButton()
+        dropButton.setText("Drop Selected Class")
+
+        # Initially disable
+        dropButton.enabled = False
+
+        # When the button is pressed, drop the currently selected class
+        dropButton.clicked.connect(self.dropSelectedClass)
+
+        # Track it for later, and add it to the sub-layout
+        self.dropButton = dropButton
+        subLayout.addWidget(dropButton)
+
+        # Place the buttons into a dummy widget and place it in the layout
+        dummyWidget = qt.QWidget()
+        dummyWidget.setLayout(subLayout)
+        layout.addWidget(dummyWidget)
+
+    def _setupCheckboxList(self, layout: qt.QFormLayout):
         # Generate a label for this list
         label = qt.QLabel("Classifications:")
         layout.addWidget(label)
@@ -64,8 +90,12 @@ class GenericClassificationGUI:
                 item.text(),
                 item.checkState()
             )
-
         listWidget.itemChanged.connect(onItemChanged)
+
+        # Enable the "drop selected" button only when a row is selected
+        listWidget.currentRowChanged.connect(
+            lambda i: self.dropButton.setEnabled(i != -1)
+        )
 
         # Add it to the layout and track it for later
         layout.addWidget(listWidget)
@@ -139,3 +169,15 @@ class GenericClassificationGUI:
 
         # Add it to our bound logic as well
         self.bound_task.class_map[label] = desc
+
+    def dropSelectedClass(self):
+        # "Pop" the currently selected from the list widget
+        row_idx = self.classList.currentRow
+        droppedItem = self.classList.takeItem(row_idx)
+
+        # Remove the corresponding class from our logic as well
+        class_label = droppedItem.text()
+        del self.bound_task.class_map[class_label]
+
+        # De-select other entries in the list to avoid "double-click double-delete"
+        self.classList.currentRow = -1
