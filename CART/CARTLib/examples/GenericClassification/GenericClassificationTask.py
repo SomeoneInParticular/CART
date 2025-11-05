@@ -60,6 +60,9 @@ class GenericClassificationTask(TaskBaseClass[GenericClassificationUnit]):
         if not self.output_path:
             raise ValueError("No output path provided, terminating.")
 
+        # Try to retrieve the last-used class map from the metadata
+        self.class_map = self.output_manager.read_metadata()
+
         # Create and track the GUI
         self.gui = GenericClassificationGUI(self)
         gui_layout = self.gui.setup()
@@ -133,8 +136,10 @@ class GenericClassificationTask(TaskBaseClass[GenericClassificationUnit]):
             self.gui.syncWithDataUnit()
 
     def save(self) -> Optional[str]:
-        # Attempt to save
+        # Attempt to save the data unit + current metadata
         result_msg = self.output_manager.save_unit(self.current_unit)
+
+        self.output_manager.save_metadata(self.class_map)
 
         # If we have a GUI, show the result to the user
         if self.gui and result_msg:

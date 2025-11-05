@@ -1,4 +1,5 @@
 import csv
+import json
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
@@ -100,6 +101,15 @@ class GenericClassificationOutputManager:
         # Return the resulting data
         return csv_data
 
+    @property
+    def json_metadata_file(self) -> Path:
+        """
+        Where the JSON metadata should be saved too.
+
+        Read-only, as it's tightly associated with the output directory.
+        """
+        return self.output_dir / f"cart_classifications.json"
+
     def save_unit(self, data_unit: GenericClassificationUnit):
         # Generate the entry key and timestamp
         entry_key = (data_unit.uid, "test")
@@ -124,3 +134,17 @@ class GenericClassificationOutputManager:
             f"Classifications saved to {str(self.csv_data_file.resolve())}."
         )
         return result_msg
+
+    def read_metadata(self) -> dict[str, str]:
+        # If the json file doesn't exist, return an empty dict
+        if not self.json_metadata_file.exists():
+            return dict()
+        # Otherwise, read the JSON file's contents and return it
+        with open(self.json_metadata_file, "r") as fp:
+            class_map = json.load(fp)
+            return class_map
+
+    def save_metadata(self, class_map: dict[str, str]):
+        # Just dumps the provided class map to file
+        with open(self.json_metadata_file, "w") as fp:
+            json.dump(class_map, fp, indent=2)
