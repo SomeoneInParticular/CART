@@ -19,13 +19,15 @@ class GenericClassificationOutputManager:
     TIMESTAMP_KEY = "timestamp"
     VERSION_KEY = "version"
     CLASSES_KEY = "classifications"
+    REMARKS_KEY = "other_remarks"
 
     LOG_HEADERS = [
         UID_KEY,
         PROFILE_KEY,
         TIMESTAMP_KEY,
         VERSION_KEY,
-        CLASSES_KEY
+        CLASSES_KEY,
+        REMARKS_KEY
     ]
 
     def __init__(
@@ -114,13 +116,19 @@ class GenericClassificationOutputManager:
         # Generate the entry key and timestamp
         entry_key = (data_unit.uid, "test")
 
+        # Edge-case; if no classes are provided, using "" instead of "set()"
+        unit_classes = data_unit.classes
+        if len(unit_classes) < 1:
+            unit_classes = ""
+
         # Add/replace the corresponding entry in our data dict
         self.csv_data[entry_key] = {
             self.UID_KEY: data_unit.uid,
             self.PROFILE_KEY: "test",
             self.TIMESTAMP_KEY: datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             self.VERSION_KEY: VERSION,
-            self.CLASSES_KEY: data_unit.classes
+            self.CLASSES_KEY: unit_classes,
+            self.REMARKS_KEY: data_unit.remarks
         }
 
         # Save the results to file

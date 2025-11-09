@@ -124,8 +124,11 @@ class GenericClassificationGUI:
         # Build the button panel
         self._setupButtonPanel(formLayout)
 
-        # Build the combobox
+        # Build the class checklist
         self._setupCheckboxList(formLayout)
+
+        # Build the "other remarks" entry widget
+        self._setupRemarksWidget(formLayout)
 
         # Initialize the list entries to match our bound task
         self._syncListEntriesWithTask()
@@ -212,6 +215,19 @@ class GenericClassificationGUI:
         layout.addWidget(listWidget)
         self.classList = listWidget
 
+    def _setupRemarksWidget(self, layout: qt.QFormLayout):
+        remarksLabel = qt.QLabel("Other Remarks:")
+        self.remarksEntry = qt.QTextEdit()
+        self.remarksEntry.placeholderText = \
+            "Other relevant remarks for this case. Optional."
+
+        def onTextChanged():
+            self.current_unit.remarks = self.remarksEntry.toPlainText()
+        self.remarksEntry.textChanged.connect(onTextChanged)
+
+        layout.addWidget(remarksLabel)
+        layout.addWidget(self.remarksEntry)
+
     def _syncListEntriesWithTask(self):
         # Block signals to avoid error spam
         with self.block_signals():
@@ -228,12 +244,14 @@ class GenericClassificationGUI:
     def block_signals(self):
         # Disable the list from sending signals
         self.classList.blockSignals(True)
+        self.remarksEntry.blockSignals(True)
 
         # Do whatever we need
         yield
 
         # Restore signal emission
         self.classList.blockSignals(False)
+        self.remarksEntry.blockSignals(False)
 
     def _addListEntry(self, label: str, desc: str = None):
         # Add the entry to the list directly
@@ -255,9 +273,9 @@ class GenericClassificationGUI:
         return newEntry
 
     def syncWithDataUnit(self):
-        # Calculate the sets of items to check
-        checked_items = self.current_unit.classes
         with self.block_signals():
+            # Calculate the sets of items to check in the GUI
+            checked_items = self.current_unit.classes
             for i in range(self.classList.count):
                 item = self.classList.item(i)
                 if item.text() in checked_items:
@@ -268,6 +286,10 @@ class GenericClassificationGUI:
                     item.setCheckState(
                         qt.Qt.Unchecked
                     )
+
+            # Update the remarks contents
+            remarks_text = self.current_unit.remarks
+            self.remarksEntry.setPlainText(remarks_text)
 
     def addNewClass(self, label: str, desc: str = None):
         # Skip if we already have a class with this label
