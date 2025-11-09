@@ -11,8 +11,8 @@ import slicer
 from CARTLib.utils.data import save_segmentation_to_nifti
 from CARTLib.utils.config import ProfileConfig
 
-from MultiContrastSegmentationEvaluationDataUnit import (
-    MultiContrastSegmentationEvaluationDataUnit,
+from SegmentationReviewUnit import (
+    SegmentationReviewUnit,
 )
 
 VERSION = 0.01
@@ -23,7 +23,7 @@ class OutputMode(Enum):
     OVERWRITE_ORIGINAL = "overwrite"
 
 
-class MultiContrastOutputManager:
+class SegmenetationReviewOutputManager:
     """
     Unified output manager that handles both parallel directory and overwrite original modes.
     Now includes CSV tracking for centralized logging of all completed data.
@@ -129,7 +129,7 @@ class MultiContrastOutputManager:
             return dict()
 
     def save_segmentation(
-        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+        self, data_unit: SegmentationReviewUnit
     ) -> Optional[str]:
         """
         Save segmentation according to the configured output mode and log to CSV.
@@ -160,7 +160,7 @@ class MultiContrastOutputManager:
 
     def _log_to_csv(
         self,
-        data_unit: MultiContrastSegmentationEvaluationDataUnit,
+        data_unit: SegmentationReviewUnit,
         segmentation_path: Path,
         sidecar_path: Path,
     ):
@@ -193,7 +193,7 @@ class MultiContrastOutputManager:
             writer.writerows(self.csv_log.values())
 
     def get_output_destinations(
-        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+        self, data_unit: SegmentationReviewUnit
     ) -> tuple[Path, Path]:
         """
         Get output paths for segmentation and sidecar files based on the current mode.
@@ -225,7 +225,7 @@ class MultiContrastOutputManager:
         return segmentation_out, sidecar_out
 
     def _get_overwrite_destinations(
-        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+        self, data_unit: SegmentationReviewUnit
     ) -> tuple[Path, Path]:
         """Get destinations for overwrite original mode."""
         segmentation_path = data_unit.get_primary_segmentation_path()
@@ -241,7 +241,7 @@ class MultiContrastOutputManager:
 
     @staticmethod
     def _save_segmentation(
-        data_unit: MultiContrastSegmentationEvaluationDataUnit, target_file: Path
+        data_unit: SegmentationReviewUnit, target_file: Path
     ):
         """
         Save the data unit's segmentation to the designated output file.
@@ -254,7 +254,7 @@ class MultiContrastOutputManager:
         save_segmentation_to_nifti(seg_node, vol_node, target_file)
 
     def _save_sidecar(
-        self, data_unit: MultiContrastSegmentationEvaluationDataUnit, target_file: Path
+        self, data_unit: SegmentationReviewUnit, target_file: Path
     ):
         """
         Save or update the sidecar JSON file with processing metadata.
@@ -297,7 +297,7 @@ class MultiContrastOutputManager:
             json.dump(sidecar_data, fp, indent=2)
 
     def _get_original_sidecar_path(
-        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+        self, data_unit: SegmentationReviewUnit
     ) -> Optional[Path]:
         """
         Get the path to the original sidecar file for reading existing metadata.
@@ -330,7 +330,7 @@ class MultiContrastOutputManager:
         return None
 
     def can_save(
-        self, data_unit: Optional[MultiContrastSegmentationEvaluationDataUnit]
+        self, data_unit: Optional[SegmentationReviewUnit]
     ) -> bool:
         """
         Check whether we can save with the current configuration.
@@ -358,7 +358,7 @@ class MultiContrastOutputManager:
         return False
 
     def get_success_message(
-        self, data_unit: MultiContrastSegmentationEvaluationDataUnit
+        self, data_unit: SegmentationReviewUnit
     ) -> str:
         """
         Get an appropriate success message based on the output mode.

@@ -13,17 +13,17 @@ from CARTLib.utils.config import ProfileConfig
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import CARTSegmentationEditorWidget, showSuccessPrompt, showErrorPrompt
 
-from MultiContrastOutputManager import OutputMode, MultiContrastOutputManager
-from MultiContrastSegmentationEvaluationDataUnit import (
-    MultiContrastSegmentationEvaluationDataUnit,
+from SegmentationReviewOutputManager import OutputMode, SegmenetationReviewOutputManager
+from SegmentationReviewUnit import (
+    SegmentationReviewUnit,
 )
-from MultiContrastSegmentationConfig import MultiContrastSegmentationConfig
+from SegmentationReviewConfig import SegmentationReviewConfig
 
 
 class MultiContrastSegmentationEvaluationGUI:
-    def __init__(self, bound_task: "MultiContrastSegmentationEvaluationTask"):
+    def __init__(self, bound_task: "SegmentationReviewTask"):
         self.bound_task = bound_task
-        self.data_unit: Optional[MultiContrastSegmentationEvaluationDataUnit] = None
+        self.data_unit: Optional[SegmentationReviewUnit] = None
 
         # The currently selected orientation in the GUI; determine our viewer layout
         self.currentOrientation: Orientation = Orientation.AXIAL
@@ -338,7 +338,7 @@ class MultiContrastSegmentationEvaluationGUI:
         failurePrompt.exec()
 
     ## CORE ##
-    def update(self, data_unit: MultiContrastSegmentationEvaluationDataUnit) -> None:
+    def update(self, data_unit: SegmentationReviewUnit) -> None:
         """
         Called whenever a new data-unit is in focus.
         Populate the volume combo, select primary, and fire off initial layers.
@@ -379,8 +379,8 @@ class MultiContrastSegmentationEvaluationGUI:
 
 
 @cart_task("Segmentation Review")
-class MultiContrastSegmentationEvaluationTask(
-    TaskBaseClass[MultiContrastSegmentationEvaluationDataUnit]
+class SegmentationReviewTask(
+    TaskBaseClass[SegmentationReviewUnit]
 ):
 
     def __init__(self, profile: ProfileConfig):
@@ -390,13 +390,13 @@ class MultiContrastSegmentationEvaluationTask(
         self.gui: Optional[MultiContrastSegmentationEvaluationGUI] = None
         self.output_mode: OutputMode = OutputMode.PARALLEL_DIRECTORY
         self.output_dir: Optional[Path] = None
-        self.output_manager: Optional[MultiContrastOutputManager] = None
-        self.data_unit: Optional[MultiContrastSegmentationEvaluationDataUnit] = None
+        self.output_manager: Optional[SegmenetationReviewOutputManager] = None
+        self.data_unit: Optional[SegmentationReviewUnit] = None
         self.csv_log_path: Optional[Path] = None  # Optional custom CSV log path
 
         # Configuration
-        self.config: MultiContrastSegmentationConfig = (
-            MultiContrastSegmentationConfig(
+        self.config: SegmentationReviewConfig = (
+            SegmentationReviewConfig(
                 parent_config=self.profile
             )
         )
@@ -413,7 +413,7 @@ class MultiContrastSegmentationEvaluationTask(
 
         # If the user provided output specifications, set up our manager here.
         if self.output_dir:
-            self.output_manager = MultiContrastOutputManager(
+            self.output_manager = SegmenetationReviewOutputManager(
                 self.profile,
                 self.output_mode,
                 self.output_dir,
@@ -425,7 +425,7 @@ class MultiContrastSegmentationEvaluationTask(
             self.gui.update(self.data_unit)
         self.gui.enter()
 
-    def receive(self, data_unit: MultiContrastSegmentationEvaluationDataUnit) -> None:
+    def receive(self, data_unit: SegmentationReviewUnit) -> None:
         # Track the data unit for later
         self.data_unit = data_unit
         # Display primary volume + segmentation overlay
@@ -460,7 +460,7 @@ class MultiContrastSegmentationEvaluationTask(
         We currently only support one data unit type, so we only provide it to
          the user
         """
-        return {"Segmentation": MultiContrastSegmentationEvaluationDataUnit}
+        return {"Segmentation": SegmentationReviewUnit}
 
     def set_output_mode(
         self,
@@ -488,7 +488,7 @@ class MultiContrastSegmentationEvaluationTask(
 
             # Set up the consolidated output manager with CSV tracking
             self.output_dir = output_path
-            self.output_manager = MultiContrastOutputManager(
+            self.output_manager = SegmenetationReviewOutputManager(
                 profile=self.profile,
                 output_mode=mode,
                 output_dir=output_path,
@@ -500,7 +500,7 @@ class MultiContrastSegmentationEvaluationTask(
         elif mode == OutputMode.OVERWRITE_ORIGINAL:
             # Set up the consolidated output manager with CSV tracking
             self.output_dir = None
-            self.output_manager = MultiContrastOutputManager(
+            self.output_manager = SegmenetationReviewOutputManager(
                 profile=self.profile, output_mode=mode, csv_log_path=csv_log_path
             )
             print("Output mode set to overwrite original")
