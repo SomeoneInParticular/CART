@@ -4,9 +4,18 @@ from typing import Optional
 
 import ctk
 import qt
-from CARTLib.examples.SegmentationReview import SegmentationReviewTask, SegmentationReviewUnit, OutputMode
 from CARTLib.utils.widgets import CARTSegmentationEditorWidget, showSuccessPrompt, showErrorPrompt
 from slicer.i18n import tr as _
+
+from SegmentationReviewUnit import SegmentationReviewUnit
+from SegmentationReviewOutputManager import OutputMode
+
+
+# Type hint guard; only risk the cyclic import if type hints are running
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    # noinspection PyUnusedImports
+    from SegmentationReviewTask import SegmentationReviewTask
 
 
 class SegmentationReviewGUI:
