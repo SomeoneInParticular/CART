@@ -31,7 +31,7 @@ class SegmentationReviewTask(
         self.output_manager: Optional[SegmenetationReviewOutputManager] = None
         self.data_unit: Optional[SegmentationReviewUnit] = None
         self.csv_log_path: Optional[Path] = None  # Optional custom CSV log path
-        self.segments_to_save: list[str] = set()
+        self.segments_to_save: list[str] = list()
 
         # Configuration
         self.config: SegmentationReviewConfig = (

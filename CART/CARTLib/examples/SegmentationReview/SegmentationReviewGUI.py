@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -33,6 +34,9 @@ class SegmentationReviewGUI:
         # Initialize the layout we'll insert everything into
         formLayout = qt.QFormLayout()
 
+        # Segmentation selection widget
+        self._addSegmentSelectionWidget(formLayout)
+
         # Segmentation editor
         self.segmentEditorWidget = CARTSegmentationEditorWidget()
         formLayout.addRow(self.segmentEditorWidget)
@@ -47,6 +51,30 @@ class SegmentationReviewGUI:
         self.promptSelectOutputMode()
 
         return formLayout
+
+    def _addSegmentSelectionWidget(self, layout: qt.QFormLayout):
+        # Label for the widget
+        segmentSelectionLabel = qt.QLabel(_(
+            "Segmentations to Save:"
+        ))
+
+        # The widget itself
+        segmentSelectionComboBox = ctk.ctkCheckableComboBox()
+
+        # When a checked index changes, update the logic to match
+        def onCheckedChanged():
+            checkedSegments = [
+                segmentSelectionComboBox.itemText(i.row()) for i in segmentSelectionComboBox.checkedIndexes()
+            ]
+            self.bound_task.segments_to_save = checkedSegments
+
+        segmentSelectionComboBox.checkedIndexesChanged.connect(onCheckedChanged)
+
+        # Add them to the layout
+        layout.addRow(segmentSelectionLabel, segmentSelectionComboBox)
+
+        # Track it for later
+        self.segmentSelectionComboBox = segmentSelectionComboBox
 
     def _addConfigButton(self, layout: qt.QFormLayout):
         # A button to open the Configuration dialog, which changes how CART operates
@@ -333,6 +361,17 @@ class SegmentationReviewGUI:
         failurePrompt.exec()
 
     ## CORE ##
+    @contextmanager
+    def block_signals(self):
+        widget_list = [self.segmentEditorWidget, self.segmentSelectionComboBox]
+        for w in widget_list:
+            w.blockSignals(True)
+
+        yield
+
+        for w in widget_list:
+            w.blockSignals(False)
+
     def update(self, data_unit: SegmentationReviewUnit) -> None:
         """
         Called whenever a new data-unit is in focus.
@@ -340,10 +379,20 @@ class SegmentationReviewGUI:
         """
         self.data_unit = data_unit
 
-        # Refresh the SegmentEditor Widget immediately
-        self.segmentEditorWidget.refresh()
+        # Update the list of segmentations that can be saved
+        with self.block_signals():
+            # Add entries not already present in segmentation selection combobox
+            existing_entries = set(
+                [self.segmentSelectionComboBox.itemText(i) for i in range(self.segmentSelectionComboBox.count)]
+            )
+            for k in data_unit.segmentation_keys:
+                if k not in existing_entries:
+                    self.segmentSelectionComboBox.addItem(k)
 
-        # Force it to select the primary segmentation node
+            # Refresh the SegmentEditor Widget immediately
+            self.segmentEditorWidget.refresh()
+
+        # Force it to select the primary segmentation node; we rely on signals here!
         self.segmentEditorWidget.setSegmentationNode(
             self.data_unit.primary_segmentation_node
         )
