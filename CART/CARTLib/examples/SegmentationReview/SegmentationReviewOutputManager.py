@@ -160,11 +160,7 @@ class SegmentationReviewOutputManager:
                 segment_dest_path = segment_source_path
                 sidecar_dest_path = sidecar_source_path
             else:
-                output_root = self.output_dir / unit.uid / "anat"
-                segment_file_name = f"{s}.nii.gz"
-                sidecar_file_name = f"{s}.json"
-                segment_dest_path = output_root / segment_file_name
-                sidecar_dest_path = output_root / sidecar_file_name
+                segment_dest_path, sidecar_dest_path = self._get_parallel_outputs(s, unit)
             # Get the segmentation and volume node for the segmentation from the data unit
             segment_node = unit.segmentation_nodes[s]
 
@@ -222,67 +218,6 @@ class SegmentationReviewOutputManager:
             writer.writeheader()
             writer.writerows(self.csv_log.values())
 
-    def get_output_destinations(
-        self, data_unit: SegmentationReviewUnit
-    ) -> tuple[Path, Path]:
-        """
-        Get output paths for segmentation and sidecar files based on the current mode.
-
-        Returns:
-            Tuple of (segmentation_path, sidecar_path)
-        """
-        if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
-            return self._get_parallel_destinations(data_unit.uid)
-        elif self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
-            return self._get_overwrite_destinations(data_unit)
-        else:
-            raise ValueError(f"Unknown output mode: {self.output_mode}")
-
-    def _get_parallel_destinations(
-        self, uid: str
-    ) -> tuple[Path, Path]:
-        """Get destinations for parallel directory mode."""
-        # Define the target output directory
-        target_dir = self.output_dir / f"{uid}/anat/"
-
-        # File name, before extensions
-        fname = f"{uid}_{self.profile_label}_seg"
-
-        # Define the target output file paths
-        segmentation_out = target_dir / f"{fname}.nii.gz"
-        sidecar_out = target_dir / f"{fname}.json"
-
-        return segmentation_out, sidecar_out
-
-    def _get_overwrite_destinations(
-        self, data_unit: SegmentationReviewUnit
-    ) -> tuple[Path, Path]:
-        """Get destinations for overwrite original mode."""
-        segmentation_path = data_unit.get_primary_segmentation_path()
-        if segmentation_path is None:
-            # If no segmentation path is found, prompt user for save location
-            segmentation_path = self._promptForSaveLocation(data_unit)
-        sidecar_path = (
-            segmentation_path.parent / f"{segmentation_path.name.split('.')[0]}.json"
-        )
-        # Assumes there are not any "." in the filename, which is a reasonable assumption for segmentation files.
-        # Now will be able to support both .nii.gz, .nii files, and .nrrd files ect.
-        return segmentation_path, sidecar_path
-
-    @staticmethod
-    def _save_segmentation(
-        data_unit: SegmentationReviewUnit, target_file: Path
-    ):
-        """
-        Save the data unit's segmentation to the designated output file.
-        """
-        # Extract the relevant node data from the data unit
-        seg_node = data_unit.primary_segmentation_node
-        vol_node = data_unit.primary_volume_node
-
-        # Save the segmentation using the utility function
-        save_segmentation_to_nifti(seg_node, vol_node, target_file)
-
     def _save_sidecar(
         self,
         source_file: Path,
@@ -321,28 +256,14 @@ class SegmentationReviewOutputManager:
         with open(target_file, "w") as fp:
             json.dump(sidecar_data, fp, indent=2)
 
-    def _promptForSaveLocation(self, data_unit) -> Optional[str]:
-        """
-        Prompt user for save location when original file doesn't exist.
-        """
-        prompt = qt.QFileDialog()
-        prompt.setWindowTitle("Select Save Location")
-        prompt.setAcceptMode(qt.QFileDialog.AcceptSave)
-        prompt.setFileMode(qt.QFileDialog.AnyFile)
-
-        # Set default filename based on data unit
-        default_name = f"{data_unit.uid}_seg.nii.gz"
-        prompt.selectFile(default_name)
-
-        if prompt.exec():
-            selected_files = prompt.selectedFiles()
-            if selected_files:
-                save_path = Path(selected_files[0])
-                return save_path.as_posix()
-        # If user cancels or no file is selected, return None
-        slicer.util.warningDisplay("No save location selected. Please try again.")
-
-        return None
+    ## UTILS ##
+    def _get_parallel_outputs(self, s: str, unit: SegmentationReviewUnit) -> tuple[Path, Path]:
+        output_root = self.output_dir / unit.uid / "anat"
+        segment_file_name = f"{s}.nii.gz"
+        sidecar_file_name = f"{s}.json"
+        segment_dest_path = output_root / segment_file_name
+        sidecar_dest_path = output_root / sidecar_file_name
+        return segment_dest_path, sidecar_dest_path
 
     def can_save(
         self, data_unit: Optional[SegmentationReviewUnit]
@@ -372,40 +293,11 @@ class SegmentationReviewOutputManager:
 
         return False
 
-    def get_success_message(
-        self, data_unit: SegmentationReviewUnit
-    ) -> str:
-        """
-        Get an appropriate success message based on the output mode.
-        """
-        if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
-            seg_out, _ = self.get_output_destinations(data_unit)
-            return (
-                f"Segmentation '{data_unit.uid}' saved to:\n{seg_out.resolve()}\n\n"
-                f"Processing logged to: {self.csv_log_path.resolve()}"
-            )
-        else:
-            return (
-                f"Segmentation '{data_unit.uid}' saved over original file.\n\n"
-                f"Processing logged to: {self.csv_log_path.resolve()}"
-            )
-
     def is_case_completed(self, case_data: dict[str, str]):
-        # If we have a logging CSV, just check against it
-        if self.csv_log:
-            uid = case_data["uid"]
-            author = self.profile_label
-            if self.csv_log.get((uid, author), None) is not None:
-                return True
-            return False
-
-        # Fallback; check against the files on disk instead
-        if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
-            # If we're saving to a parallel directory, simply check if the output file exist
-            uid = case_data['uid']
-            a, b = self._get_parallel_destinations(uid)
-            return a.exists() and b.exists()
-
-        # If we're in overwrite mode and don't have a log, assume they want to go through everything
+        # Check against the log; other solutions are too complicated
+        uid = case_data["uid"]
+        author = self.profile_label
+        if self.csv_log.get((uid, author), None) is not None:
+            return True
         return False
 
