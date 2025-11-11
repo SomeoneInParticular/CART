@@ -161,8 +161,8 @@ class SegmentationReviewOutputManager:
                 sidecar_dest_path = sidecar_source_path
             else:
                 output_root = self.output_dir / unit.uid / "anat"
-                segment_file_name = f"{unit.uid}.nii.gz"
-                sidecar_file_name = f"{unit.uid}.json"
+                segment_file_name = f"{s}.nii.gz"
+                sidecar_file_name = f"{s}.json"
                 segment_dest_path = output_root / segment_file_name
                 sidecar_dest_path = output_root / sidecar_file_name
             # Get the segmentation and volume node for the segmentation from the data unit
