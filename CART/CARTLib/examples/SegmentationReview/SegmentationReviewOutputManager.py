@@ -15,7 +15,7 @@ from SegmentationReviewUnit import (
     SegmentationReviewUnit,
 )
 
-VERSION = 0.01
+VERSION = 0.02
 
 
 class OutputMode(Enum):
@@ -23,7 +23,7 @@ class OutputMode(Enum):
     OVERWRITE_ORIGINAL = "overwrite"
 
 
-class SegmenetationReviewOutputManager:
+class SegmentationReviewOutputManager:
     """
     Unified output manager that handles both parallel directory and overwrite original modes.
     Now includes CSV tracking for centralized logging of all completed data.
@@ -31,17 +31,24 @@ class SegmenetationReviewOutputManager:
 
     UID_KEY = "uid"
     AUTHOR_KEY = "author"
+    TIMESTAMP_KEY = "timestamp"
+    OUTPUT_MODE_KEY = "output_mode"
+    INPUT_SEGMENTATION_KEY = "original_segmentation_path"
+    SEGMENTATION_PATH_KEY = "segmentation_path"
+    SIDECAR_PATH_KEY = "sidecar_path"
+    VERSION_KEY = "version"
+    NOTES_KEY = "notes"
 
     HEADERS = [
         UID_KEY,
         AUTHOR_KEY,
-        "timestamp",
-        "output_mode",
-        "segmentation_path",
-        "sidecar_path",
-        "original_segmentation_path",
-        "version",
-        "processing_notes",
+        TIMESTAMP_KEY,
+        OUTPUT_MODE_KEY,
+        SEGMENTATION_PATH_KEY,
+        SIDECAR_PATH_KEY,
+        INPUT_SEGMENTATION_KEY,
+        VERSION_KEY,
+        NOTES_KEY,
     ]
 
     def __init__(
@@ -83,12 +90,8 @@ class SegmenetationReviewOutputManager:
         if csv_log_path:
             return csv_log_path
 
-        # Auto-generate CSV log path based on output mode
-        if self.output_mode == OutputMode.PARALLEL_DIRECTORY and self.output_dir:
-            return self.output_dir / "segmentation_review_log.csv"
-        else:
-            # For overwrite mode or when no output dir, use current working directory
-            return Path.cwd() / f"segmentation_review_log_{self.profile_label}.csv"
+        # Auto-generate CSV log path
+        return self.output_dir / "segmentation_review_log.csv"
 
     def _init_csv_log(self) -> dict[tuple[str, str], dict[str, str]]:
         """
@@ -128,41 +131,69 @@ class SegmenetationReviewOutputManager:
             # Return an empty dictionary, as we don't have anything yet
             return dict()
 
-    def save_segmentation(
-        self, data_unit: SegmentationReviewUnit
-    ) -> Optional[str]:
+    ## I/O ##
+    def save_unit(
+        self, unit: SegmentationReviewUnit, segments_to_save: list[str]
+    ) -> str:
         """
-        Save segmentation according to the configured output mode and log to CSV.
+        Save the contents of a data unit, as dictated by the current
+        logic settings and user configurations.
 
-        Returns:
-            None if successful, error message string if failed
+        # TODO handle the case where the original file doesn't exist And we are in "Overwrite Original" mode
+
+        :param unit: The data unit to reference for node data
+        :param segments_to_save: List of segmentation IDs that should be saved
+        :return str: A message to report to the user when saving is complete
         """
-        try:
-            # Get output destinations based on mode
-            segmentation_out, sidecar_out = self.get_output_destinations(data_unit)
+        # Begin building the return message
+        should_overwrite = self.output_mode == OutputMode.OVERWRITE_ORIGINAL
+        if should_overwrite:
+            result_msg = f"Overwrote the following entries for case '{unit.uid}':\n"
+        else:
+            result_msg = f"Saved the following entries for case '{unit.uid}':\n"
 
-            # Create directories if needed (only for parallel mode)
-            if self.output_mode == OutputMode.PARALLEL_DIRECTORY:
-                segmentation_out.parent.mkdir(parents=True, exist_ok=True)
+        for s in segments_to_save:
+            # Determine the original source path for the segmentation and its sidecar
+            segment_source_path = unit.segmentation_paths.get(s)
+            sidecar_source_path = Path(str(segment_source_path).split('.')[0] + ".json")
 
-            # Save the segmentation file
-            self._save_segmentation(data_unit, segmentation_out)
+            # Determine the output paths
+            if self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
+                segment_dest_path = segment_source_path
+                sidecar_dest_path = sidecar_source_path
+            else:
+                output_root = self.output_dir / unit.uid / "anat"
+                segment_file_name = f"{unit.uid}.nii.gz"
+                sidecar_file_name = f"{unit.uid}.json"
+                segment_dest_path = output_root / segment_file_name
+                sidecar_dest_path = output_root / sidecar_file_name
+            # Get the segmentation and volume node for the segmentation from the data unit
+            segment_node = unit.segmentation_nodes[s]
 
-            # Save/update the sidecar file
-            self._save_sidecar(data_unit, sidecar_out)
+            # Save the node to the destination path
+            save_segmentation_to_nifti(segment_node, unit.primary_volume_node, segment_dest_path)
 
-            # Log to CSV
-            self._log_to_csv(data_unit, segmentation_out, sidecar_out)
+            # Add a log entry
+            self._log_to_csv(
+                unit,
+                segment_dest_path,
+                sidecar_dest_path,
+                segment_source_path
+            )
 
-            return None  # Success
-        except Exception as e:
-            return str(e)
+            # Extend the return message with the segment name
+            result_msg += f"  * {s}\n"
+
+        # Complete the message by denoting where the (now updated) log file is
+        result_msg += f"\nSee log at '{str(self.csv_log_path.resolve())}' for details."
+        return result_msg
 
     def _log_to_csv(
         self,
         data_unit: SegmentationReviewUnit,
         segmentation_path: Path,
         sidecar_path: Path,
+        initial_path: Path,
     ):
         """Log the completed processing to CSV file."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -171,16 +202,14 @@ class SegmenetationReviewOutputManager:
         log_entry = {
             self.UID_KEY: data_unit.uid,
             self.AUTHOR_KEY: self.profile_label,
-            "timestamp": timestamp,
-            "output_mode": self.output_mode.value,
-            "segmentation_path": str(segmentation_path.resolve()),
-            "sidecar_path": str(sidecar_path.resolve()),
-            "original_segmentation_path": str(
-                data_unit.get_primary_segmentation_path().resolve()
-            ),
-            "version": VERSION,
+            self.TIMESTAMP_KEY: timestamp,
+            self.OUTPUT_MODE_KEY: self.output_mode.value,
+            self.SEGMENTATION_PATH_KEY: str(segmentation_path.resolve()),
+            self.SIDECAR_PATH_KEY: str(sidecar_path.resolve()),
+            self.INPUT_SEGMENTATION_KEY: str(initial_path.resolve()),
+            self.VERSION_KEY: VERSION,
             # TODO Populate this with data from a note section or similar
-            "processing_notes": f"Segmentation review completed using {self.output_mode.value} mode",
+            self.NOTES_KEY: f"Segmentation review completed using {self.output_mode.value} mode",
         }
 
         # Set/Replace the corresponding entry in our CSV log
@@ -236,7 +265,7 @@ class SegmenetationReviewOutputManager:
             segmentation_path.parent / f"{segmentation_path.name.split('.')[0]}.json"
         )
         # Assumes there are not any "." in the filename, which is a reasonable assumption for segmentation files.
-        # Now will be able to suppoort both .nii.gz, .nii files, and .nrrd files ect.
+        # Now will be able to support both .nii.gz, .nii files, and .nrrd files ect.
         return segmentation_path, sidecar_path
 
     @staticmethod

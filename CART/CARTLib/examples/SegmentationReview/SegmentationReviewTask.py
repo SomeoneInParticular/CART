@@ -7,9 +7,10 @@ import slicer
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.utils.config import ProfileConfig
 from CARTLib.utils.task import cart_task
+from CARTLib.utils.widgets import showSuccessPrompt
 
 from SegmentationReviewGUI import SegmentationReviewGUI
-from SegmentationReviewOutputManager import OutputMode, SegmenetationReviewOutputManager
+from SegmentationReviewOutputManager import OutputMode, SegmentationReviewOutputManager
 from SegmentationReviewUnit import (
     SegmentationReviewUnit,
 )
@@ -28,7 +29,7 @@ class SegmentationReviewTask(
         self.gui: Optional[SegmentationReviewGUI] = None
         self.output_mode: OutputMode = OutputMode.PARALLEL_DIRECTORY
         self.output_dir: Optional[Path] = None
-        self.output_manager: Optional[SegmenetationReviewOutputManager] = None
+        self.output_manager: Optional[SegmentationReviewOutputManager] = None
         self.data_unit: Optional[SegmentationReviewUnit] = None
         self.csv_log_path: Optional[Path] = None  # Optional custom CSV log path
         self.segments_to_save: list[str] = list()
@@ -52,7 +53,7 @@ class SegmentationReviewTask(
 
         # If the user provided output specifications, set up our manager here.
         if self.output_dir:
-            self.output_manager = SegmenetationReviewOutputManager(
+            self.output_manager = SegmentationReviewOutputManager(
                 self.profile,
                 self.output_mode,
                 self.output_dir,
@@ -130,7 +131,7 @@ class SegmentationReviewTask(
 
             # Set up the consolidated output manager with CSV tracking
             self.output_dir = output_path
-            self.output_manager = SegmenetationReviewOutputManager(
+            self.output_manager = SegmentationReviewOutputManager(
                 profile=self.profile,
                 output_mode=mode,
                 output_dir=output_path,
@@ -142,7 +143,7 @@ class SegmentationReviewTask(
         elif mode == OutputMode.OVERWRITE_ORIGINAL:
             # Set up the consolidated output manager with CSV tracking
             self.output_dir = None
-            self.output_manager = SegmenetationReviewOutputManager(
+            self.output_manager = SegmentationReviewOutputManager(
                 profile=self.profile, output_mode=mode, csv_log_path=csv_log_path
             )
             print("Output mode set to overwrite original")
@@ -161,18 +162,17 @@ class SegmentationReviewTask(
         """
         Save the current segmentation using the output manager.
         """
-        # If we can't save, just return early
-        # TODO improve how descriptive this error is
-        if not self.can_save():
-            return "Could not save!"
-        # Have the output manager save the result
-        # TODO handle the case where the original file doesn't exist And we are in "Overwrite Original" mode
-        result = self.output_manager.save_segmentation(self.data_unit)
-        # If we have a GUI, have it provide the appropriate response to the user
-        if self.gui:
-            self.gui.saveCompletePrompt(result)
-        # Return the result for further use
-        return result
+        # Confirm we can save before trying
+        if len(self.segments_to_save) < 1:
+            raise ValueError("No segmentations selected to save!")
+        elif not self.data_unit:
+            raise ValueError("Theres no loaded case! Cannot save.")
+        elif not self.output_manager:
+            raise ValueError("You managed to initialize the task without an output handler. "
+                             "Cannot save; please report this to the developers.")
+        # Get the output manager to try and save the result
+        msg = self.output_manager.save_unit(self.data_unit, self.segments_to_save)
+        showSuccessPrompt(msg)
 
     def isTaskComplete(self, case_data: dict[str: str]) -> bool:
         # The user might not have selected an output directory
