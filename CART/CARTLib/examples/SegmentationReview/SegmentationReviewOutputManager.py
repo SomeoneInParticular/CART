@@ -139,8 +139,6 @@ class SegmentationReviewOutputManager:
         Save the contents of a data unit, as dictated by the current
         logic settings and user configurations.
 
-        # TODO handle the case where the original file doesn't exist And we are in "Overwrite Original" mode
-
         :param unit: The data unit to reference for node data
         :param segments_to_save: List of segmentation IDs that should be saved
         :return str: A message to report to the user when saving is complete
@@ -172,6 +170,9 @@ class SegmentationReviewOutputManager:
 
             # Save the node to the destination path
             save_segmentation_to_nifti(segment_node, unit.primary_volume_node, segment_dest_path)
+
+            # Save/update a copy of the sidecar
+            self._save_sidecar(sidecar_source_path, sidecar_dest_path)
 
             # Add a log entry
             self._log_to_csv(
@@ -283,25 +284,20 @@ class SegmentationReviewOutputManager:
         save_segmentation_to_nifti(seg_node, vol_node, target_file)
 
     def _save_sidecar(
-        self, data_unit: SegmentationReviewUnit, target_file: Path
+        self,
+        source_file: Path,
+        target_file: Path
     ):
         """
         Save or update the sidecar JSON file with processing metadata.
         """
-        sidecar_data = {}
-
-        # Try to read existing sidecar data
-        if self.output_mode == OutputMode.OVERWRITE_ORIGINAL:
-            # For overwrite mode, read from the target location if it exists
-            if target_file.exists():
-                with open(target_file) as fp:
-                    sidecar_data = json.load(fp)
+        # Try to start with the previous sidecars data
+        if source_file.exists():
+            with open(source_file) as fp:
+                sidecar_data = json.load(fp)
         else:
-            # For parallel mode, read from the original location
-            original_sidecar = self._get_original_sidecar_path(data_unit)
-            if original_sidecar and original_sidecar.exists():
-                with open(original_sidecar) as fp:
-                    sidecar_data = json.load(fp)
+            # If there isn't any, start from scratch
+            sidecar_data = {}
 
         # Create new entry for this processing step
         entry_time = datetime.now()
@@ -324,16 +320,6 @@ class SegmentationReviewOutputManager:
         # Write the updated sidecar file
         with open(target_file, "w") as fp:
             json.dump(sidecar_data, fp, indent=2)
-
-    def _get_original_sidecar_path(
-        self, data_unit: SegmentationReviewUnit
-    ) -> Optional[Path]:
-        """
-        Get the path to the original sidecar file for reading existing metadata.
-        """
-        # Get the base filename without extension from the segmentation path
-        fname = str(data_unit.get_primary_segmentation_path()).split(".")[0]
-        return Path(f"{fname}.json")
 
     def _promptForSaveLocation(self, data_unit) -> Optional[str]:
         """
