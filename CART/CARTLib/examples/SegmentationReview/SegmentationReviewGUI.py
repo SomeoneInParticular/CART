@@ -397,19 +397,6 @@ class SegmentationReviewGUI:
             self.data_unit.primary_segmentation_node
         )
 
-    def _save(self) -> None:
-        err = self.bound_task.save()
-        self.saveCompletePrompt(err)
-
-    def saveCompletePrompt(self, err_msg: Optional[str]) -> None:
-        if err_msg is None:
-            success_message = self.bound_task.output_manager.get_success_message(
-                self.bound_task.data_unit
-            )
-            showSuccessPrompt(success_message)
-        else:
-            showErrorPrompt(err_msg)
-
     ## GUI SYNCHRONIZATION ##
     def enter(self) -> None:
         # Ensure the segmentation editor widget it set up correctly
