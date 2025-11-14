@@ -85,19 +85,28 @@ class SegmentationReviewOutputManager:
         return self.profile.label
 
     ## CSV LOGGING ##
-    def _setup_csv_log_path(self, csv_log_path: Optional[Path]) -> Path:
+    def _setup_csv_log_path(self, csv_log_path: Optional[Path]) -> Optional[Path]:
         """Set up the CSV log file path."""
+        # If the CSV path is valid and already exists, use it
         if csv_log_path:
             return csv_log_path
+
+        # If no output directory was provided, return none
+        elif self.output_dir is None:
+            return None
 
         # Auto-generate CSV log path
         return self.output_dir / "segmentation_review_log.csv"
 
-    def _init_csv_log(self) -> dict[tuple[str, str], dict[str, str]]:
+    def _init_csv_log(self) -> Optional[dict[tuple[str, str], dict[str, str]]]:
         """
         Load the CSV file designated by the user into memory; if one doesn't exist
         create it instead.
         """
+        # If the csv log path is None, return early as None
+        if self.csv_log_path is None:
+            return None
+
         # If the CSV file already exists, load it
         if self.csv_log_path.exists():
             # Read existing entries
@@ -170,19 +179,21 @@ class SegmentationReviewOutputManager:
             # Save/update a copy of the sidecar
             self._save_sidecar(sidecar_source_path, sidecar_dest_path)
 
-            # Add a log entry
-            self._log_to_csv(
-                unit,
-                segment_dest_path,
-                sidecar_dest_path,
-                segment_source_path
-            )
+            # Add a log entry, if we have a log to save to
+            if self.csv_log_path is not None:
+                self._log_to_csv(
+                    unit,
+                    segment_dest_path,
+                    sidecar_dest_path,
+                    segment_source_path
+                )
 
             # Extend the return message with the segment name
             result_msg += f"  * {s}\n"
 
         # Complete the message by denoting where the (now updated) log file is
-        result_msg += f"\nSee log at '{str(self.csv_log_path.resolve())}' for details."
+        if self.csv_log_path is not None:
+            result_msg += f"\nChange logged into file '{str(self.csv_log_path.resolve())}'."
         return result_msg
 
     def _log_to_csv(
