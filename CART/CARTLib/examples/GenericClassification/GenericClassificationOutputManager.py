@@ -113,7 +113,7 @@ class GenericClassificationOutputManager:
         return self.output_dir / f"cart_classifications.json"
 
     def save_unit(self, data_unit: GenericClassificationUnit):
-        # Generate the entry key and timestamp
+        # Generate the entry key
         entry_key = (data_unit.uid, "test")
 
         # Edge-case; if no classes are provided, using "" instead of "set()"
