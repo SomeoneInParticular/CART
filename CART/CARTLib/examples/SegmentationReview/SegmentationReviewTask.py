@@ -64,6 +64,14 @@ class SegmentationReviewTask(
     def csv_log_path(self, new_path):
         self.output_manager.csv_log_path = new_path
 
+    @property
+    def with_logging(self) -> bool:
+        return self.output_manager.with_logging
+
+    @with_logging.setter
+    def with_logging(self, new_val: bool):
+        self.output_manager.with_logging = new_val
+
     def setup(self, container: qt.QWidget) -> None:
         print(f"Running {self.__class__.__name__} setup!")
 
