@@ -27,19 +27,42 @@ class SegmentationReviewTask(
 
         # Local Attributes
         self.gui: Optional[SegmentationReviewGUI] = None
-        self.output_mode: OutputMode = OutputMode.PARALLEL_DIRECTORY
-        self.output_dir: Optional[Path] = None
-        self.output_manager: Optional[SegmentationReviewOutputManager] = None
         self.data_unit: Optional[SegmentationReviewUnit] = None
-        self.csv_log_path: Optional[Path] = None  # Optional custom CSV log path
         self.segments_to_save: list[str] = list()
 
         # Configuration
-        self.config: SegmentationReviewConfig = (
-            SegmentationReviewConfig(
-                parent_config=self.profile
-            )
+        self.config: SegmentationReviewConfig = SegmentationReviewConfig(
+            parent_config=self.profile
         )
+
+        # Output manager
+        self.output_manager = SegmentationReviewOutputManager(
+            profile=self.profile
+        )
+
+    @property
+    def output_dir(self) -> Optional[Path]:
+        return self.output_manager.output_dir
+
+    @output_dir.setter
+    def output_dir(self, new_dir: Path):
+        self.output_manager.output_dir = new_dir
+
+    @property
+    def output_mode(self) -> OutputMode:
+        return self.output_manager.output_mode
+
+    @output_mode.setter
+    def output_mode(self, new_mode: OutputMode):
+        self.output_manager.output_mode = new_mode
+
+    @property
+    def csv_log_path(self) -> Optional[Path]:
+        return self.output_manager.csv_log_path
+
+    @csv_log_path.setter
+    def csv_log_path(self, new_path):
+        self.output_manager.csv_log_path = new_path
 
     def setup(self, container: qt.QWidget) -> None:
         print(f"Running {self.__class__.__name__} setup!")
@@ -50,15 +73,6 @@ class SegmentationReviewTask(
 
         # Integrate the task's GUI into CART
         container.setLayout(layout)
-
-        # If the user provided output specifications, set up our manager here.
-        if self.output_dir:
-            self.output_manager = SegmentationReviewOutputManager(
-                self.profile,
-                self.output_mode,
-                self.output_dir,
-                self.csv_log_path
-            )
 
         # If we have a data unit at this point, synchronize the GUI to it
         if self.data_unit:
