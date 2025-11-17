@@ -57,10 +57,16 @@ class OutputConfigurationPrompt(qt.QDialog):
     def _buildOutputSection(self, layout, task):
         self.outputModeGroup = qt.QButtonGroup()
 
+        # Label describing the section
+        sectionLabel = qt.QLabel(_(
+            "Choose how segmentations should be saved:"
+        ))
+        layout.addWidget(sectionLabel)
+
         # "Replace Original" button
         overwriteRadio = qt.QRadioButton(_("Replace Original Segmentations"))
         overwriteRadio.setToolTip(_(
-            "Overwrites the original segmentations files with any changes you made.\n"
+            "Overwrites the original segmentations files with any changes you made.\n\n"
             "The sidecar for the file will be updated to denote a change was made as well "
             "(if no sidecar exists, a new one will be made)."
         ))
@@ -68,10 +74,10 @@ class OutputConfigurationPrompt(qt.QDialog):
         layout.addWidget(overwriteRadio)
 
         # "Save Copy" button
-        parallelRadio = qt.QRadioButton(_("Save As Copy"))
+        parallelRadio = qt.QRadioButton(_("Save Copies to Directory"))
         parallelRadio.setToolTip(_(
-            "Saves a copy of each segmentation with your edits to the designated directory.\n"
-            "If a sidecar file is present, it will also be copied with an extension denoting "
+            "Saves a copy of the segmentation(s) with your edits to the following directory.\n\n"
+            "If a sidecar file is present, it will also be copied with an additional note tracking "
             "the changes made (if no sidecar exists, a new one will will be made instead)."
         ))
         self.outputModeGroup.addButton(parallelRadio, self.COPY_BUTTON_ID)
@@ -84,7 +90,7 @@ class OutputConfigurationPrompt(qt.QDialog):
             overwriteRadio.setChecked(True)
 
         # Directory selection widget (only inter-actable in COPY mode)
-        dirLabel = qt.QLabel(_("Output Directory:"))
+        outputFileLabel = qt.QLabel(_("Output Directory:"))
         self.outputFileEdit = ctk.ctkPathLineEdit()
         self.outputFileEdit.setToolTip(_(
             "Saved segmentations will be placed here, in a BIDS-like file structure."
@@ -103,32 +109,32 @@ class OutputConfigurationPrompt(qt.QDialog):
 
         # When the CSV logging state is changed, enable/disable the editor to match
         def _onOutputModeChanged():
-            self.outputFileEdit.setEnabled(
-                self.output_mode == OutputMode.PARALLEL_DIRECTORY
-            )
-
+            isCopyMode = self.output_mode == OutputMode.PARALLEL_DIRECTORY
+            outputFileLabel.setEnabled(isCopyMode)
+            self.outputFileEdit.setEnabled(isCopyMode)
+        _onOutputModeChanged()
         self.outputModeGroup.buttonToggled.connect(_onOutputModeChanged)
 
         # Insert everything into the provided layout
-        layout.addWidget(dirLabel)
+        layout.addWidget(outputFileLabel)
         layout.addWidget(self.outputFileEdit)
 
     def _buildLoggingSection(self, layout, task):
         # Initial setup
-        csvGroupBox = qt.QGroupBox(_("Logging"))
+        csvGroupBox = qt.QGroupBox(_("Processing Log"))
         csvGroupLayout = qt.QVBoxLayout()
         csvGroupBox.setLayout(csvGroupLayout)
 
         # CSV log option checkbox
         self.enableCsvLogging = qt.QCheckBox(_("Enable Logging"))
-        self.enableCsvLogging.setChecked(True)  # Default to enabled
+        self.enableCsvLogging.setChecked(task.with_logging)
         self.enableCsvLogging.setToolTip(_(
             "Log all processing activities to a CSV file for tracking."
         ))
         csvGroupLayout.addWidget(self.enableCsvLogging)
 
         # CSV file path selection
-        csvLogLabel = qt.QLabel(_("CSV Path:"))
+        csvLogLabel = qt.QLabel(_("Path to Logging File (CSV):"))
         self.csvLogEdit = ctk.ctkPathLineEdit()
         self.csvLogEdit.setToolTip(_(
             "Where the CSV file will be placed."
@@ -161,7 +167,10 @@ class OutputConfigurationPrompt(qt.QDialog):
 
         # When the CSV logging state is changed, enable/disable the editor to match
         def _onLoggingChanged():
-            self.csvLogEdit.setEnabled(self.enableCsvLogging.isChecked())
+            isChecked = self.enableCsvLogging.isChecked()
+            csvLogLabel.setEnabled(isChecked)
+            self.csvLogEdit.setEnabled(isChecked)
+        _onLoggingChanged()
         self.enableCsvLogging.stateChanged.connect(_onLoggingChanged)
 
         # Place everything into the group box
