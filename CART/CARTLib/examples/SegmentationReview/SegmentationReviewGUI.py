@@ -515,15 +515,27 @@ class SegmentationReviewGUI:
         """
         self.data_unit = data_unit
 
-        # Update the list of segmentations that can be saved
+        # Update the segmentation list to match the current logic's state
         with self.block_signals():
-            # Add entries not already present in segmentation selection combobox
-            existing_entries = set(
-                [self.segmentSelectionComboBox.itemText(i) for i in range(self.segmentSelectionComboBox.count)]
-            )
-            for k in data_unit.segmentation_keys:
-                if k not in existing_entries:
-                    self.segmentSelectionComboBox.addItem(k)
+            # Reset the combobox
+            self.segmentSelectionComboBox.clear()
+
+            # Add each item from the data unit, and sync it with the logic
+            for i, k in enumerate(data_unit.segmentation_keys):
+                # Add the new item
+                self.segmentSelectionComboBox.addItem(k)
+
+                # Sync the check-state
+                checkModel = self.segmentSelectionComboBox.checkableModel()
+                idx = checkModel.index(i, 0)
+                # KO: Slicer's impl of QT is not forthcoming about where the "real" enum is,
+                #  so we hard code it here. If you find the enum, please fix this garbage.
+                checked = k in self.bound_task.segments_to_save
+                if checked:
+                    checked = 2
+                else:
+                    checked = 0
+                self.segmentSelectionComboBox.setCheckState(idx, checked)
 
             # Refresh the SegmentEditor Widget immediately
             self.segmentEditorWidget.refresh()

@@ -28,7 +28,7 @@ class SegmentationReviewTask(
         # Local Attributes
         self.gui: Optional[SegmentationReviewGUI] = None
         self.data_unit: Optional[SegmentationReviewUnit] = None
-        self.segments_to_save: list[str] = list()
+        self.segments_to_save: set[str] = set()
 
         # Configuration
         self.config: SegmentationReviewConfig = SegmentationReviewConfig(
@@ -97,6 +97,11 @@ class SegmentationReviewTask(
             foreground=data_unit.primary_segmentation_node,
             fit=True,
         )
+
+        # By default, all segmentations are saved
+        for s in self.data_unit.segmentation_keys:
+            if s not in self.segments_to_save:
+                self.segments_to_save.add(s)
 
         # Hide the segmentation node if requested by the user's config
         self.data_unit.set_primary_segments_visible(
