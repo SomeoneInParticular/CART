@@ -66,7 +66,7 @@ class OutputConfigurationPrompt(qt.QDialog):
         # "Replace Original" button
         overwriteRadio = qt.QRadioButton(_("Replace Original Segmentations"))
         overwriteRadio.setToolTip(_(
-            "Overwrites the original segmentations files with any changes you made.\n\n"
+            "When saved, the segmentation will overwrite the input segmentation used to modify it.\n\n"
             "The sidecar for the file will be updated to denote a change was made as well "
             "(if no sidecar exists, a new one will be made)."
         ))
