@@ -133,6 +133,23 @@ class _NodeComboBoxProxy(qt.QComboBox):
         self._bound_widget.showHidden = val
 
 
+class _VolumeNodeComboBoxProxy(_NodeComboBoxProxy):
+    """
+    For reasons unknown, the volume node list within Slicer has an off-by-one error,
+    which results in all volume indices being offset by one.
+
+    This subclass corrects for this discrepancy withing the index map for our
+    ComboBoxProxy class.
+    """
+    def refresh(self):
+        # Refresh as usual
+        super().refresh()
+
+        # Offset the indices within the map by 1
+        for k, v in self.idx_map.items():
+            self.idx_map[k] = v+1
+
+
 class CARTSegmentationEditorWidget(
     qSlicerSegmentationsModuleWidgetsPythonQt.qMRMLSegmentEditorWidget
 ):
@@ -228,12 +245,12 @@ class CARTSegmentationEditorWidget(
             c_name = c.name
             if c_name == "SourceVolumeNodeComboBox":
                 # Build a proxy widget for it
-                proxy = self._proxyComboBox(c)
+                proxy = self._buildProxyVolumeComboBox(c)
                 # Track it for later
                 volumeSelectNode = proxy
             elif c_name == "SegmentationNodeComboBox":
                 # Build a proxy widget for it
-                proxy = self._proxyComboBox(c)
+                proxy = self._buildProxySegmentationComboBox(c)
                 # Return it, ending the search here
                 segmentSelectNode = proxy
 
@@ -244,9 +261,21 @@ class CARTSegmentationEditorWidget(
         # Return what we found
         return volumeSelectNode, segmentSelectNode
 
-    def _proxyComboBox(self, comboBox):
+    def _buildProxySegmentationComboBox(self, comboBox):
         # Generate the widget we want to put in its place
         proxy = _NodeComboBoxProxy(comboBox)
+        # Use it to replace the original widget in the UI
+        self.layout().replaceWidget(comboBox, proxy)
+        # Share the size policy of the combobox with its proxy
+        proxy.setSizePolicy(comboBox.sizePolicy)
+        # Hide the original combo box from view
+        comboBox.setVisible(False)
+        # Return the proxy for further use
+        return proxy
+
+    def _buildProxyVolumeComboBox(self, comboBox):
+        # Generate the widget we want to put in its place
+        proxy = _VolumeNodeComboBoxProxy(comboBox)
         # Use it to replace the original widget in the UI
         self.layout().replaceWidget(comboBox, proxy)
         # Share the size policy of the combobox with its proxy
