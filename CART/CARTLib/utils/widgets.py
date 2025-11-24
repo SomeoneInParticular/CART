@@ -135,10 +135,11 @@ class _NodeComboBoxProxy(qt.QComboBox):
 
 class _VolumeNodeComboBoxProxy(_NodeComboBoxProxy):
     """
-    For reasons unknown, the volume node list within Slicer has an off-by-one error,
-    which results in all volume indices being offset by one.
+    Due to the first row in the "Source Volume" combobox always being
+    "Select Source Volume for Editting", _NodeComboBoxProxy will have
+    an off-by-one error if used raw.
 
-    This subclass corrects for this discrepancy withing the index map for our
+    This subclass corrects for this discrepancy within the index map for our
     ComboBoxProxy class.
     """
     def refresh(self):
