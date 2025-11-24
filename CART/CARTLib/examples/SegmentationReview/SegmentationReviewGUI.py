@@ -436,11 +436,13 @@ class SegmentationReviewGUI:
 
     def _addOutputSelectionButton(self, layout: qt.QFormLayout) -> None:
         btn = qt.QPushButton("Change Output Settings")
-        btn.clicked.connect(self.promptSelectOutputMode)
+        btn.clicked.connect(
+            lambda: self.promptSelectOutputMode(cancellable=True)
+        )
         layout.addRow(btn)
 
     ## USER PROMPTS ##
-    def promptSelectOutputMode(self, cancellable=True):
+    def promptSelectOutputMode(self, cancellable):
         """
         Prompt the user to select output mode and location.
         """
