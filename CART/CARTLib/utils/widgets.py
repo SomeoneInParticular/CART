@@ -171,6 +171,7 @@ class CARTSegmentationEditorWidget(
     """
 
     SEGMENT_EDITOR_NODE_KEY = "vtkMRMLSegmentEditorNode"
+    TOGGLE_VISIBILITY_SHORTCUT_KEY = qt.QKeySequence("g")
 
     def __init__(self, tag: str = "CARTSegmentEditor", scene=slicer.mrmlScene):
         """
@@ -215,6 +216,9 @@ class CARTSegmentationEditorWidget(
         # Track our segmentation node combo box for direct reference
         # TODO: Figure out why this makes these combo-boxes become "stubby"
         self.proxyVolumeNodeComboBox, self.proxySegNodeComboBox = self._replaceSelectionNodes()
+
+        # Track the current shortcut override
+        self.hideActiveSegmentationShortcut = None
 
     ## Setup Helpers ##
     def _set_up_editor_node(self):
@@ -286,18 +290,44 @@ class CARTSegmentationEditorWidget(
         # Return the proxy for further use
         return proxy
 
+    ## Shortcuts ##
+    def toggleSegmentVisibility(self):
+        # Get the display node for the currently selected segmentation
+        display_node = self.segmentationNode().GetDisplayNode()
+
+        # Toggle the visibility of ALL of its segments.
+        is_visible = len(display_node.GetVisibleSegmentIDs()) > 0
+        display_node.SetAllSegmentsVisibility(not is_visible)
+
+    def installShortcutOverrides(self):
+        # Overwritten `g` shortcut, allowing better control of segmentation visibility
+        self.hideActiveSegmentationShortcut = qt.QShortcut(slicer.util.mainWindow())
+        self.hideActiveSegmentationShortcut.setKey(self.TOGGLE_VISIBILITY_SHORTCUT_KEY)
+        self.hideActiveSegmentationShortcut.activated.connect(
+            self.toggleSegmentVisibility
+        )
+
+    def uninstallShortcutOverrides(self):
+        self.hideActiveSegmentationShortcut.activated.disconnect()
+        self.hideActiveSegmentationShortcut.setParent(None)
+        self.hideActiveSegmentationShortcut = None
+
     ## UI Management ##
     def enter(self):
         # Synchronize ourselves with the MRML state
         self.updateWidgetFromMRML()
         # Install our built-in shortcuts into Slicer's hotkeys
         self.installKeyboardShortcuts()
+        # Install our custom shortcuts over top
+        self.installShortcutOverrides()
 
     def exit(self):
         # Disable the active effect, as it *will* desync otherwise
         self.setActiveEffect(None)
         # Uninstall keyboard shortcuts
         self.uninstallKeyboardShortcuts()
+        # Install our custom shortcuts over top
+        self.uninstallShortcutOverrides()
 
     def refresh(self):
         self.proxyVolumeNodeComboBox.refresh()
