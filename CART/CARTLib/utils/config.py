@@ -582,7 +582,7 @@ class CARTConfig(DictBackedConfig):
         handled by whatever is requesting the configuration be loaded!
         """
         # If our specified configuration file doesn't exist, copy the default to make one
-        if not MAIN_CONFIG.exists():
+        if not GLOBAL_CONFIG_PATH.exists():
             print("No configuration file found, creating a new one!")
             with open(DEFAULT_FILE) as cf:
                 # Load the data
@@ -598,7 +598,7 @@ class CARTConfig(DictBackedConfig):
         """
         Save the in-memory contents of the configuration back to our JSON file
         """
-        with open(MAIN_CONFIG, "w") as cf:
+        with open(GLOBAL_CONFIG_PATH, "w") as cf:
             json.dump(self._backing_dict, cf, indent=2)
 
 
@@ -846,6 +846,6 @@ class ProfileConfigDialog(ConfigDialog[ProfileConfig]):
         layout.addRow(layoutPreserveLabel, layoutPreserveCheck)
 
 # The location of the config file for this installation of CART.
-MAIN_CONFIG = Path(__file__).parent.parent.parent / "configuration.json"
+GLOBAL_CONFIG_PATH = Path(__file__).parent.parent.parent / "configuration.json"
 
-GLOBAL_CONFIG = CARTConfig(MAIN_CONFIG)
+GLOBAL_CONFIG = CARTConfig(GLOBAL_CONFIG_PATH)
