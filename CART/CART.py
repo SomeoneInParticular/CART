@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import vtk
 import ctk
@@ -12,14 +12,18 @@ from slicer.util import VTKObservationMixin
 
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from CARTLib.core.SetupWizard import CARTSetupWizard
 from CARTLib.utils.config import GLOBAL_CONFIG, ProfileConfig, GLOBAL_CONFIG_PATH
-from CARTLib.utils.task import CART_TASK_REGISTRY, initialize_tasks
+from CARTLib.utils.task import initialize_tasks
 
 CURRENT_DIR = Path(__file__).parent
 CONFIGURATION_FILE_NAME = CURRENT_DIR / "configuration.json"
 sample_data_path = CURRENT_DIR.parent / "sample_data"
 sample_data_cohort_csv = sample_data_path / "example_cohort.csv"
 
+
+if TYPE_CHECKING:
+    import PyQt5.Qt as qt
 
 #
 # CART
@@ -143,6 +147,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     ## User Prompts ##
     def setupPrompt(self):
+        # Ask the user if they want to begin setup
         response = qt.QMessageBox.question(
             None,
             _("Initialize CART?"),
@@ -151,10 +156,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             qt.QMessageBox.Yes
         )
 
+        # Initiate CART setup if they do
         if response == qt.QMessageBox.Yes:
-            print("+" * 100)
-        else:
-            print("-" * 100)
+            setupWizard = CARTSetupWizard(None)
+            result = setupWizard.exec()
+
+            # If we got an "accept" signal, update our logic and begin task setup
+            if result == qt.QDialog.Accepted:
+                setupWizard.update_logic(self.logic)
 
     def resumePrompt(self):
         response = qt.QMessageBox.question(
@@ -189,7 +198,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 # CARTLogic
 #
 class CARTLogic(ScriptedLoadableModuleLogic):
-
     def __init__(self):
         ScriptedLoadableModuleLogic.__init__(self)
 
@@ -199,6 +207,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self._task_instance: Optional[TaskBaseClass] = None
         self._data_unit_factory: Optional[DataUnitFactory] = None
 
+    ## GUI Management ##
     def enter(self):
         """
         Called when the CART module is loaded (through our CARTWidget).
@@ -223,5 +232,3 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         """
         if self._task_instance:
             self._task_instance.exit()
-
-

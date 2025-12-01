@@ -5,6 +5,7 @@ from typing import Generic, Optional, TypeVar, Protocol
 
 import qt
 import slicer
+from slicer.i18n import tr as _
 
 from CARTLib.core.DataUnitBase import DataUnitBase
 from CARTLib.utils.config import ProfileConfig
@@ -37,7 +38,6 @@ class TaskBaseClass(ABC, Generic[D]):
     with debugging, but (like all type hints) is not enforced by us or Python
     itself.!
     """
-
     def __init__(self, profile: ProfileConfig):
         """
         Basic constructor.
@@ -114,6 +114,16 @@ class TaskBaseClass(ABC, Generic[D]):
         """
 
         raise NotImplementedError("save must be implemented in subclasses")
+
+    @classmethod
+    def description(cls):
+        """
+        A description for this task, detailing what it should be used for, as well as
+        anything else the user should know before they use it.
+        """
+        return (_(
+            f"'{cls.__name__}' has no description; you should remind the developer to provide one!"
+        ))
 
     def save_on_iter(self) -> Optional[str]:
         """
