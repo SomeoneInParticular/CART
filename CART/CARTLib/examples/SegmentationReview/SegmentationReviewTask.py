@@ -21,6 +21,7 @@ from SegmentationReviewConfig import SegmentationReviewConfig
 class SegmentationReviewTask(
     TaskBaseClass[SegmentationReviewUnit]
 ):
+    README_PATH = Path(__file__).parent / "README.md"
 
     def __init__(self, profile: ProfileConfig):
         super().__init__(profile)
@@ -39,6 +40,11 @@ class SegmentationReviewTask(
         self.output_manager = SegmentationReviewOutputManager(
             profile=self.profile
         )
+
+    @classmethod
+    def description(cls):
+        with open(cls.README_PATH, 'r') as fp:
+            return fp.read()
 
     @property
     def output_dir(self) -> Optional[Path]:

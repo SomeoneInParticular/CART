@@ -26,6 +26,8 @@ class GenericClassificationTask(TaskBaseClass[GenericClassificationUnit]):
 
     Saves the classification(s) into a CSV folder
     """
+    README_PATH = Path(__file__).parent / "README.md"
+
     def __init__(self, profile: ProfileConfig):
         super().__init__(profile)
 
@@ -43,6 +45,11 @@ class GenericClassificationTask(TaskBaseClass[GenericClassificationUnit]):
 
         # The output manager for this class
         self._output_manager: Optional[GenericClassificationOutputManager] = None
+
+    @classmethod
+    def description(cls):
+        with open(cls.README_PATH, 'r') as fp:
+            return fp.read()
 
     @property
     def classes(self) -> list[str]:

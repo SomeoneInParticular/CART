@@ -17,6 +17,8 @@ from RapidMarkupUnit import RapidMarkupUnit
 
 @cart_task("Rapid Markup")
 class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
+    README_PATH = Path(__file__).parent / "README.md"
+
     def __init__(self, profile: ProfileConfig):
         super().__init__(profile)
 
@@ -35,6 +37,11 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
 
         # Config management
         self.config = RapidMarkupConfig(parent_config=self.profile)
+
+    @classmethod
+    def description(cls):
+        with open(cls.README_PATH, 'r') as fp:
+            return fp.read()
 
     def setup(self, container: qt.QWidget) -> None:
         print(f"Running {self.__class__.__name__} setup!")
