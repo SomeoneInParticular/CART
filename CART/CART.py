@@ -13,7 +13,7 @@ from slicer.util import VTKObservationMixin
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.SetupWizard import CARTSetupWizard
-from CARTLib.utils.config import GLOBAL_CONFIG, ProfileConfig, GLOBAL_CONFIG_PATH
+from CARTLib.utils.config import GLOBAL_CONFIG, ProfileConfig, GLOBAL_CONFIG_PATH, MasterProfileConfig
 from CARTLib.utils.task import initialize_tasks
 
 CURRENT_DIR = Path(__file__).parent
@@ -202,10 +202,40 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         ScriptedLoadableModuleLogic.__init__(self)
 
         # Attribute declaration
-        self.job_config: Optional[ProfileConfig] = None
+        self.master_profile_config: MasterProfileConfig = MasterProfileConfig()
+        self.active_job_config: Optional[ProfileConfig] = None
         self._data_manager: Optional[DataManager] = None
         self._task_instance: Optional[TaskBaseClass] = None
         self._data_unit_factory: Optional[DataUnitFactory] = None
+
+    ## Attributes
+    @property
+    def author(self) -> str:
+        return self.master_profile_config.author
+
+    @author.setter
+    def author(self, new_author: str):
+        self.master_profile_config.author = new_author
+
+    @property
+    def position(self) -> str:
+        return self.master_profile_config.position
+
+    @position.setter
+    def position(self, new_position: str):
+        self.master_profile_config.position = new_position
+
+    @property
+    def last_job_path(self) -> Path:
+        return self.master_profile_config.last_job_path
+
+    @last_job_path.setter
+    def last_job_path(self, new_path: Path):
+        self.master_profile_config.last_job_path = new_path
+
+    ## Config Management ##
+    def save_master_config(self):
+        self.master_profile_config.save()
 
     ## GUI Management ##
     def enter(self):

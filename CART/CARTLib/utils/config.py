@@ -297,6 +297,66 @@ class ConfigDialog(qt.QDialog, ABC, Generic[DICT_CONFIG_TYPE], metaclass=_ABCQDi
 
 
 ## Backing Config Managers ##
+class MasterProfileConfig(DictBackedConfig):
+    ## Attributes ##
+    AUTHOR_KEY = "author"
+
+    @property
+    def author(self) -> Optional[str]:
+        return
+
+    @author.setter
+    def author(self, new_author: str):
+        self.backing_dict[self.AUTHOR_KEY] = new_author
+        self.has_changed = True
+
+    POSITION_KEY = "position"
+
+    @property
+    def position(self) -> Optional[str]:
+        return self.backing_dict.get(self.POSITION_KEY, None)
+
+    @position.setter
+    def position(self, new_position):
+        self.backing_dict[self.POSITION_KEY] = new_position
+        self.has_changed = True
+
+    @position.setter
+    def position(self, new_position):
+        self.backing_dict[self.POSITION_KEY] = new_position
+        self.has_changed = True
+
+    LAST_JOB_KEY = "last_job_path"
+    @property
+    def last_job_path(self) -> Optional[Path]:
+        val = self.backing_dict.get(self.LAST_JOB_KEY, None)
+        if val is None:
+            return val
+        return Path(val)
+
+    @last_job_path.setter
+    def last_job_path(self, new_path: Path):
+        val = str(new_path.resolve())
+        self.backing_dict[self.LAST_JOB_KEY] = val
+        self.has_changed = True
+
+    ## Utilities ##
+    def save_without_parent(self) -> None:
+        """
+        Save the in-memory contents of the configuration back to our JSON file
+        """
+        with open(GLOBAL_CONFIG_PATH, "w") as cf:
+            json.dump(self.backing_dict, cf, indent=2)
+
+    def show_gui(self) -> qt.QDialog:
+        # TODO
+        pass
+
+    @classmethod
+    def default_config_label(cls) -> str:
+        return "cart_master_profile"
+
+
 class ProfileConfig(DictBackedConfig):
     """
     Configuration manager for a CART profile.

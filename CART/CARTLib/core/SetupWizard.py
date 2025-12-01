@@ -2,8 +2,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import qt
-from CARTLib.utils.task import CART_TASK_REGISTRY
 from slicer.i18n import tr as _
+
+from CARTLib.utils.task import CART_TASK_REGISTRY
 
 
 if TYPE_CHECKING:
@@ -160,5 +161,9 @@ class CARTSetupWizard(qt.QWizard):
 
     ## Utils ##
     def update_logic(self, logic: "CARTLogic"):
-        # TODO
-        print("Updating Logic!")
+        # Update the logic's attributes
+        logic.author = self.author
+        logic.position = self.position
+
+        # Have the logic save its config immediately
+        logic.save_master_config()
