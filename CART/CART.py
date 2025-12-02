@@ -12,7 +12,7 @@ from slicer.util import VTKObservationMixin
 
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-from CARTLib.core.SetupWizard import CARTSetupWizard
+from CARTLib.core.SetupWizard import CARTSetupWizard, JobSetupWizard
 from CARTLib.utils.config import GLOBAL_CONFIG, ProfileConfig, GLOBAL_CONFIG_PATH, MasterProfileConfig
 from CARTLib.utils.task import initialize_tasks
 
@@ -139,15 +139,21 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     ## Connections ##
     def startButtonPressed(self):
-        # Immediately prompt the user to start a CART job
+        # If this is the first time CART has been run, ask if they want to initialize
         if not GLOBAL_CONFIG_PATH.exists():
-            self.setupPrompt()
+            self.initialSetupPrompt()
+            return
+        # If they haven't run a job before, ask if they want to do so
+        elif self.logic.last_job_path is None or not self.logic.last_job_path.exists():
+            self.jobSetupPrompt()
+            return
+        # Otherwise, ask if they want to resume their last job
         else:
             self.resumePrompt()
 
     ## User Prompts ##
-    def setupPrompt(self):
-        # Ask the user if they want to begin setup
+    def initialSetupPrompt(self):
+        # Ask the user if they want to begin initial setup
         response = qt.QMessageBox.question(
             None,
             _("Initialize CART?"),
@@ -158,12 +164,21 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Initiate CART setup if they do
         if response == qt.QMessageBox.Yes:
-            setupWizard = CARTSetupWizard(None)
-            result = setupWizard.exec()
+            self.runInitialSetup()
 
-            # If we got an "accept" signal, update our logic and begin task setup
-            if result == qt.QDialog.Accepted:
-                setupWizard.update_logic(self.logic)
+    def jobSetupPrompt(self):
+        # Ask the user if they want to begin job setup
+        response = qt.QMessageBox.question(
+            None,
+            _("Create Job?"),
+            _("You have not run a CART job before. Would you like to create one now?"),
+            qt.QMessageBox.Yes | qt.QMessageBox.No,
+            qt.QMessageBox.Yes
+        )
+
+        # Initiate Job setup if they do
+        if response == qt.QMessageBox.Yes:
+            self.runNewJobSetup()
 
     def resumePrompt(self):
         response = qt.QMessageBox.question(
@@ -178,6 +193,24 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             print("+" * 100)
         else:
             print("-" * 100)
+
+    def runInitialSetup(self):
+        initSetupWizard = CARTSetupWizard(None)
+        result = initSetupWizard.exec()
+
+        # If we got an "accept" signal, update our logic and begin job setup
+        if result == qt.QDialog.Accepted:
+            initSetupWizard.update_logic(self.logic)
+            self.runNewJobSetup()
+
+    def runNewJobSetup(self):
+        jobSetupWizard = JobSetupWizard(None)
+        result = jobSetupWizard.exec()
+
+        # If we got an "accept" signal, create the job config and initialize the job
+        if result == qt.QDialog.Accepted:
+            # TODO
+            print(jobSetupWizard.data_path)
 
     ## View Management ##
     def cleanup(self) -> None:
