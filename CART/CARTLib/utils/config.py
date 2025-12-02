@@ -303,7 +303,7 @@ class MasterProfileConfig(DictBackedConfig):
 
     @property
     def author(self) -> Optional[str]:
-        return
+        return self.backing_dict.get(self.AUTHOR_KEY, None)
 
     @author.setter
     def author(self, new_author: str):
@@ -355,7 +355,6 @@ class MasterProfileConfig(DictBackedConfig):
     @classmethod
     def default_config_label(cls) -> str:
         return "cart_master_profile"
-
 
 class ProfileConfig(DictBackedConfig):
     """

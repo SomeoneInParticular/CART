@@ -259,6 +259,10 @@ class JobSetupWizard(qt.QWizard):
         return self._dataPage.data_path
 
     @property
+    def output_path(self):
+        return self._dataPage.output_path
+
+    @property
     def cohort_path(self) -> Optional[Path]:
         # Delegate property, due to the unique checks required for the cohort path
         return self._cohortPage.cohort_path
