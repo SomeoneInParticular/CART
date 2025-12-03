@@ -2,13 +2,17 @@ import json
 from abc import ABC, abstractmethod, ABCMeta
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generic, Optional, TypeVar, Union, Callable
+from typing import Generic, Optional, TypeVar, Union, Callable, TYPE_CHECKING
 
 import qt
 
 # The location of the default config used by a fresh installation of CART.
 #  DO NOT TOUCH IT UNLESS YOU KNOW WHAT YOU'RE DOING.
 DEFAULT_FILE = Path(__file__).parent / "default_config.json"
+
+
+if TYPE_CHECKING:
+    from CARTLib.core.JobProfiles import JobProfileConfig
 
 
 ## Re-Usable Abstract Elements ##
@@ -326,27 +330,67 @@ class MasterProfileConfig(DictBackedConfig):
         self.backing_dict[self.POSITION_KEY] = new_position
         self.has_changed = True
 
-    LAST_JOB_KEY = "last_job_path"
-    @property
-    def last_job_path(self) -> Optional[Path]:
-        val = self.backing_dict.get(self.LAST_JOB_KEY, None)
-        if val is None:
-            return val
-        return Path(val)
+    REGISTERED_JOB_KEYS = "registered_jobs"
 
-    @last_job_path.setter
-    def last_job_path(self, new_path: Path):
-        val = str(new_path.resolve())
-        self.backing_dict[self.LAST_JOB_KEY] = val
+    @property
+    def registered_jobs(self) -> dict[str, str]:
+        """
+        Map of registered jobs, in "name: path" format.
+        """
+        job_map = self.get_or_default(self.REGISTERED_JOB_KEYS, {})
+        return job_map
+
+    def register_new_job(self, job_config: "JobProfileConfig"):
+        # Register the new job
+        k = job_config.name
+        p = str(job_config.file.resolve())
+        job_map = self.get_or_default(self.REGISTERED_JOB_KEYS, {})
+        job_map[k] = p
+        # Mark ourselves as being changed
         self.has_changed = True
+
+    @property
+    def last_job(self) -> Optional[tuple[str, Path]]:
+        """
+        Returns the name and path to the job last used, as detailed within this config.
+        """
+        job_registry = self.registered_jobs
+        if len(self.registered_jobs) < 1:
+            return None
+        first_key = next(iter(job_registry.keys()))
+        return first_key, job_registry[first_key]
+
+    def set_last_job(self, job_name: str):
+        old_job_registry = self.get_or_default(self.REGISTERED_JOB_KEYS, {})
+        job_path = old_job_registry.get(job_name, None)
+        if job_path is None:
+            raise ValueError(
+                f"Job '{job_name}' has not been registered! Cannot make it the last-used job."
+            )
+        # Re-build our job map using the new setup
+        new_registry = {job_name: job_path}
+        for k, v in old_job_registry.items():
+            # Skip adding the job again; it's already inserted
+            if k == job_name:
+                continue
+            new_registry[k] = v
+        self.backing_dict[self.REGISTERED_JOB_KEYS] = new_registry
+
 
     ## Utilities ##
     def save_without_parent(self) -> None:
         """
         Save the in-memory contents of the configuration back to our JSON file
         """
-        with open(GLOBAL_CONFIG_PATH, "w") as cf:
-            json.dump(self.backing_dict, cf, indent=2)
+        with open(GLOBAL_CONFIG_PATH, "w") as fp:
+            json.dump(self.backing_dict, fp, indent=2)
+
+    def reload(self):
+        if not GLOBAL_CONFIG_PATH.exists():
+            print(f"Could not load master config; configuration file does not exist!")
+            return
+        with open(GLOBAL_CONFIG_PATH, "r") as fp:
+            self.backing_dict = json.load(fp)
 
     def show_gui(self) -> qt.QDialog:
         # TODO
@@ -355,6 +399,7 @@ class MasterProfileConfig(DictBackedConfig):
     @classmethod
     def default_config_label(cls) -> str:
         return "cart_master_profile"
+
 
 class ProfileConfig(DictBackedConfig):
     """

@@ -7,6 +7,8 @@ from slicer.i18n import tr as _
 
 from CARTLib.utils.task import CART_TASK_REGISTRY
 
+from . import CART_PATH
+from .JobProfiles import JobProfileConfig
 
 if TYPE_CHECKING:
     # Avoid a cyclical import
@@ -18,7 +20,7 @@ if TYPE_CHECKING:
 
 
 ## Setup ##
-CART_LOGO_PIXMAP = qt.QPixmap(Path("../../Resources/Icons/CART.png"))
+CART_LOGO_PIXMAP = qt.QPixmap(CART_PATH / "Resources/Icons/CART.png")
 
 JOB_NAME_FIELD = "job_name"
 SELECTED_TASK_FIELD = "selected_task"
@@ -267,6 +269,19 @@ class JobSetupWizard(qt.QWizard):
         # Delegate property, due to the unique checks required for the cohort path
         return self._cohortPage.cohort_path
 
+    def generate_new_config(self, logic: "CARTLogic") -> JobProfileConfig:
+        # Generate the new config and immediately save it
+        new_config = JobProfileConfig()
+        new_config.name = self.job_name
+        new_config.data_path = self.data_path
+        new_config.output_path = self.output_path
+        new_config.cohort_path = self.cohort_path
+        new_config.save()
+
+        # Register the new job
+        logic.register_job_config(new_config)
+
+        return new_config
 
 ## Wizard Pages ##
 class _DataWizardPage(qt.QWizardPage):

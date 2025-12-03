@@ -1,3 +1,4 @@
+from functools import singledispatchmethod
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
@@ -11,15 +12,11 @@ from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
 
 from CARTLib.core.DataManager import DataManager
+from CARTLib.core.JobProfiles import JobProfileConfig
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.SetupWizard import CARTSetupWizard, JobSetupWizard
 from CARTLib.utils.config import GLOBAL_CONFIG, ProfileConfig, GLOBAL_CONFIG_PATH, MasterProfileConfig
 from CARTLib.utils.task import initialize_tasks
-
-CURRENT_DIR = Path(__file__).parent
-CONFIGURATION_FILE_NAME = CURRENT_DIR / "configuration.json"
-sample_data_path = CURRENT_DIR.parent / "sample_data"
-sample_data_cohort_csv = sample_data_path / "example_cohort.csv"
 
 
 if TYPE_CHECKING:
@@ -190,7 +187,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         )
 
         if response == qt.QMessageBox.Yes:
-            print("+" * 100)
+            self.logic.set_active_job(self.logic.last_job_name)
+            print(self.logic.active_job_config.backing_dict)
         else:
             print("-" * 100)
 
@@ -207,10 +205,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         jobSetupWizard = JobSetupWizard(None)
         result = jobSetupWizard.exec()
 
-        # If we got an "accept" signal, create the job config and initialize the job
+        # If we got an "accept" signal, create the job config and initialize it
         if result == qt.QDialog.Accepted:
-            # TODO
-            print(jobSetupWizard.data_path)
+            new_config = jobSetupWizard.generate_new_config(self.logic)
+            self.logic.set_active_job(new_config.name)
 
     ## View Management ##
     def cleanup(self) -> None:
@@ -236,10 +234,13 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Attribute declaration
         self.master_profile_config: MasterProfileConfig = MasterProfileConfig()
-        self.active_job_config: Optional[ProfileConfig] = None
+        self.active_job_config: Optional[JobProfileConfig] = None
         self._data_manager: Optional[DataManager] = None
         self._task_instance: Optional[TaskBaseClass] = None
         self._data_unit_factory: Optional[DataUnitFactory] = None
+
+        # Attempt to load the config into memory
+        self.reload_laster_config()
 
     ## Attributes
     @property
@@ -258,17 +259,63 @@ class CARTLogic(ScriptedLoadableModuleLogic):
     def position(self, new_position: str):
         self.master_profile_config.position = new_position
 
+    ## Job Management ##
     @property
-    def last_job_path(self) -> Path:
-        return self.master_profile_config.last_job_path
+    def registered_jobs(self) -> dict[str, str]:
+        return self.master_profile_config.registered_jobs
 
-    @last_job_path.setter
-    def last_job_path(self, new_path: Path):
-        self.master_profile_config.last_job_path = new_path
+    @property
+    def registered_jobs_names(self) -> list[str]:
+        # Shortcut function for easy reference.
+        return list(self.master_profile_config.registered_jobs.keys())
+
+    @property
+    def last_job_name(self):
+        return self.master_profile_config.last_job[0]
+
+    @property
+    def last_job_path(self) -> Optional[Path]:
+        if self.master_profile_config.last_job is None:
+            return None
+        else:
+            return Path(self.master_profile_config.last_job[1])
+
+    def set_active_job(self, job_name: str):
+        """
+        Loads the specified job, based on its associated config
+        """
+        # Confirm the requested job is registered
+        if not job_name in self.registered_jobs.keys():
+            raise ValueError(f"Cannot set job '{job_name}' as active; it has not been registered!")
+
+        # Confirm the job config file exist
+        job_file = Path(self.registered_jobs.get(job_name))
+        if not job_file.exists() or not job_file.is_file():
+            raise ValueError(f"Cannot set job '{job_name}' as active; its corresponding config file does not exist!")
+
+        # Unload the previous job TODO
+        print(f"Unloaded previous job")
+
+        # Initiate the new job
+        job_profile = JobProfileConfig(file_path=job_file)
+        job_profile.reload()
+        self.active_job_config = job_profile
+        print("Job profile loaded!")
+        # TODO: Initialize the task as well
+
+        # Update the config to use this as our last job
+        self.master_profile_config.set_last_job(job_name)
+
+    def register_job_config(self, job_config: JobProfileConfig):
+        self.master_profile_config.register_new_job(job_config)
+        self.master_profile_config.save()
 
     ## Config Management ##
     def save_master_config(self):
         self.master_profile_config.save()
+
+    def reload_laster_config(self):
+        self.master_profile_config.reload()
 
     ## GUI Management ##
     def enter(self):
