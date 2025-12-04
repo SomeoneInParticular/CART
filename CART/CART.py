@@ -151,6 +151,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     ## User Prompts ##
     def initialSetupPrompt(self):
         # Ask the user if they want to begin initial setup
+        # noinspection PyTypeChecker
         response = qt.QMessageBox.question(
             None,
             _("Initialize CART?"),
@@ -165,6 +166,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def jobSetupPrompt(self):
         # Ask the user if they want to begin job setup
+        # noinspection PyTypeChecker
         response = qt.QMessageBox.question(
             None,
             _("Create Job?"),
@@ -178,6 +180,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.runNewJobSetup()
 
     def resumePrompt(self):
+        # noinspection PyTypeChecker
         response = qt.QMessageBox.question(
             None,
             _("Resume?"),
