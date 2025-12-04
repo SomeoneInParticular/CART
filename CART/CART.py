@@ -154,7 +154,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         response = qt.QMessageBox.question(
             None,
             _("Initialize CART?"),
-            _("CART has not been run before. Would you like to do so now?"),
+            _("CART has not been run before. Would you like to run setup now?"),
             qt.QMessageBox.Yes | qt.QMessageBox.No,
             qt.QMessageBox.Yes
         )
@@ -168,7 +168,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         response = qt.QMessageBox.question(
             None,
             _("Create Job?"),
-            _("You have not run a CART job before. Would you like to create one now?"),
+            _("You have not run a CART job before. Would you like to set up a job now?"),
             qt.QMessageBox.Yes | qt.QMessageBox.No,
             qt.QMessageBox.Yes
         )
