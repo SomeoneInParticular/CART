@@ -12,10 +12,9 @@ from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
 
 from CARTLib.core.DataManager import DataManager
-from CARTLib.core.JobProfiles import JobProfileConfig
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.SetupWizard import CARTSetupWizard, JobSetupWizard
-from CARTLib.utils.config import GLOBAL_CONFIG, ProfileConfig, GLOBAL_CONFIG_PATH, MasterProfileConfig
+from CARTLib.utils.config import GLOBAL_CONFIG, JobProfileConfig, GLOBAL_CONFIG_PATH, MasterProfileConfig
 from CARTLib.utils.task import initialize_tasks
 
 

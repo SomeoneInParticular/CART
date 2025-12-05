@@ -5,10 +5,10 @@ import ctk
 import qt
 from slicer.i18n import tr as _
 
+from CARTLib.utils import CART_PATH
+from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
 
-from . import CART_PATH
-from .JobProfiles import JobProfileConfig
 
 if TYPE_CHECKING:
     # Avoid a cyclical import
