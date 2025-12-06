@@ -336,6 +336,9 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         else:
             # Load all task paths
             for p in set(registered_tasks.values()):
+                # Skip the "None" case for now
+                if p is None:
+                    continue
                 # Load the task
                 new_tasks = self.load_tasks_from_file(p)
                 # Filter out tasks which were loaded, but not registered
@@ -345,6 +348,14 @@ class CARTLogic(ScriptedLoadableModuleLogic):
                         f"Task '{k}' was loaded alongside another task, "
                         f"but has not been registered and was filtered out."
                     )
+            # Mark tasks which have an invalid associated file in the registry!
+            for task_key in [k for k, p in registered_tasks.items() if p is None]:
+                self.logger.warning(
+                    f"The file for task '{task_key}' was unavailable, and therefore could not "
+                    f"be loaded into CART. Check that drive with the file is mounted, and "
+                    f"that the file on the drive is accessible to a Python program."
+                )
+                CART_TASK_REGISTRY[task_key] = None
 
     def load_tasks_from_file(self, task_path):
         # Confirm the path exists and can be read as a (python) file

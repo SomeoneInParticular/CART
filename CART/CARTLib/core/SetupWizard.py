@@ -203,10 +203,9 @@ class JobSetupWizard(qt.QWizard):
         layout.addWidget(taskSelectionWidget)
 
         # Task description
-        default_text = _(
-            "Details about the selected task will appear here."
-        )
-        taskDescriptionWidget = qt.QTextEdit(default_text)
+        taskDescriptionWidget = qt.QTextEdit(_(
+            "Please select a task; details about the selected task will then appear here."
+        ))
         # Make it fill out all available space
         taskDescriptionWidget.setSizePolicy(
             qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding
@@ -223,7 +222,14 @@ class JobSetupWizard(qt.QWizard):
         def onSelectedTaskChanged(new_task: str):
             task = CART_TASK_REGISTRY.get(new_task)
             if task is None:
-                taskDescriptionWidget.setMarkdown(default_text)
+                error_text = _(
+                    '<span style=" font-size:8pt; font-weight:600; color:#ff0000;" >'
+                    f"ERROR! The file for the selected task could not be accessed! "
+                    "Please check that the associated drive is mounted, "
+                    "and that it can be accessed with Slicer's current permission level!"
+                    '</span'
+                )
+                taskDescriptionWidget.setText(error_text)
             else:
                 taskDescriptionWidget.setMarkdown(task.description())
         taskSelectionWidget.currentTextChanged.connect(onSelectedTaskChanged)

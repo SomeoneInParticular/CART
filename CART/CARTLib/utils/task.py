@@ -1,9 +1,17 @@
 import inspect
 from pathlib import Path
+from typing import Optional
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass
 
-CART_TASK_REGISTRY: dict[str, type[TaskBaseClass]] = dict()
+"""
+Registry for loaded CART tasks
+
+If a task entry is "None", it indicates that a task by that name was
+registered in the configuration, but the associated file did not exist
+or was otherwise unavailable.
+"""
+CART_TASK_REGISTRY: dict[str, Optional[type[TaskBaseClass]]] = dict()
 
 
 def cart_task(label: str):
