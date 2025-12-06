@@ -9,6 +9,8 @@ from CARTLib.utils import CART_PATH
 from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
 
+from .TaskBaseClass import TaskBaseClass
+
 
 if TYPE_CHECKING:
     # Avoid a cyclical import
@@ -154,12 +156,13 @@ class JobSetupWizard(qt.QWizard):
 
         # Workarounds for fields not playing nicely w/ CTK widgets
         self._dataPage = _DataWizardPage()
+        self._taskPage = _TaskWizardPage()
         self._cohortPage = _CohortWizardPage()
 
         # Add initial pages
         self.addPage(self.introPage())
         self.addPage(self._dataPage)
-        self.addPage(self.selectTaskPage())
+        self.addPage(self._taskPage)
         self.addPage(self._cohortPage)
         self.addPage(self.conclusionPage())
 
@@ -178,63 +181,6 @@ class JobSetupWizard(qt.QWizard):
         ))
         label.setWordWrap(True)
         layout.addWidget(label)
-
-        return page
-
-    def selectTaskPage(self):
-        # Basic Attributes
-        page = qt.QWizardPage()
-        page.setTitle(_("Task Selection"))
-        layout = qt.QVBoxLayout()
-        page.setLayout(layout)
-
-        # Task selection
-        taskSelectionLabel = qt.QLabel(_("Please select a task for this job:"))
-        taskSelectionWidget = qt.QComboBox()
-        taskSelectionWidget.addItems(list(
-            CART_TASK_REGISTRY.keys()
-        ))
-        # This doesn't work; keeping it here in case Slicer ever fixes this bug
-        taskSelectionWidget.placeholderText = _("[None Selected]")
-        taskSelectionWidget.setCurrentIndex(-1)
-        taskSelectionLabel.setBuddy(taskSelectionWidget)
-        page.registerField(SELECTED_TASK_FIELD + "*", taskSelectionWidget)
-        layout.addWidget(taskSelectionLabel)
-        layout.addWidget(taskSelectionWidget)
-
-        # Task description
-        taskDescriptionWidget = qt.QTextEdit(_(
-            "Please select a task; details about the selected task will then appear here."
-        ))
-        # Make it fill out all available space
-        taskDescriptionWidget.setSizePolicy(
-            qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding
-        )
-        # Add a border around it to visually distinguish it
-        taskDescriptionWidget.setFrameShape(qt.QFrame.Panel)
-        taskDescriptionWidget.setFrameShadow(qt.QFrame.Sunken)
-        taskDescriptionWidget.setLineWidth(3)
-        # Align text to the upper-left
-        taskDescriptionWidget.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignTop)
-        # Make it read-only
-        taskDescriptionWidget.setReadOnly(True)
-        # When the selected task changes, update the description text to match
-        def onSelectedTaskChanged(new_task: str):
-            task = CART_TASK_REGISTRY.get(new_task)
-            if task is None:
-                error_text = _(
-                    '<span style=" font-size:8pt; font-weight:600; color:#ff0000;" >'
-                    f"ERROR! The file for the selected task could not be accessed! "
-                    "Please check that the associated drive is mounted, "
-                    "and that it can be accessed with Slicer's current permission level!"
-                    '</span'
-                )
-                taskDescriptionWidget.setText(error_text)
-            else:
-                taskDescriptionWidget.setMarkdown(task.description())
-        taskSelectionWidget.currentTextChanged.connect(onSelectedTaskChanged)
-        # Add it to the layout
-        layout.addWidget(taskDescriptionWidget)
 
         return page
 
@@ -269,6 +215,10 @@ class JobSetupWizard(qt.QWizard):
     @property
     def output_path(self):
         return self._dataPage.output_path
+
+    @property
+    def selected_task(self) -> Optional[TaskBaseClass]:
+        return self._taskPage.selected_task
 
     @property
     def cohort_path(self) -> Optional[Path]:
@@ -381,6 +331,77 @@ class _DataWizardPage(qt.QWizardPage):
             return False
         # Otherwise we're done!
         return True
+
+
+class _TaskWizardPage(qt.QWizardPage):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        # Basic Attributes
+        self.setTitle(_("Task Selection"))
+        layout = qt.QVBoxLayout()
+        self.setLayout(layout)
+
+        # Task selection
+        taskSelectionLabel = qt.QLabel(_("Please select a task for this job:"))
+        taskSelectionWidget = qt.QComboBox()
+        taskSelectionWidget.addItems(list(
+            CART_TASK_REGISTRY.keys()
+        ))
+        # This doesn't work; keeping it here in case Slicer ever fixes this bug
+        taskSelectionWidget.placeholderText = _("[None Selected]")
+        taskSelectionWidget.setCurrentIndex(-1)
+        taskSelectionLabel.setBuddy(taskSelectionWidget)
+        self.registerField(SELECTED_TASK_FIELD + "*", taskSelectionWidget)
+        layout.addWidget(taskSelectionLabel)
+        layout.addWidget(taskSelectionWidget)
+
+        # Task description
+        taskDescriptionWidget = qt.QTextEdit(_(
+            "Please select a task; details about the selected task will then appear here."
+        ))
+        # Make it fill out all available space
+        taskDescriptionWidget.setSizePolicy(
+            qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding
+        )
+        # Add a border around it to visually distinguish it
+        taskDescriptionWidget.setFrameShape(qt.QFrame.Panel)
+        taskDescriptionWidget.setFrameShadow(qt.QFrame.Sunken)
+        taskDescriptionWidget.setLineWidth(3)
+        # Align text to the upper-left
+        taskDescriptionWidget.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignTop)
+        # Make it read-only
+        taskDescriptionWidget.setReadOnly(True)
+
+        # When the selected task changes, update the description text to match
+        def onSelectedTaskChanged(new_task: str):
+            task = CART_TASK_REGISTRY.get(new_task)
+            if task is None:
+                error_text = _(
+                    '<span style=" font-size:8pt; font-weight:600; color:#ff0000;" >'
+                    f"ERROR! The file for the selected task could not be accessed! "
+                    "Please check that the associated drive is mounted, "
+                    "and that it can be accessed with Slicer's current permission level!"
+                    '</span'
+                )
+                taskDescriptionWidget.setText(error_text)
+            else:
+                taskDescriptionWidget.setMarkdown(task.description())
+
+        taskSelectionWidget.currentTextChanged.connect(onSelectedTaskChanged)
+        self.taskSelectionWidget = taskSelectionWidget
+        # Add it to the layout
+        layout.addWidget(taskDescriptionWidget)
+
+    @property
+    def selected_task(self) -> Optional[TaskBaseClass]:
+        # Helper method to parse
+        selected_idx = self.field(SELECTED_TASK_FIELD)
+        task_name = self.taskSelectionWidget.itemText(selected_idx)
+        return CART_TASK_REGISTRY.get(task_name, None)
+
+    def isComplete(self):
+        return self.selected_task is not None
 
 
 class _CohortWizardPage(qt.QWizardPage):
