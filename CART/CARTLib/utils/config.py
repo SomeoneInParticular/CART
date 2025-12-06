@@ -5,7 +5,7 @@ from typing import Generic, Optional, TypeVar, Union, Callable
 
 import qt
 
-from . import CART_PATH
+from . import CART_PATH, CART_VERSION
 
 # The location of the default config used by a fresh installation of CART.
 #  DO NOT TOUCH IT UNLESS YOU KNOW WHAT YOU'RE DOING.
@@ -374,6 +374,19 @@ class MasterProfileConfig(DictBackedConfig):
             new_registry[k] = v
         self.backing_dict[self.REGISTERED_JOB_KEYS] = new_registry
 
+    VERSION_KEY = "version"
+
+    @property
+    def version(self):
+        return self.get_or_default(self.VERSION_KEY, CART_VERSION)
+
+    @version.setter
+    def version(self, new_version: str):
+        """
+        WARNING: You really shouldn't change this yourself. The version
+        used
+        """
+        self.backing_dict[self.VERSION_KEY] = new_version
 
     ## Utilities ##
     def save_without_parent(self) -> None:

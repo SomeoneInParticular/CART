@@ -1,4 +1,3 @@
-from functools import singledispatchmethod
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
@@ -14,7 +13,8 @@ from slicer.util import VTKObservationMixin
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.SetupWizard import CARTSetupWizard, JobSetupWizard
-from CARTLib.utils.config import GLOBAL_CONFIG, JobProfileConfig, GLOBAL_CONFIG_PATH, MasterProfileConfig
+from CARTLib.utils import CART_VERSION
+from CARTLib.utils.config import GLOBAL_CONFIG_PATH, GLOBAL_CONFIG, JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import initialize_tasks
 
 
@@ -227,6 +227,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Delegate to our logic to have tasks properly update
         self.logic.exit()
 
+
 #
 # CARTLogic
 #
@@ -242,7 +243,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self._data_unit_factory: Optional[DataUnitFactory] = None
 
         # Attempt to load the config into memory
-        self.reload_laster_config()
+        self.reload_master_config()
 
     ## Attributes
     @property
@@ -316,8 +317,15 @@ class CARTLogic(ScriptedLoadableModuleLogic):
     def save_master_config(self):
         self.master_profile_config.save()
 
-    def reload_laster_config(self):
+    def reload_master_config(self):
+        # Pull the data from the config file
         self.master_profile_config.reload()
+        # If the config version doesn't match the current CART version, warn the user
+        if self.master_profile_config.version != CART_VERSION:
+            # TODO: Prompt the user directly!
+            print("WARNING: Current CART version does not match that of the master profile! "
+                  "CART may not work as expected!")
+            self.master_profile_config.version = CART_VERSION
 
     ## GUI Management ##
     def enter(self):
