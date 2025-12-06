@@ -1,3 +1,6 @@
+import importlib
+import logging
+import sys
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
@@ -13,10 +16,9 @@ from slicer.util import VTKObservationMixin
 from CARTLib.core.DataManager import DataManager
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.SetupWizard import CARTSetupWizard, JobSetupWizard
-from CARTLib.utils import CART_VERSION
+from CARTLib.utils import CART_PATH, CART_VERSION
 from CARTLib.utils.config import GLOBAL_CONFIG_PATH, GLOBAL_CONFIG, JobProfileConfig, MasterProfileConfig
-from CARTLib.utils.task import initialize_tasks
-
+from CARTLib.utils.task import CART_TASK_REGISTRY
 
 if TYPE_CHECKING:
     import PyQt5.Qt as qt
@@ -79,9 +81,6 @@ class CART(ScriptedLoadableModule):
 
         cartlib_path = (Path(__file__) / "CARTLib").resolve()
         sys.path.append(str(cartlib_path))
-
-        # Register all tasks currently configured in our CART Config
-        initialize_tasks()
 
 
 #
@@ -242,8 +241,14 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self._task_instance: Optional[TaskBaseClass] = None
         self._data_unit_factory: Optional[DataUnitFactory] = None
 
+        # Logging
+        self.logger = logging.getLogger("CARTLogic")
+
         # Attempt to load the config into memory
         self.reload_master_config()
+
+        # Attempt to fetch all loaded tasks
+        self.load_registered_tasks()
 
     ## Attributes
     @property
@@ -311,6 +316,121 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
     def register_job_config(self, job_config: JobProfileConfig):
         self.master_profile_config.register_new_job(job_config)
+        self.master_profile_config.save()
+
+    ## Task Management ##
+    def load_registered_tasks(self):
+        """
+        Attempt to load all registered tasks for reference throughout the program
+        """
+        registered_tasks = self.master_profile_config.registered_task_paths
+        # If there are no registered tasks, rebuild the registry from scratch
+        if registered_tasks is None:
+            self.logger.warning(
+                f"No registered task entry found in config file! "
+                f"Resetting the config to use only example tasks."
+            )
+            self.reset_task_registry()
+            return
+        # Otherwise, load each of our registered tasks
+        else:
+            # Load all task paths
+            for p in set(registered_tasks.values()):
+                # Load the task
+                new_tasks = self.load_tasks_from_file(p)
+                # Filter out tasks which were loaded, but not registered
+                for k in [x for x in new_tasks if x not in registered_tasks.keys()]:
+                    CART_TASK_REGISTRY.pop(k)
+                    self.logger.warning(
+                        f"Task '{k}' was loaded alongside another task, "
+                        f"but has not been registered and was filtered out."
+                    )
+
+    def load_tasks_from_file(self, task_path):
+        # Confirm the path exists and can be read as a (python) file
+        if not task_path.exists():
+            raise ValueError(f"File '{task_path}' does not exist; cannot load task!")
+        elif not task_path.is_file():
+            raise ValueError(f"Path '{task_path}' is not a file; cannot load directories!")
+        elif ".py" not in task_path.suffixes:
+            self.logger.warning(
+                f"Registered task file '{task_path}' was not a Python file; "
+                f"will attempt to load it anyways!"
+            )
+
+        # Track the list of tasks already registered for later
+        prior_tasks = set(CART_TASK_REGISTRY.keys())
+
+        # Add the parent of the path to our Python path
+        module_path = str(task_path.parent.resolve())
+        sys.path.append(module_path)
+        module_name = task_path.name.split('.')[0]
+
+        try:
+            # Try to load the module in question
+            spec = importlib.util.spec_from_file_location(module_name, task_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        except Exception as e:
+            # If something went wrong, roll back our changes to `sys.path`
+            sys.path.remove(module_path)
+            raise e
+
+        # Get the list of tasks that were registered by the decorator
+        new_tasks = set(CART_TASK_REGISTRY.keys()) - prior_tasks
+
+        # If no new tasks were registered, roll back the changes and raise an error
+        if len(new_tasks) < 1:
+            sys.path.remove(module_path)
+            raise ValueError(f"No tasks were registered when importing the file '{task_path}'; "
+                             f"Rolling everything back!")
+        # Otherwise, keep the module loaded!
+        sys.modules[module_name] = module
+
+        # Return the list of (now-loaded) tasks!
+        return new_tasks
+
+    def register_new_task(self, task_path: Path):
+        # Load the task(s) within the task file
+        new_tasks = self.load_tasks_from_file(task_path)
+
+        # Keep track of the task(s) in our configuration file
+        for k in new_tasks:
+            self.master_profile_config.add_task_path(k, task_path)
+
+        # Save the configuration immediately
+        self.master_profile_config.save()
+        return new_tasks
+
+    def reset_task_registry(self):
+        # Try to load all the example tasks
+        examples_path = CART_PATH / "CARTLib/examples"
+        example_task_paths = [
+            examples_path / "SegmentationReview/SegmentationReviewTask.py",
+            examples_path / "GenericClassification/GenericClassificationTask.py",
+            examples_path / "RapidMarkup/RapidMarkupTask.py"
+        ]
+
+        # Make sure the example tasks all exist before doing anything!
+        missing_paths = []
+        for p in example_task_paths:
+            if not p.exists():
+                missing_paths.append(p)
+
+        if len(missing_paths) > 0:
+            err_msg = "CART seems to have been corrupted; was missing the following paths!\n"
+            err_msg += f"\n  * ".join([str(p) for p in missing_paths])
+            raise ValueError(err_msg)
+
+        # Completely reset our task registry and configuration
+        self.master_profile_config.clear_task_paths()
+        CART_TASK_REGISTRY.clear()
+
+        # Register each example task again, one-by-one
+        for p in example_task_paths:
+            self.register_new_task(p)
+
+        # Save the config immediately to preserve the changes
         self.master_profile_config.save()
 
     ## Config Management ##

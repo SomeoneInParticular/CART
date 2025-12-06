@@ -328,21 +328,21 @@ class MasterProfileConfig(DictBackedConfig):
         self.backing_dict[self.POSITION_KEY] = new_position
         self.has_changed = True
 
-    REGISTERED_JOB_KEYS = "registered_jobs"
+    REGISTERED_JOB_KEY = "registered_jobs"
 
     @property
     def registered_jobs(self) -> dict[str, str]:
         """
         Map of registered jobs, in "name: path" format.
         """
-        job_map = self.get_or_default(self.REGISTERED_JOB_KEYS, {})
+        job_map = self.get_or_default(self.REGISTERED_JOB_KEY, {})
         return job_map
 
     def register_new_job(self, job_config: "JobProfileConfig"):
         # Register the new job
         k = job_config.name
         p = str(job_config.file.resolve())
-        job_map = self.get_or_default(self.REGISTERED_JOB_KEYS, {})
+        job_map = self.get_or_default(self.REGISTERED_JOB_KEY, {})
         job_map[k] = p
         # Mark ourselves as being changed
         self.has_changed = True
@@ -359,7 +359,7 @@ class MasterProfileConfig(DictBackedConfig):
         return first_key, job_registry[first_key]
 
     def set_last_job(self, job_name: str):
-        old_job_registry = self.get_or_default(self.REGISTERED_JOB_KEYS, {})
+        old_job_registry = self.get_or_default(self.REGISTERED_JOB_KEY, {})
         job_path = old_job_registry.get(job_name, None)
         if job_path is None:
             raise ValueError(
@@ -372,7 +372,7 @@ class MasterProfileConfig(DictBackedConfig):
             if k == job_name:
                 continue
             new_registry[k] = v
-        self.backing_dict[self.REGISTERED_JOB_KEYS] = new_registry
+        self.backing_dict[self.REGISTERED_JOB_KEY] = new_registry
 
     VERSION_KEY = "version"
 
@@ -387,6 +387,33 @@ class MasterProfileConfig(DictBackedConfig):
         used
         """
         self.backing_dict[self.VERSION_KEY] = new_version
+
+    REGISTERED_TASK_PATHS_KEY = "registered_task"
+
+    @property
+    def registered_task_paths(self) -> Optional[dict[str, Path]]:
+        registered_task_vals: dict[str, str]  = self.backing_dict.get(self.REGISTERED_TASK_PATHS_KEY)
+        if registered_task_vals is None:
+            return None
+        return_dict = {}
+        for k, v in registered_task_vals.items():
+            p = Path(v)
+            if not p.is_file():
+                print(f"WARNING: Task file '{v}' does not exist!")
+                return_dict[k] = None
+            else:
+                return_dict[k] = p
+        return return_dict
+
+    def add_task_path(self, task_name: str, task_path: Path):
+        registered_task_vals = self.get_or_default(self.REGISTERED_TASK_PATHS_KEY, {})
+        registered_task_vals[task_name] = str(task_path.resolve())
+        self.has_changed = True
+
+    def clear_task_paths(self):
+        # Clear the task paths entirely!
+        self.backing_dict[self.REGISTERED_TASK_PATHS_KEY] = {}
+        self.has_changed = True
 
     ## Utilities ##
     def save_without_parent(self) -> None:
