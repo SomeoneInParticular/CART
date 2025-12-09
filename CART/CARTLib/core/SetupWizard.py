@@ -426,6 +426,11 @@ class _CohortWizardPage(qt.QWizardPage):
         cohortFileSelector.nameFilters = [
             "CSV files (*.csv)",
         ]
+        cohortFileLabel.setToolTip(_(
+            "The cohort file; defines the contents of each case you want to iterate through, "
+            "and the order they will be iterated through. If you don't already have a cohort "
+            "file for your data/task, click 'New' below to create on interactively."
+        ))
         # Workaround to CTK not playing nicely w/ "registerField"
         self._cohortFileSelector = cohortFileSelector
         layout.addRow(cohortFileLabel, cohortFileSelector)
@@ -435,14 +440,25 @@ class _CohortWizardPage(qt.QWizardPage):
 
         # Button to create/edit the selected cohort file
         createNewButton = qt.QPushButton(_("New"))
+        createNewButton.setToolTip(_(
+            "Generate a new cohort file from scratch! Will attempt to parse the contents of "
+            "the 'Input Data' folder you selected previously to determine which cases there "
+            "should be."
+        ))
         buttonLayout.addWidget(createNewButton)
 
         # Buttons to edit/preview an existing cohort
         previewCohortButton = qt.QPushButton(_("Preview"))
         previewCohortButton.setEnabled(False)
+        previewCohortButton.setToolTip(_(
+            "Preview the selected cohort file. The contents will appear in the widget below."
+        ))
         buttonLayout.addWidget(previewCohortButton)
         editCohortButton = qt.QPushButton(_("Edit"))
         editCohortButton.setEnabled(False)
+        editCohortButton.setToolTip(_(
+            "Modify the selected cohort file to add, remove, or change its cases and/or columns."
+        ))
         buttonLayout.addWidget(editCohortButton)
 
         # Cohort preview widget
