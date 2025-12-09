@@ -177,7 +177,10 @@ class JobSetupWizard(qt.QWizard):
 
         # Introduction text
         label = qt.QLabel(_(
-            "This wizard will walk you through job creation, including data selection and task setup."
+            "This wizard will help you define a 'job' in CART. "
+            "CART will use the information you specify here to determine what data "
+            "it should use, what you would like to do to it, and where the results "
+            "should be saved."
         ))
         label.setWordWrap(True)
         layout.addWidget(label)
@@ -195,8 +198,9 @@ class JobSetupWizard(qt.QWizard):
 
         # Introduction text
         label = qt.QLabel(_(
-            "Job specification is nearly complete; "
-            "fill out the task-specific setup, and you're done!"
+            "You're nearly done! "
+            "Please follow the task-specific instructions that will be presented next; "
+            "the job will initiate once you are finished."
         ))
         label.setWordWrap(True)
         layout.addWidget(label)
