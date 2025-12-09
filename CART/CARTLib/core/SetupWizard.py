@@ -267,12 +267,12 @@ class _DataWizardPage(qt.QWizardPage):
         layout.addRow(jobNameLabel, jobNameEntry)
 
         # Data path
-        dataPathLabel = qt.QLabel(_("Data Source:"))
+        dataPathLabel = qt.QLabel(_("Input Path:"))
         dataPathEntry: qt.QWidget = ctk.ctkPathLineEdit()
         dataPathEntry.filters = ctk.ctkPathLineEdit.Dirs
         dataPathEntry.setToolTip(_(
-            "This should be a directory containing the data files you wish to use. If left blank, "
-            "all files within the cohort will be treated as absolute paths"
+            "This should be a directory containing the data files you wish to use. "
+            "It is used as the 'root' for any files in your cohort which do point to absolute paths."
         ))
         dataPathLabel.setBuddy(dataPathEntry)
         # Workaround to CTK not playing nicely w/ "registerField"
@@ -285,7 +285,8 @@ class _DataWizardPage(qt.QWizardPage):
         outputPathEntry.filters = ctk.ctkPathLineEdit.Dirs
         outputPathEntry.setToolTip(_(
             "The directory the results/output of the job should be placed in. "
-            "What is saved, and in what structure, depends on the task (selected later)"
+            "What is saved, and in what structure, depends on which task "
+            "you are running (selected next)."
         ))
         outputPathLabel.setBuddy(outputPathEntry)
         # Workaround to CTK not playing nicely w/ "registerField"
