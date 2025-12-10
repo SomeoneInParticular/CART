@@ -170,6 +170,7 @@ class CSVBackedTableWidget(qt.QStackedWidget):
         self.tableView.show()
         self.tableView.horizontalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
         self.tableView.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
+        self.tableView.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
         self.addWidget(self.tableView)
 
         # An error message; shown when the CSV is invalid
@@ -178,6 +179,7 @@ class CSVBackedTableWidget(qt.QStackedWidget):
             "Please confirm it exists, is accessible, and formatted correctly."
         )
         self.errorLabel = qt.QLabel(f"<b style='color:red;'>{error_msg}</b>")
+        self.errorLabel.setAlignment(qt.Qt.AlignTop | qt.Qt.AlignLeft)
         self.addWidget(self.errorLabel)
 
         # Set the size policy
