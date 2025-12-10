@@ -1,8 +1,9 @@
 import csv
 from pathlib import Path
-from typing import cast, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 import ctk
+import numpy as np
 import qt
 import slicer
 from slicer.i18n import tr as _
@@ -13,6 +14,7 @@ from slicer.i18n import tr as _
 import qSlicerSegmentationsModuleWidgetsPythonQt
 
 if TYPE_CHECKING:
+    import numpy.typing as npt
     # Try to use a reference PyQT5 install if it's available
     import PyQt5.Qt as qt
 
@@ -53,7 +55,8 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         self._csv_path = csv_path
 
         # The backing contents of the CSV data
-        self._csv_data: Optional[list[list[str]]] = None
+        self._header: "Optional[npt.NDArray[str]]" = None
+        self._csv_data: "Optional[npt.NDArray[str]]" = None
 
         # Try to load the CSV data into memory immediately
         if csv_path is None:
@@ -62,7 +65,8 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
             self.load()
         # If the file doesn't exist (we're creating it), set the data to be blank
         else:
-            self._csv_data = []
+            self._header = np.empty((0, 0), str)
+            self._csv_data = np.empty((0, 0), str)
 
     @property
     def csv_path(self):
@@ -73,6 +77,10 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         self._csv_path = new_path
         # Re-load the data
         self.load()
+
+    @property
+    def header(self) -> "npt.NDArray[str]":
+        return self._header
 
     @property
     def csv_data(self):
@@ -87,8 +95,7 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
             return None
         # If this is a displayed element, return the data's content
         if role == qt.Qt.DisplayRole:
-            # +1 to skip the header
-            return str(self.csv_data[index.row()+1][index.column()])
+            return str(self.csv_data[index.row()][index.column()])
         # Otherwise, return None by default.
         return None
 
@@ -102,23 +109,21 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
 
     def headerData(self, section: int, orientation: qt.Qt.Orientation, role: int = ...):
         # Return early if we don't have any CSV data yet
-        if self.csv_data is None:
-            return None
         if role == qt.Qt.DisplayRole and orientation == qt.Qt.Horizontal:
-            return self.csv_data[0][section]
+            return self.header
         return None
 
     def rowCount(self, parent: qt.QObject = None):
         if self.csv_data is None:
             return 0
-        return len(self.csv_data) - 1  # Ignore the header
+        return self.csv_data.shape[0]
 
     def columnCount(self, parent: qt.QObject = None):
         if self.csv_data is None:
             return 0
-        return len(self.csv_data[0])
+        return self.csv_data.shape[1]
 
-    def flags(self, index: qt.QModelIndex):
+    def flags(self, index: qt.QModelIndex) -> "qt.Qt.ItemFlags":
         # Mark all elements as editable
         return qt.Qt.ItemIsEditable
 
@@ -129,7 +134,11 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         # Reset the backing data to contain the contents of the CSV file
         try:
             with open(self.csv_path, 'r') as fp:
-                self._csv_data = [r for r in csv.reader(fp)]
+                new_data = np.array([r for r in csv.reader(fp)])
+                self._header = new_data[0]
+                n_cols = new_data.shape[1]
+                self._csv_data = new_data[1:] if n_cols > 1 else \
+                    np.empty((0, n_cols), str)
         except Exception as e:
             # Blank the CSV data outright if an error occurred
             self._csv_data = None
