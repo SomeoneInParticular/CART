@@ -10,7 +10,7 @@ from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
 
 from .TaskBaseClass import TaskBaseClass
-
+from ..utils.widgets import CSVBackedTableWidget
 
 if TYPE_CHECKING:
     # Avoid a cyclical import
@@ -451,13 +451,7 @@ class _CohortWizardPage(qt.QWizardPage):
         ))
         buttonLayout.addWidget(createNewButton)
 
-        # Buttons to edit/preview an existing cohort
-        previewCohortButton = qt.QPushButton(_("Preview"))
-        previewCohortButton.setEnabled(False)
-        previewCohortButton.setToolTip(_(
-            "Preview the selected cohort file. The contents will appear in the widget below."
-        ))
-        buttonLayout.addWidget(previewCohortButton)
+        # Button to edit the selected CSV
         editCohortButton = qt.QPushButton(_("Edit"))
         editCohortButton.setEnabled(False)
         editCohortButton.setToolTip(_(
@@ -465,8 +459,13 @@ class _CohortWizardPage(qt.QWizardPage):
         ))
         buttonLayout.addWidget(editCohortButton)
 
-        # Cohort preview widget
-        # TODO
+        # Button to preview the selected CSV
+        previewCohortButton = qt.QPushButton(_("Preview"))
+        previewCohortButton.setEnabled(False)
+        previewCohortButton.setToolTip(_(
+            "Preview the selected cohort file. The contents will appear in the widget below."
+        ))
+        buttonLayout.addWidget(previewCohortButton)
 
         # Connections
         def onTextChanged(__: str):
@@ -482,6 +481,13 @@ class _CohortWizardPage(qt.QWizardPage):
         buttonWidget = qt.QWidget()
         buttonWidget.setLayout(buttonLayout)
         layout.addRow(buttonWidget)
+
+        # Cohort preview widget
+        cohortPreviewWidget = CSVBackedTableWidget.from_path(None)
+        def onPreviewClick():
+            cohortPreviewWidget.backing_csv = self.cohort_path
+        previewCohortButton.clicked.connect(onPreviewClick)
+        layout.addRow(cohortPreviewWidget)
 
     @property
     def cohort_path(self):

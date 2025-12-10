@@ -1,4 +1,6 @@
-from typing import Optional
+import csv
+from pathlib import Path
+from typing import cast, Optional, TYPE_CHECKING
 
 import ctk
 import qt
@@ -9,6 +11,11 @@ from slicer.i18n import tr as _
 #  to the namespace after slicer boots, hence the error suppression
 # noinspection PyUnresolvedReferences
 import qSlicerSegmentationsModuleWidgetsPythonQt
+
+if TYPE_CHECKING:
+    # Try to use a reference PyQT5 install if it's available
+    import PyQt5.Qt as qt
+
 
 ## Standardized Prompts ##
 def showSuccessPrompt(msg: str, parent_widget: Optional[qt.QWidget] = None):
@@ -35,6 +42,179 @@ def showErrorPrompt(msg: str, parent_widget: Optional[qt.QWidget]):
     # Display the requested text within it, and show it to the user
     errBox.showMessage(msg)
     errBox.exec()
+
+
+## CSV-Backed Table Widget ##
+class CSVBackedTableModel(qt.QAbstractTableModel):
+    def __init__(self, csv_path: Optional[Path], parent: qt.QObject = None):
+        super().__init__(parent)
+
+        # The CSV path that should be referenced
+        self._csv_path = csv_path
+
+        # The backing contents of the CSV data
+        self._csv_data: Optional[list[list[str]]] = None
+
+        # Try to load the CSV data into memory immediately
+        if csv_path is None:
+            pass
+        elif csv_path.exists():
+            self.load()
+        # If the file doesn't exist (we're creating it), set the data to be blank
+        else:
+            self._csv_data = []
+
+    @property
+    def csv_path(self):
+        return self._csv_path
+
+    @csv_path.setter
+    def csv_path(self, new_path: Path):
+        self._csv_path = new_path
+        # Re-load the data
+        self.load()
+
+    @property
+    def csv_data(self):
+        """
+        Read-only; data should be hard-synced to the backing CSV.
+        """
+        return self._csv_data
+
+    def data(self, index: qt.QModelIndex, role=qt.Qt.DisplayRole):
+        # If we failed to load CSV data, return None
+        if self.csv_data is None:
+            return None
+        # If this is a displayed element, return the data's content
+        if role == qt.Qt.DisplayRole:
+            # +1 to skip the header
+            return str(self.csv_data[index.row()+1][index.column()])
+        # Otherwise, return None by default.
+        return None
+
+    def setData(self, index: qt.QModelIndex, value, role: int = ...):
+        if not self.checkIndex(index):
+            return False
+        if role == qt.Qt.EditRole:
+            self.csv_data[index.row()][index.column()] = value.toString()
+        self.dataChanged(index, index)
+        return True
+
+    def headerData(self, section: int, orientation: qt.Qt.Orientation, role: int = ...):
+        # Return early if we don't have any CSV data yet
+        if self.csv_data is None:
+            return None
+        if role == qt.Qt.DisplayRole and orientation == qt.Qt.Horizontal:
+            return self.csv_data[0][section]
+        return None
+
+    def rowCount(self, parent: qt.QObject = None):
+        if self.csv_data is None:
+            return 0
+        return len(self.csv_data) - 1  # Ignore the header
+
+    def columnCount(self, parent: qt.QObject = None):
+        if self.csv_data is None:
+            return 0
+        return len(self.csv_data[0])
+
+    def flags(self, index: qt.QModelIndex):
+        # Mark all elements as editable
+        return qt.Qt.ItemIsEditable
+
+    ## I/O ##
+    def load(self):
+        # Denote that a full reset is beginning
+        self.beginResetModel()
+        # Reset the backing data to contain the contents of the CSV file
+        try:
+            with open(self.csv_path, 'r') as fp:
+                self._csv_data = [r for r in csv.reader(fp)]
+        except Exception as e:
+            # Blank the CSV data outright if an error occurred
+            self._csv_data = None
+            raise e
+        finally:
+            # No matter what, denote that the reset has ended
+            self.endResetModel()
+
+    def save(self):
+        if self.csv_data is None:
+            raise ValueError("Nothing to save!")
+        with open(self.csv_path, 'w') as fp:
+            csv.writer(fp).writerows(self.csv_data)
+
+
+class CSVBackedTableWidget(qt.QStackedWidget):
+    """
+    Simple implementation for viewing the contents of a CSV file in Qt.
+
+    Shows an error message when the backing CSV cannot be read.
+    """
+    def __init__(self, model: CSVBackedTableModel, parent: qt.QWidget = None):
+        super().__init__(parent)
+
+        # The table widget itself; shown when the CSV is valid
+        self._model = model
+        self.tableView = qt.QTableView()
+        self.tableView.setModel(model)
+        self.tableView.show()
+        self.tableView.horizontalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
+        self.tableView.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
+        self.addWidget(self.tableView)
+
+        # An error message; shown when the CSV is invalid
+        error_msg = _(
+            "ERROR: Could not load the selected CSV file. "
+            "Please confirm it exists, is accessible, and formatted correctly."
+        )
+        self.errorLabel = qt.QLabel(f"<b style='color:red;'>{error_msg}</b>")
+        self.addWidget(self.errorLabel)
+
+        # Set the size policy
+        self.setSizePolicy(
+            qt.QSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Preferred)
+        )
+
+        # Refresh immediately
+        self.refresh()
+
+    @classmethod
+    def from_path(cls, csv_path):
+        model = CSVBackedTableModel(csv_path)
+        return cls(model)
+
+    @property
+    def model(self) -> CSVBackedTableModel:
+        return self._model
+
+    @model.setter
+    def model(self, new_model: CSVBackedTableModel):
+        # To ensure sync, we need to update the table widget's model as well
+        self._model = new_model
+        self.tableView.setModel(new_model)
+
+    @property
+    def backing_csv(self) -> Path:
+        # Defer to our backing model
+        return self.model.csv_path
+
+    @backing_csv.setter
+    def backing_csv(self, new_path: Path):
+        # Defer to our backing model
+        self.model.csv_path = new_path
+        self.refresh()
+
+    def save(self):
+        # Defer to our backing model
+        self.model.save()
+
+    def refresh(self):
+        # Show the error widget if the CSV table failed to load
+        if self.model.csv_data is None:
+            self.setCurrentWidget(self.errorLabel)
+        else:
+            self.setCurrentWidget(self.tableView)
 
 
 ## CART-Tuned Segmentation Editor ##
