@@ -482,8 +482,8 @@ class _CohortWizardPage(qt.QWizardPage):
         buttonWidget.setLayout(buttonLayout)
         layout.addRow(buttonWidget)
 
-        # Cohort preview widget
-        cohortPreviewWidget = CSVBackedTableWidget.from_path(None)
+        # Cohort preview widget; it's a preview, so disable editing
+        cohortPreviewWidget = CSVBackedTableWidget.from_path(None, editable=False)
         def onPreviewClick():
             cohortPreviewWidget.backing_csv = self.cohort_path
         previewCohortButton.clicked.connect(onPreviewClick)

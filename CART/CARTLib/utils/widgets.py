@@ -48,7 +48,7 @@ def showErrorPrompt(msg: str, parent_widget: Optional[qt.QWidget]):
 
 ## CSV-Backed Table Widget ##
 class CSVBackedTableModel(qt.QAbstractTableModel):
-    def __init__(self, csv_path: Optional[Path], parent: qt.QObject = None):
+    def __init__(self, csv_path: Optional[Path], editable: bool = True, parent: qt.QObject = None):
         super().__init__(parent)
 
         # The CSV path that should be referenced
@@ -57,6 +57,12 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         # The backing contents of the CSV data
         self._header: "Optional[npt.NDArray[str]]" = None
         self._csv_data: "Optional[npt.NDArray[str]]" = None
+
+        # Cells should, by default, be enabled and select-able
+        self._flags = qt.Qt.ItemIsEnabled | qt.Qt.ItemIsSelectable
+        # Add the "editable" flag if requested as well
+        if editable:
+            self._flags = self._flags | qt.Qt.ItemIsEditable
 
         # Try to load the CSV data into memory immediately
         if csv_path is None:
@@ -93,17 +99,15 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         # If we failed to load CSV data, return None
         if self.csv_data is None:
             return None
-        # If this is a displayed element, return the data's content
-        if role == qt.Qt.DisplayRole:
+        # If this is a displayed element, or a to-be-edited element, return the data's content
+        if role in (qt.Qt.DisplayRole, qt.Qt.EditRole):
             return str(self.csv_data[index.row()][index.column()])
         # Otherwise, return None by default.
         return None
 
     def setData(self, index: qt.QModelIndex, value, role: int = ...):
-        if not self.checkIndex(index):
-            return False
         if role == qt.Qt.EditRole:
-            self.csv_data[index.row()][index.column()] = value.toString()
+            self.csv_data[index.row()][index.column()] = str(value)
         self.dataChanged(index, index)
         return True
 
@@ -123,9 +127,9 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
             return 0
         return self.csv_data.shape[1]
 
-    def flags(self, index: qt.QModelIndex) -> "qt.Qt.ItemFlags":
-        # Mark all elements as editable
-        return qt.Qt.ItemIsEditable
+    def flags(self, __: qt.QModelIndex) -> "qt.Qt.ItemFlags":
+        # Mark all elements as enabled, selectable, and editable
+        return self._flags
 
     ## I/O ##
     def load(self):
@@ -191,8 +195,8 @@ class CSVBackedTableWidget(qt.QStackedWidget):
         self.refresh()
 
     @classmethod
-    def from_path(cls, csv_path):
-        model = CSVBackedTableModel(csv_path)
+    def from_path(cls, csv_path, editable: bool = True):
+        model = CSVBackedTableModel(csv_path, editable=editable)
         return cls(model)
 
     @property
