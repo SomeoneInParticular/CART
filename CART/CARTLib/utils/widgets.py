@@ -55,7 +55,6 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         self._csv_path = csv_path
 
         # The backing contents of the CSV data
-        self._header: "Optional[npt.NDArray[str]]" = None
         self._csv_data: "Optional[npt.NDArray[str]]" = None
 
         # Cells should, by default, be enabled and select-able
@@ -71,7 +70,6 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
             self.load()
         # If the file doesn't exist (we're creating it), set the data to be blank
         else:
-            self._header = np.empty((0, 0), str)
             self._csv_data = np.empty((0, 0), str)
 
     @property
@@ -86,28 +84,42 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
 
     @property
     def header(self) -> "npt.NDArray[str]":
-        return self._header
+        return self._csv_data[0]
 
     @property
-    def csv_data(self):
+    def csv_data(self) -> "Optional[npt.NDArray]":
         """
         Read-only; data should be hard-synced to the backing CSV.
         """
-        return self._csv_data
+        if self._csv_data is None:
+            return None
+        return self._csv_data[1:]
 
+    # Querying
+    def __getitem__(self, item):
+        if self.csv_data is None:
+            return None
+        return self.csv_data[item]
+
+    def __setitem__(self, key, value):
+        if self.csv_data is None:
+            raise IndexError("Cannot set value, as no CSV data has been initialized!")
+        self.csv_data[key] = value
+
+    ## Overrides
     def data(self, index: qt.QModelIndex, role=qt.Qt.DisplayRole):
         # If we failed to load CSV data, return None
         if self.csv_data is None:
             return None
         # If this is a displayed element, or a to-be-edited element, return the data's content
         if role in (qt.Qt.DisplayRole, qt.Qt.EditRole):
-            return str(self.csv_data[index.row()][index.column()])
+            return str(self[index.row()][index.column()])
         # Otherwise, return None by default.
         return None
 
     def setData(self, index: qt.QModelIndex, value, role: int = ...):
         if role == qt.Qt.EditRole:
-            self.csv_data[index.row()][index.column()] = str(value)
+            self[index.row()][index.column()] = str(value)
         self.dataChanged(index, index)
         return True
 
@@ -139,10 +151,7 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         try:
             with open(self.csv_path, 'r') as fp:
                 new_data = np.array([r for r in csv.reader(fp)])
-                self._header = new_data[0]
-                n_cols = new_data.shape[1]
-                self._csv_data = new_data[1:] if n_cols > 1 else \
-                    np.empty((0, n_cols), str)
+                self._csv_data = new_data
         except Exception as e:
             # Blank the CSV data outright if an error occurred
             self._csv_data = None
@@ -155,8 +164,7 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         if self.csv_data is None:
             raise ValueError("Nothing to save!")
         with open(self.csv_path, 'w') as fp:
-            csv.writer(fp).writerow(self.header)
-            csv.writer(fp).writerows(self.csv_data)
+            csv.writer(fp).writerows(self._csv_data)
 
 
 class CSVBackedTableWidget(qt.QStackedWidget):
