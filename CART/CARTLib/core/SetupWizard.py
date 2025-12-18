@@ -487,6 +487,10 @@ class _CohortWizardPage(qt.QWizardPage):
         def onPreviewClick():
             cohortPreviewWidget.backing_csv = self.cohort_path
         previewCohortButton.clicked.connect(onPreviewClick)
+        # Add a border around it to visually distinguish it
+        cohortPreviewWidget.setFrameShape(qt.QFrame.Panel)
+        cohortPreviewWidget.setFrameShadow(qt.QFrame.Sunken)
+        cohortPreviewWidget.setLineWidth(3)
         layout.addRow(cohortPreviewWidget)
 
     @property
