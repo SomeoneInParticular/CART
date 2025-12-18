@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 import qt
 from slicer.i18n import tr as _
 
-from CARTLib.utils.widgets import CSVBackedTableModel, CSVBackedTableWidget
+from CARTLib.utils.widgets import CohortTableModel, CohortTableWidget
 
 
 if TYPE_CHECKING:
@@ -39,7 +39,7 @@ class CohortEditorDialog(qt.QDialog):
         layout = qt.QVBoxLayout(self)
 
         # Main table widget
-        cohortWidget = CSVBackedTableWidget(self._io.model)
+        cohortWidget = CohortTableWidget(self._io.model)
         cohortWidget.setFrameShape(qt.QFrame.Panel)
         cohortWidget.setFrameShadow(qt.QFrame.Sunken)
         cohortWidget.setLineWidth(3)
@@ -65,7 +65,7 @@ class CohortEditorDialog(qt.QDialog):
 class CohortIO:
     def __init__(self, csv_path: Path, save_sidecar: bool = True):
         # Tracker for the model tracking the CSV data
-        self._model: CSVBackedTableModel = CSVBackedTableModel(csv_path)
+        self._model: CohortTableModel = CohortTableModel(csv_path)
 
         # JSON sidecar management
         self.save_sidecar = save_sidecar
@@ -73,7 +73,7 @@ class CohortIO:
         self._sidecar_data: dict = dict()
 
     @property
-    def model(self) -> CSVBackedTableModel:
+    def model(self) -> CohortTableModel:
         # Get-only to avoid desync
         return self._model
 

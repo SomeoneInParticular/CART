@@ -166,7 +166,6 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         with open(self.csv_path, 'w') as fp:
             csv.writer(fp).writerows(self._csv_data)
 
-
 class CSVBackedTableWidget(qt.QStackedWidget):
     """
     Simple implementation for viewing the contents of a CSV file in Qt.
@@ -253,6 +252,84 @@ class CSVBackedTableWidget(qt.QStackedWidget):
         else:
             self.setCurrentWidget(self.errorLabel)
 
+
+## Cohort Editor/Preview Widget ##
+class CohortTableModel(CSVBackedTableModel):
+    """
+    More specialized version of the CSV-backed model w/ additional checks
+    and features specific to cohort editing
+    """
+
+    def __init__(self, csv_path: Optional[Path], editable: bool = True, parent: qt.QObject = None):
+        super().__init__(csv_path, editable, parent)
+
+        # Try to move the UID column to the front of the array
+        if self._csv_data is not None:
+            self._move_uid_to_index()
+
+    def _move_uid_to_index(self) -> bool:
+        for i, c in enumerate(self.header):
+            if c.lower() == "uid":
+                # Model "reset", as this changes far more than just a column pos
+                self.beginResetModel()
+                uid_arr = self._csv_data[:, i]
+                np.delete(self._csv_data, i, axis=1)
+                np.insert(self._csv_data, 0, uid_arr, axis=1)
+                self.endResetModel()
+                return True
+        return False
+
+    @property
+    def csv_data(self) -> "Optional[npt.NDArray]":
+        if self._csv_data is None:
+            return None
+        # Suppressed because PyCharm went mad for some reason here
+        # noinspection PyTypeChecker
+        return self._csv_data[1:, 1:]
+
+    @property
+    def header(self) -> "npt.NDArray[str]":
+        return self._csv_data[0, 1:]
+
+    @property
+    def indices(self) -> "npt.NDArray[str]":
+        data = self._csv_data[1:, 0]
+        return data
+
+    def headerData(self, section: int, orientation: qt.Qt.Orientation, role: int = ...):
+        # Note; "section" -> column for Horizontal, row for Vertical
+        if role == qt.Qt.DisplayRole:
+            if orientation == qt.Qt.Horizontal:
+                return self.header[section]
+            elif orientation == qt.Qt.Vertical:
+                return self.indices[section]
+        return None
+
+
+class CohortTableWidget(CSVBackedTableWidget):
+    """
+    Simple implementation for viewing the contents of a CSV file in Qt.
+
+    Shows an error message when the backing CSV cannot be read.
+    """
+    def __init__(self, model: CohortTableModel, parent: qt.QWidget = None):
+        super().__init__(model, parent)
+
+    @classmethod
+    def from_path(cls, csv_path, editable: bool = True):
+        model = CohortTableModel(csv_path, editable=editable)
+        return cls(model)
+
+    def refresh(self):
+        # If we have data, show it no matter what
+        if self.model.csv_data is not None:
+            self.setCurrentWidget(self.tableView)
+        # Otherwise, check if we just haven't selected a path yet
+        elif self.model.csv_path is None:
+            self.setCurrentWidget(self.defaultLabel)
+        # If neither of the above, something's gone wrong
+        else:
+            self.setCurrentWidget(self.errorLabel)
 
 ## CART-Tuned Segmentation Editor ##
 class _NodeComboBoxProxy(qt.QComboBox):
