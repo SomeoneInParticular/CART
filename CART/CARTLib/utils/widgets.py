@@ -177,6 +177,15 @@ class CSVBackedTableWidget(qt.QStackedWidget):
         self.tableView.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
         self.addWidget(self.tableView)
 
+        # Placeholder message; shown when no CSV is selected
+        default_msg = _(
+            "No CSV file has been provided yet; once selected, its contents "
+            "should appear here."
+        )
+        self.defaultLabel = qt.QLabel(default_msg)
+        self.defaultLabel.setAlignment(qt.Qt.AlignTop | qt.Qt.AlignLeft)
+        self.addWidget(self.defaultLabel)
+
         # An error message; shown when the CSV is invalid
         error_msg = _(
             "ERROR: Could not load the selected CSV file. "
@@ -226,7 +235,9 @@ class CSVBackedTableWidget(qt.QStackedWidget):
 
     def refresh(self):
         # Show the error widget if the CSV table failed to load
-        if self.model.csv_data is None:
+        if self.model.csv_path is None:
+            self.setCurrentWidget(self.defaultLabel)
+        elif self.model.csv_data is None:
             self.setCurrentWidget(self.errorLabel)
         else:
             self.setCurrentWidget(self.tableView)
