@@ -155,6 +155,7 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         if self.csv_data is None:
             raise ValueError("Nothing to save!")
         with open(self.csv_path, 'w') as fp:
+            csv.writer(fp).writerow(self.header)
             csv.writer(fp).writerows(self.csv_data)
 
 
@@ -234,13 +235,15 @@ class CSVBackedTableWidget(qt.QStackedWidget):
         self.model.save()
 
     def refresh(self):
-        # Show the error widget if the CSV table failed to load
-        if self.model.csv_path is None:
-            self.setCurrentWidget(self.defaultLabel)
-        elif self.model.csv_data is None:
-            self.setCurrentWidget(self.errorLabel)
-        else:
+        # If we have data, show it no matter what
+        if self.model.csv_data is not None:
             self.setCurrentWidget(self.tableView)
+        # Otherwise, check if we just haven't selected a path yet
+        elif self.model.csv_path is None:
+            self.setCurrentWidget(self.defaultLabel)
+        # If neither of the above, something's gone wrong
+        else:
+            self.setCurrentWidget(self.errorLabel)
 
 
 ## CART-Tuned Segmentation Editor ##

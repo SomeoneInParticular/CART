@@ -10,6 +10,7 @@ from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
 from CARTLib.utils.widgets import CSVBackedTableWidget
 
+from .CohortEditor import CohortEditorDialog
 from .TaskBaseClass import TaskBaseClass
 
 if TYPE_CHECKING:
@@ -457,6 +458,14 @@ class _CohortWizardPage(qt.QWizardPage):
         editCohortButton.setToolTip(_(
             "Modify the selected cohort file to add, remove, or change its cases and/or columns."
         ))
+        def onEditClick():
+            # Create and show the editor dialog
+            dialog = CohortEditorDialog(self.cohort_path)
+            result = dialog.exec()
+            # If the user confirmed the edits, preview the result on close
+            if result:
+                cohortPreviewWidget.backing_csv = self.cohort_path
+        editCohortButton.clicked.connect(onEditClick)
         buttonLayout.addWidget(editCohortButton)
 
         # Button to preview the selected CSV
