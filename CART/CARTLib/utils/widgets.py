@@ -264,8 +264,9 @@ class CohortTableModel(CSVBackedTableModel):
         super().__init__(csv_path, editable, parent)
 
         # Try to move the UID column to the front of the array
-        if self._csv_data is not None:
-            self._move_uid_to_index()
+        if self._csv_path is not None:
+            if not self._move_uid_to_index():
+                raise ValueError("No UID column found, cannot set up Cohort model!")
 
     def _move_uid_to_index(self) -> bool:
         for i, c in enumerate(self.header):
