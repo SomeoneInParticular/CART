@@ -112,9 +112,9 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         return True
 
     def headerData(self, section: int, orientation: qt.Qt.Orientation, role: int = ...):
-        # Return early if we don't have any CSV data yet
+        # Note; "section" -> column for Horizontal, row for Vertical
         if role == qt.Qt.DisplayRole and orientation == qt.Qt.Horizontal:
-            return self.header
+            return self.header[section]
         return None
 
     def rowCount(self, parent: qt.QObject = None):
