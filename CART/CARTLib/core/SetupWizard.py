@@ -8,9 +8,9 @@ from slicer.i18n import tr as _
 from CARTLib.utils import CART_PATH
 from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
+from CARTLib.utils.widgets import CSVBackedTableWidget
 
 from .TaskBaseClass import TaskBaseClass
-from ..utils.widgets import CSVBackedTableWidget
 
 if TYPE_CHECKING:
     # Avoid a cyclical import
