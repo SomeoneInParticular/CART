@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Callable
 
 import ctk
 import qt
@@ -156,15 +156,17 @@ class JobSetupWizard(qt.QWizard):
         )
 
         # Workarounds for fields not playing nicely w/ CTK widgets
-        self._dataPage = _DataWizardPage()
-        self._taskPage = _TaskWizardPage()
-        self._cohortPage = _CohortWizardPage()
+        self._dataPage = _DataWizardPage(self)
+        self._taskPage = _TaskWizardPage(self)
+        def data_hook():
+            return self.data_path
+        self._cohortPage = _CohortWizardPage(data_hook, self)
 
         # Add initial pages
-        self.addPage(self.introPage())
         self.addPage(self._dataPage)
-        self.addPage(self._taskPage)
         self.addPage(self._cohortPage)
+        self.addPage(self.introPage())
+        self.addPage(self._taskPage)
         self.addPage(self.conclusionPage())
 
     ## Page Management ##
@@ -416,7 +418,12 @@ class _CohortWizardPage(qt.QWizardPage):
 
     Has enough unique functionality (including a Qt override) to form its own class;
     """
-    def __init__(self, parent=None):
+    def __init__(self, data_hook: Callable[[], Path], parent=None):
+        """
+        The data path hook should return a path containing the file a cohort editor should search
+        for; it is a function to allow it to be implicitly "synced" when needed, rather than
+        being static post-init.
+        """
         super().__init__(parent)
 
         # Basic Attributes
@@ -460,7 +467,8 @@ class _CohortWizardPage(qt.QWizardPage):
         ))
         def onEditClick():
             # Create and show the editor dialog
-            dialog = CohortEditorDialog(self.cohort_path)
+            data_path = data_hook()
+            dialog = CohortEditorDialog(self.cohort_path, data_path)
             result = dialog.exec()
             # If the user confirmed the edits, preview the result on close
             if result:

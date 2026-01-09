@@ -139,6 +139,30 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
             return 0
         return self.csv_data.shape[1]
 
+    def insertRows(self, row: int, count: int, parent = ...):
+        self.beginInsertRows(parent, row, row+count)
+        np.insert(self._csv_data, row, np.full((self.columnCount(parent), count), ""))
+        self.endInsertRows()
+
+    def insertColumns(self, column: int, count: int, parent = ...):
+        self.beginInsertColumns(parent, column, column+count)
+        np.insert(self._csv_data, column, np.full((self.columnCount(parent), count), ""), axis=1)
+        self.endInsertColumns()
+
+    def addRow(self, row_idx: int, contents: "npt.NDArray[str]"):
+        # Create the new row
+        self.insertRow(row_idx)
+        # Inser the new values into it
+        for i in range(np.min(contents.shape[0], self.columnCount())):
+            self.setData(self.index(row_idx, i), contents[i])
+
+    def addColumn(self, col_idx: int, contents: "npt.NDArray[str]"):
+        # Create the new column
+        self.insertColumn(col_idx)
+        # Inser the new values into it
+        for i in range(np.min(contents.shape[0], self.columnCount())):
+            self.setData(self.index(i, col_idx), contents[i])
+
     def flags(self, __: qt.QModelIndex) -> "qt.Qt.ItemFlags":
         # Mark all elements as enabled, selectable, and editable
         return self._flags
@@ -259,7 +283,6 @@ class CohortTableModel(CSVBackedTableModel):
     More specialized version of the CSV-backed model w/ additional checks
     and features specific to cohort editing
     """
-
     def __init__(self, csv_path: Optional[Path], editable: bool = True, parent: qt.QObject = None):
         super().__init__(csv_path, editable, parent)
 
@@ -269,15 +292,20 @@ class CohortTableModel(CSVBackedTableModel):
                 raise ValueError("No UID column found, cannot set up Cohort model!")
 
     def _move_uid_to_index(self) -> bool:
+        # If the UID is already in the index position, do nothing
+        if self._csv_data[0, 0].lower() == "uid":
+            return True
+        # Otherwise, find and move the UID column to the front
         for i, c in enumerate(self.header):
             if c.lower() == "uid":
-                # Model "reset", as this changes far more than just a column pos
+                # Model "reset", as this changes more than just one column's pos
                 self.beginResetModel()
                 uid_arr = self._csv_data[:, i]
                 np.delete(self._csv_data, i, axis=1)
                 np.insert(self._csv_data, 0, uid_arr, axis=1)
                 self.endResetModel()
                 return True
+        # If that fails (there's no UID column), return False for handling
         return False
 
     @property
@@ -331,6 +359,7 @@ class CohortTableWidget(CSVBackedTableWidget):
         # If neither of the above, something's gone wrong
         else:
             self.setCurrentWidget(self.errorLabel)
+
 
 ## CART-Tuned Segmentation Editor ##
 class _NodeComboBoxProxy(qt.QComboBox):
