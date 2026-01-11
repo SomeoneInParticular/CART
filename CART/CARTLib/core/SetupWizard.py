@@ -6,11 +6,10 @@ import qt
 from slicer.i18n import tr as _
 
 from CARTLib.utils import CART_PATH
+from CARTLib.utils.cohort import CohortTableWidget, CohortEditorDialog
 from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
-from CARTLib.utils.widgets import CohortTableWidget
 
-from .CohortEditor import CohortEditorDialog
 from .TaskBaseClass import TaskBaseClass
 
 if TYPE_CHECKING:
@@ -500,7 +499,7 @@ class _CohortWizardPage(qt.QWizardPage):
         layout.addRow(buttonWidget)
 
         # Cohort preview widget; it's a preview, so disable editing
-        cohortPreviewWidget = CohortTableWidget.from_path(None, editable=False)
+        cohortPreviewWidget = CohortTableWidget.from_path(None)
         def onPreviewClick():
             cohortPreviewWidget.backing_csv = self.cohort_path
         previewCohortButton.clicked.connect(onPreviewClick)
