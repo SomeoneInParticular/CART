@@ -152,14 +152,14 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
     def addRow(self, row_idx: int, contents: "npt.NDArray[str]"):
         # Create the new row
         self.insertRow(row_idx)
-        # Inser the new values into it
+        # Insert the new values into it
         for i in range(np.min(contents.shape[0], self.columnCount())):
             self.setData(self.index(row_idx, i), contents[i])
 
     def addColumn(self, col_idx: int, contents: "npt.NDArray[str]"):
         # Create the new column
         self.insertColumn(col_idx)
-        # Inser the new values into it
+        # Insert the new values into it
         for i in range(np.min(contents.shape[0], self.columnCount())):
             self.setData(self.index(i, col_idx), contents[i])
 
