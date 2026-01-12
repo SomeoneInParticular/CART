@@ -6,7 +6,7 @@ import qt
 from slicer.i18n import tr as _
 
 from CARTLib.utils import CART_PATH
-from CARTLib.utils.cohort import CohortTableWidget, CohortEditorDialog
+from CARTLib.utils.cohort import cohort_from_generator, CohortTableWidget, CohortEditorDialog, NewCohortDialog
 from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
 
@@ -157,9 +157,9 @@ class JobSetupWizard(qt.QWizard):
         # Workarounds for fields not playing nicely w/ CTK widgets
         self._dataPage = _DataWizardPage(self)
         self._taskPage = _TaskWizardPage(self)
-        def data_hook():
-            return self.data_path
-        self._cohortPage = _CohortWizardPage(data_hook, self)
+        def data_hook(): return self.data_path
+        def output_hook(): return self.output_path
+        self._cohortPage = _CohortWizardPage(data_hook, output_hook, self)
 
         # Add initial pages
         self.addPage(self._dataPage)
@@ -417,7 +417,11 @@ class _CohortWizardPage(qt.QWizardPage):
 
     Has enough unique functionality (including a Qt override) to form its own class;
     """
-    def __init__(self, data_hook: Callable[[], Path], parent=None):
+    def __init__(
+            self,
+            data_hook: Callable[[], Path],
+            output_hook: Callable[[], Path],
+            parent=None):
         """
         The data path hook should return a path containing the file a cohort editor should search
         for; it is a function to allow it to be implicitly "synced" when needed, rather than
@@ -456,6 +460,15 @@ class _CohortWizardPage(qt.QWizardPage):
             "the 'Input Data' folder you selected previously to determine which cases there "
             "should be."
         ))
+        def onCreateClick():
+            # Create and show the creator dialog
+            data_path = data_hook()
+            dialog = NewCohortDialog(data_path)
+            self.mediateCohortCreation(
+                dialog, data_path, output_hook(), cohortFileSelector, cohortPreviewWidget
+            )
+
+        createNewButton.clicked.connect(onCreateClick)
         buttonLayout.addWidget(createNewButton)
 
         # Button to edit the selected CSV
@@ -466,12 +479,8 @@ class _CohortWizardPage(qt.QWizardPage):
         ))
         def onEditClick():
             # Create and show the editor dialog
-            data_path = data_hook()
-            dialog = CohortEditorDialog(self.cohort_path, data_path)
-            result = dialog.exec()
-            # If the user confirmed the edits, preview the result on close
-            if result:
-                cohortPreviewWidget.backing_csv = self.cohort_path
+            dialog = CohortEditorDialog.from_paths(self.cohort_path, data_hook())
+            self.mediateCohortEditor(dialog, cohortPreviewWidget)
         editCohortButton.clicked.connect(onEditClick)
         buttonLayout.addWidget(editCohortButton)
 
@@ -525,3 +534,40 @@ class _CohortWizardPage(qt.QWizardPage):
 
     def isComplete(self):
         return self.is_current_path_valid()
+
+    def mediateCohortCreation(
+            self,
+            dialog: NewCohortDialog,
+            data_path: Path,
+            output_path: Path,
+            fileSelector: ctk.ctkPathLineEdit,
+            previewWidget: CohortTableWidget
+    ):
+        """
+        Mediates GUI updates required after a Cohort is initialized.
+        """
+        result = dialog.exec()
+        # If the user confirmed creation, create the file and proceed
+        if result:
+            # Create the backing cohort (and its associated files)
+            cohort = cohort_from_generator(
+                dialog.cohort_name, data_path, output_path, dialog.current_generator
+            )
+            # Update the GUI's selected file to match the newly created file
+            fileSelector.setCurrentPath(str(cohort.csv_path))
+            # Spawn and manage a cohort editor to continue building up the cohort
+            editorDialog = CohortEditorDialog(cohort)
+            self.mediateCohortEditor(editorDialog, previewWidget)
+
+    def mediateCohortEditor(
+            self,
+            dialog: CohortEditorDialog,
+            cohortPreview: CohortTableWidget
+    ):
+        """
+        Updates our GUI in response to a Cohort Editor finishing
+        """
+        result = dialog.exec()
+        # If the user confirmed the edits, preview the result on close
+        if result:
+            cohortPreview.backing_csv = self.cohort_path
