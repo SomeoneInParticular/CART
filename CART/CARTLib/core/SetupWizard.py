@@ -567,7 +567,11 @@ class _CohortWizardPage(qt.QWizardPage):
         """
         Updates our GUI in response to a Cohort Editor finishing
         """
+        # Hide the wizard until we're done
+        self.wizard().hide()
         result = dialog.exec()
         # If the user confirmed the edits, preview the result on close
         if result:
             cohortPreview.backing_csv = self.cohort_path
+        # Re-show the wizard
+        self.wizard().show()
