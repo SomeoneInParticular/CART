@@ -448,6 +448,11 @@ class CohortEditorDialog(qt.QDialog):
         # Add Case (Row) + Add Feature (Column) buttons
         newCaseButton = qt.QPushButton(_("New Case"))
         newFeatureButton = qt.QPushButton(_("New Feature"))
+        def onNewFeatureClicked():
+            dialog = FeatureEditorDialog(self._cohort)
+            dialog.exec()
+        newFeatureButton.clicked.connect(onNewFeatureClicked)
+
         newXButtonPanel = qt.QHBoxLayout()
         newXButtonPanel.addWidget(newCaseButton)
         newXButtonPanel.addWidget(newFeatureButton)
@@ -480,3 +485,68 @@ class CohortEditorDialog(qt.QDialog):
         # Generate the cohort manager using the provided paths
         cohort = Cohort(csv_path, data_path)
         return cls(cohort)
+
+
+class FeatureEditorDialog(qt.QDialog):
+    def __init__(
+        self,
+        cohort: Cohort,
+        feature_name: str = None,
+        parent: qt.QObject = None
+    ):
+        """
+        Dialog for editing (or creating) new Features within a cohort.
+
+        :param cohort: The Cohort to apply the edits to
+        :param feature_name: The name of the feature to edit. If None, will create a feature with
+            the user specified name instead.
+        :param parent: Parent widget, as required by QT.
+        """
+        super().__init__(parent)
+
+        # Backing cohort manager
+        self._cohort = cohort
+
+        # Reference feature name
+        self._reference_feature = feature_name
+
+        # Initial setup
+        self.setWindowTitle(_("Add New Feature"))
+        self.setMinimumSize(500, self.minimumHeight)
+        layout = qt.QFormLayout(self)
+
+        # Data entry fields
+        nameLabel = qt.QLabel(_("Feature Name:"))
+        nameField = qt.QLineEdit()
+        if feature_name:
+            nameField.setText(feature_name)
+        nameField.setPlaceholderText(_("e.g. Segmentation_T1w, spinal_reference"))
+        nameTooltip = _(
+            "Anything is valid, so long as it does not have any commas. We recommend following your selected "
+            "Task's naming convention to ensure CART runs smoothly, however."
+        )
+        nameLabel.setToolTip(nameTooltip)
+        nameField.setToolTip(nameTooltip)
+        layout.addRow(nameLabel, nameField)
+
+        includeLabel = qt.QLabel(_("Include:"))
+        includeField = qt.QLineEdit()
+        includeTooltip = _(
+            "Elements that a file MUST have to be used for this feature. "
+            "This incudes the directory the file is contained within!"
+        )
+        includeLabel.setToolTip(includeTooltip)
+        includeField.setToolTip(includeTooltip)
+        includeField.setPlaceholderText(_("e.g. T1w, nii, lesion_seg"))
+        layout.addRow(includeLabel, includeField)
+
+        excludeLabel = qt.QLabel(_("Exclude:"))
+        excludeField = qt.QLineEdit()
+        excludeTooltip = _(
+            "Elements that a file MUST NOT have to be used for this feature. "
+            "This incudes the directory the file is contained within!"
+        )
+        excludeLabel.setToolTip(excludeTooltip)
+        excludeField.setToolTip(excludeTooltip)
+        excludeField.setPlaceholderText(_("e.g. derivatives, masked, brain"))
+        layout.addRow(excludeLabel, excludeField)
