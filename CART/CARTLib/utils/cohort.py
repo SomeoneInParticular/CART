@@ -422,8 +422,9 @@ class CohortEditorDialog(qt.QDialog):
     """
     GUI Dialog for editing a given cohort file.
 
-    Alternatively, the user can manually add, remove, edit the rows/columns
-    within the table widget itself.
+    Using the button panel, users can add, edit, or delete rows/columns within the cohort.
+
+    The user can manually add, remove, edit the rows/columns within the table widget itself.
     """
 
     def __init__(
@@ -508,6 +509,10 @@ class FeatureEditorDialog(qt.QDialog):
         # Reference feature name
         self._reference_feature = feature_name
 
+        # Track whether changes have been made since this dialog was opened
+        self.has_changed = False
+        def mark_changed(): self.has_changed = True
+
         # Initial setup
         self.setWindowTitle(_("Add New Feature"))
         self.setMinimumSize(500, self.minimumHeight)
@@ -519,6 +524,7 @@ class FeatureEditorDialog(qt.QDialog):
         if feature_name:
             nameField.setText(feature_name)
         nameField.setPlaceholderText(_("e.g. Segmentation_T1w, spinal_reference"))
+        nameField.textChanged.connect(mark_changed)
         nameTooltip = _(
             "Anything is valid, so long as it does not have any commas. We recommend following your selected "
             "Task's naming convention to ensure CART runs smoothly, however."
@@ -529,6 +535,7 @@ class FeatureEditorDialog(qt.QDialog):
 
         includeLabel = qt.QLabel(_("Include:"))
         includeField = qt.QLineEdit()
+        includeField.textChanged.connect(mark_changed)
         includeTooltip = _(
             "Elements that a file MUST have to be used for this feature. "
             "This incudes the directory the file is contained within!"
@@ -540,6 +547,7 @@ class FeatureEditorDialog(qt.QDialog):
 
         excludeLabel = qt.QLabel(_("Exclude:"))
         excludeField = qt.QLineEdit()
+        excludeField.textChanged.connect(mark_changed)
         excludeTooltip = _(
             "Elements that a file MUST NOT have to be used for this feature. "
             "This incudes the directory the file is contained within!"
@@ -548,3 +556,42 @@ class FeatureEditorDialog(qt.QDialog):
         excludeField.setToolTip(excludeTooltip)
         excludeField.setPlaceholderText(_("e.g. derivatives, masked, brain"))
         layout.addRow(excludeLabel, excludeField)
+
+        # Ok/Cancel Buttons
+        buttonBox = qt.QDialogButtonBox()
+        buttonBox.setStandardButtons(
+            qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel
+        )
+        def onButtonClicked(button: qt.QPushButton):
+            button_role = buttonBox.buttonRole(button)
+            if button_role == qt.QDialogButtonBox.RejectRole:
+                # Delegate to "onCancel" to prevent immediate closing
+                self.onCancel()
+            elif button_role == qt.QDialogButtonBox.AcceptRole:
+                # Apply the requested changes to the cohort before closing.
+                self.apply_changes()
+                self.accept()
+            else:
+                raise ValueError("Pressed a button with an invalid role!")
+        buttonBox.clicked.connect(onButtonClicked)
+        layout.addWidget(buttonBox)
+
+    def onCancel(self):
+        # If we have changed anything, confirm we want to exit first
+        if self.has_changed:
+            msg = qt.QMessageBox()
+            msg.setWindowTitle("Are you sure?")
+            msg.setText("You have unsaved changes. Do you want to close anyways?")
+            msg.setStandardButtons(
+                qt.QMessageBox.Yes | qt.QMessageBox.No
+            )
+            result = msg.exec()
+            # If the user backs out, return early to do nothing.
+            if result != qt.QMessageBox.Yes:
+                return
+        # Otherwise, exit the program with a "rejection" signal
+        self.reject()
+
+    def apply_changes(self):
+        # TODO
+        pass
