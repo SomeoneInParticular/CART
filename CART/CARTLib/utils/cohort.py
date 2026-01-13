@@ -8,8 +8,9 @@ import numpy as np
 from numpy import typing as npt
 
 import qt
-from CARTLib.utils.widgets import CSVBackedTableModel, CSVBackedTableWidget
 from slicer.i18n import tr as _
+
+from .widgets import CSVBackedTableModel, CSVBackedTableWidget
 
 
 ## Type Utils ##
@@ -418,9 +419,6 @@ class CohortEditorDialog(qt.QDialog):
     """
     GUI Dialog for editing a given cohort file.
 
-    Can search for files associated with each case based on a search bar,
-    allowing for automated creation of the table columns.
-
     Alternatively, the user can manually add, remove, edit the rows/columns
     within the table widget itself.
     """
@@ -446,6 +444,14 @@ class CohortEditorDialog(qt.QDialog):
         cohortWidget.setFrameShadow(qt.QFrame.Sunken)
         cohortWidget.setLineWidth(3)
         layout.addWidget(cohortWidget)
+
+        # Add Case (Row) + Add Feature (Column) buttons
+        newCaseButton = qt.QPushButton(_("New Case"))
+        newFeatureButton = qt.QPushButton(_("New Feature"))
+        newXButtonPanel = qt.QHBoxLayout()
+        newXButtonPanel.addWidget(newCaseButton)
+        newXButtonPanel.addWidget(newFeatureButton)
+        layout.addLayout(newXButtonPanel)
 
         # Ok/Cancel Buttons
         buttonBox = qt.QDialogButtonBox()
