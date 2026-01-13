@@ -198,8 +198,8 @@ class CaseGenerator(Protocol):
 
     Allows for type-hinting, aiding in the registration of custom case generators for future extensions.
     """
-    def __call__(self, data_path: Path) -> CaseMap:
-        ...
+
+    def __call__(self, data_path: Path) -> CaseMap: ...
 
 
 # Default generators; simple BIDS support + blank slate
@@ -251,21 +251,20 @@ def _blank(__: Path) -> CaseMap:
 CASE_GENERATORS: dict[str, CaseGenerator] = {
     "BIDS (Case By Subject)": _bids_cases_by_subject,
     "BIDS (Case By Session)": _bids_cases_by_session,
-    "Blank Slate": _blank
+    "Blank Slate": _blank,
 }
 
 
 def register_case_generator(label: str, generator: CaseGenerator):
     if label in CASE_GENERATORS.keys():
-        raise ValueError(f"Cannot register generator '{label}', an existing generator with that label already exists!")
+        raise ValueError(
+            f"Cannot register generator '{label}', an existing generator with that label already exists!"
+        )
     CASE_GENERATORS[label] = generator
 
 
 def cohort_from_generator(
-        cohort_name: str,
-        data_path: Path,
-        output_path: Path,
-        generator: CaseGenerator
+    cohort_name: str, data_path: Path, output_path: Path, generator: CaseGenerator
 ) -> Cohort:
     """
     Generate a cohort from scratch, using the provided generator and input dataset.
@@ -287,7 +286,10 @@ class CohortTableModel(CSVBackedTableModel):
     More specialized version of the CSV-backed model w/ additional checks
     and features specific to cohort editing
     """
-    def __init__(self, csv_path: Optional[Path], editable: bool = True, parent: qt.QObject = None):
+
+    def __init__(
+        self, csv_path: Optional[Path], editable: bool = True, parent: qt.QObject = None
+    ):
         super().__init__(csv_path, editable, parent)
 
         # Try to move the UID column to the front of the array
@@ -345,6 +347,7 @@ class CohortTableWidget(CSVBackedTableWidget):
 
     Shows an error message when the backing CSV cannot be read.
     """
+
     def __init__(self, model: CohortTableModel, parent: qt.QWidget = None):
         super().__init__(model, parent)
 
@@ -357,9 +360,9 @@ class CohortTableWidget(CSVBackedTableWidget):
 ## Related Dialogues ##
 class NewCohortDialog(qt.QDialog):
     def __init__(
-            self,
-            data_path: Path,
-            parent: qt.QObject = None,
+        self,
+        data_path: Path,
+        parent: qt.QObject = None,
     ):
         super().__init__(parent)
 
@@ -448,9 +451,11 @@ class CohortEditorDialog(qt.QDialog):
         # Add Case (Row) + Add Feature (Column) buttons
         newCaseButton = qt.QPushButton(_("New Case"))
         newFeatureButton = qt.QPushButton(_("New Feature"))
+
         def onNewFeatureClicked():
             dialog = FeatureEditorDialog(self._cohort)
             dialog.exec()
+
         newFeatureButton.clicked.connect(onNewFeatureClicked)
 
         newXButtonPanel = qt.QHBoxLayout()
@@ -477,11 +482,7 @@ class CohortEditorDialog(qt.QDialog):
         layout.addWidget(buttonBox)
 
     @classmethod
-    def from_paths(
-        cls,
-        csv_path: Path,
-        data_path: Path
-    ):
+    def from_paths(cls, csv_path: Path, data_path: Path):
         # Generate the cohort manager using the provided paths
         cohort = Cohort(csv_path, data_path)
         return cls(cohort)
@@ -489,10 +490,7 @@ class CohortEditorDialog(qt.QDialog):
 
 class FeatureEditorDialog(qt.QDialog):
     def __init__(
-        self,
-        cohort: Cohort,
-        feature_name: str = None,
-        parent: qt.QObject = None
+        self, cohort: Cohort, feature_name: str = None, parent: qt.QObject = None
     ):
         """
         Dialog for editing (or creating) new Features within a cohort.
