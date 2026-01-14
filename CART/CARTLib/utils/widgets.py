@@ -140,28 +140,37 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         return self.csv_data.shape[1]
 
     def insertRows(self, row: int, count: int, parent = ...):
-        self.beginInsertRows(parent, row, row+count)
-        np.insert(self._csv_data, row, np.full((self.columnCount(parent), count), ""))
+        self.beginInsertRows(parent, row, row+count-1)
+        self._csv_data = np.insert(self._csv_data, row, "", axis=0)
         self.endInsertRows()
 
     def insertColumns(self, column: int, count: int, parent = ...):
-        self.beginInsertColumns(parent, column, column+count)
-        np.insert(self._csv_data, column, np.full((self.columnCount(parent), count), ""), axis=1)
+        self.beginInsertColumns(parent, column, column+count-1)
+        self._csv_data = np.insert(self._csv_data, column, "", axis=1)
         self.endInsertColumns()
 
     def addRow(self, row_idx: int, contents: "npt.NDArray[str]"):
-        # Create the new row
-        self.insertRow(row_idx)
-        # Insert the new values into it
-        for i in range(np.min(contents.shape[0], self.columnCount())):
-            self.setData(self.index(row_idx, i), contents[i])
+        # Create the new row; offset by 1, as the row is inserted BEFORE the desired index
+        self.insertRow(row_idx+1)
+        # Set contents of column directly and notify any watching widgets
+        self.csv_data[row_idx, :] = contents
+        self.dataChanged(
+            self.createIndex(row_idx, 0),
+            self.createIndex(row_idx, self.columnCount())
+        )
 
     def addColumn(self, col_idx: int, contents: "npt.NDArray[str]"):
-        # Create the new column
-        self.insertColumn(col_idx)
-        # Insert the new values into it
-        for i in range(np.min(contents.shape[0], self.columnCount())):
-            self.setData(self.index(i, col_idx), contents[i])
+        # Insert a new column; offset by 1, as the column is inserted BEFORE the desired index
+        self.insertColumn(col_idx+1)
+        # "Trim" the contents to the same size, padding with blanks if needed.
+        trimmed_contents = contents.copy()
+        trimmed_contents.resize([self.rowCount()])
+        trimmed_contents[trimmed_contents == 0] = ""
+        self.csv_data[:, col_idx] = trimmed_contents
+        self.dataChanged(
+            self.createIndex(0, col_idx),
+            self.createIndex(self.rowCount(), col_idx)
+        )
 
     def flags(self, __: qt.QModelIndex) -> "qt.Qt.ItemFlags":
         # Mark all elements as enabled, selectable, and editable

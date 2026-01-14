@@ -22,7 +22,8 @@ if TYPE_CHECKING:
 
 # Typing aliases for commonly used dictionary mappings
 CaseMap = dict[str, list[Path]]
-FilterMap = dict[str, list[str]]
+FilterEntry = dict[str, list[str]]
+FilterMap = dict[str, FilterEntry]
 
 
 # Current version of the cohort manager
@@ -102,6 +103,30 @@ class Cohort:
     def filters(self) -> FilterMap:
         # Get-only; use the add/remove functions instead, or edit the returned dict directly
         return self._filters
+
+    FILTER_INCLUDE_KEY = "include"
+    FILTER_EXCLUDE_KEY = "exclude"
+
+    def set_filter(self, filter_label: str, filter_entry: FilterEntry):
+        """
+        Set the filter associated with a given feature label in the cohort
+
+        :param filter_label: The label of the filter.
+            If a filter already exists with this label, replaces it; otherwise, a new filter is created
+        :param filter_entry: The filter entry to associate with the given label.
+        """
+        # Validate the new filter entry
+        keyset = set(filter_entry.keys())
+        if len(keyset - {self.FILTER_INCLUDE_KEY, self.FILTER_EXCLUDE_KEY}) > 0:
+            raise ValueError("Filter maps can only have two entries: 'include' and 'exclude'")
+        # If this is a new feature, create a new column to match
+        if filter_label not in self.filters.keys():
+            col_idx = self.model.columnCount()
+            # TODO: Use the new filter to regenerate the contents in-place instead
+            dummy_vals = np.array([str(i) for i in range(self.model.rowCount())])
+            self.model.addColumn(col_idx, dummy_vals)
+            # Set the header to this new label
+            self.model.setHeaderData(col_idx, qt.Qt.Horizontal, filter_label, qt.Qt.EditRole)
 
     def reset_filters(self):
         self._filters = dict()
@@ -340,6 +365,14 @@ class CohortTableModel(CSVBackedTableModel):
                 return self.indices[section]
         return None
 
+    def setHeaderData(self, section, orientation, value, role = ...):
+        if role == qt.Qt.EditRole:
+            if orientation == qt.Qt.Horizontal:
+                self.header[section] = value
+            elif orientation == qt.Qt.Vertical:
+                self.indices[section] = value
+            self.headerDataChanged(orientation, section, section)
+
 
 class CohortTableWidget(CSVBackedTableWidget):
     """
@@ -455,7 +488,8 @@ class CohortEditorDialog(qt.QDialog):
 
         def onNewFeatureClicked():
             dialog = FeatureEditorDialog(self._cohort)
-            dialog.exec()
+            if dialog.exec():
+                pass
 
         newFeatureButton.clicked.connect(onNewFeatureClicked)
 
@@ -531,30 +565,33 @@ class FeatureEditorDialog(qt.QDialog):
         )
         nameLabel.setToolTip(nameTooltip)
         nameField.setToolTip(nameTooltip)
+        self.nameField = nameField
         layout.addRow(nameLabel, nameField)
 
         includeLabel = qt.QLabel(_("Include:"))
         includeField = qt.QLineEdit()
         includeField.textChanged.connect(mark_changed)
         includeTooltip = _(
-            "Elements that a file MUST have to be used for this feature. "
+            "Comma-separated elements that a file MUST have to be used for this feature. "
             "This incudes the directory the file is contained within!"
         )
         includeLabel.setToolTip(includeTooltip)
         includeField.setToolTip(includeTooltip)
         includeField.setPlaceholderText(_("e.g. T1w, nii, lesion_seg"))
+        self.includeField = includeField
         layout.addRow(includeLabel, includeField)
 
         excludeLabel = qt.QLabel(_("Exclude:"))
         excludeField = qt.QLineEdit()
         excludeField.textChanged.connect(mark_changed)
         excludeTooltip = _(
-            "Elements that a file MUST NOT have to be used for this feature. "
+            "Comma-separated elements that a file MUST NOT have to be used for this feature. "
             "This incudes the directory the file is contained within!"
         )
         excludeLabel.setToolTip(excludeTooltip)
         excludeField.setToolTip(excludeTooltip)
         excludeField.setPlaceholderText(_("e.g. derivatives, masked, brain"))
+        self.excludeField = excludeField
         layout.addRow(excludeLabel, excludeField)
 
         # Ok/Cancel Buttons
@@ -593,5 +630,21 @@ class FeatureEditorDialog(qt.QDialog):
         self.reject()
 
     def apply_changes(self):
+        # Only run the (relatively) expensive update if something has changed
+        if not self.has_changed:
+            return
+        # Parse the contents of our GUI elements, stripping leading/trailing whitespace
+        label = self.nameField.text.strip()
+        filter_entry: FilterEntry = {
+            Cohort.FILTER_INCLUDE_KEY: [s.strip() for s in self.includeField.text.split(",")],
+            Cohort.FILTER_EXCLUDE_KEY: [s.strip() for s in self.excludeField.text.split(",")]
+        }
+
+        # If this an updated feature, rename the feature to this new name
         # TODO
-        pass
+
+        # Update cohort to use the new filter
+        self._cohort.set_filter(label, filter_entry)
+
+        # Save the reslt
+        self._cohort.save()
