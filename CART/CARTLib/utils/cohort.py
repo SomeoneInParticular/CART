@@ -1,6 +1,7 @@
 import csv
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Optional, Protocol, TYPE_CHECKING
 
@@ -118,15 +119,42 @@ class Cohort:
         # Validate the new filter entry
         keyset = set(filter_entry.keys())
         if len(keyset - {self.FILTER_INCLUDE_KEY, self.FILTER_EXCLUDE_KEY}) > 0:
-            raise ValueError("Filter maps can only have two entries: 'include' and 'exclude'")
+            raise ValueError(
+                "Filter maps can only have two entries: 'include' and 'exclude'"
+            )
+
+        # Find and process the list of paths associated with this filter
+        new_paths = self.find_column_files(filter_entry)
+        new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
+
         # If this is a new feature, create a new column to match
         if filter_label not in self.filters.keys():
             col_idx = self.model.columnCount()
-            # TODO: Use the new filter to regenerate the contents in-place instead
-            dummy_vals = np.array([str(i) for i in range(self.model.rowCount())])
-            self.model.addColumn(col_idx, dummy_vals)
+            self.model.addColumn(col_idx, new_paths)
             # Set the header to this new label
-            self.model.setHeaderData(col_idx, qt.Qt.Horizontal, filter_label, qt.Qt.EditRole)
+            self.model.setHeaderData(
+                col_idx, qt.Qt.Horizontal, filter_label, qt.Qt.EditRole
+            )
+        # Otherwise, replace the column's values with the newly found paths
+        else:
+            # Find the column position which matches our feature label
+            col_idx = np.argwhere(self.model.header == filter_label).flatten()[0]
+            # Change the model's contents to our new list of paths
+            self.model.setColumn(col_idx, new_paths)
+
+        # Save the new filter for later
+        self.filters[filter_label] = filter_entry
+
+    def rename_filter(self, old_name: str, new_name: str):
+        # Check that there's actually a filter to rename
+        if old_name not in self.filters.keys():
+            raise ValueError(f"Cannot rename filter '{old_name}'; it doesn't exist!")
+        # Update the backing model
+        col_idx = np.argwhere(self.model.header == old_name).flatten()[0]
+        self.model.setHeaderData(col_idx, qt.Qt.Horizontal, new_name, qt.Qt.EditRole)
+        # Update the filter map to reflect the change
+        filter_map = self.filters.pop(old_name)
+        self.filters[new_name] = filter_map
 
     def reset_filters(self):
         self._filters = dict()
@@ -151,8 +179,10 @@ class Cohort:
     def save_sidecar(self):
         sidecar_data = {
             self.VERSION_KEY: COHORT_VERSION,
-            self.CASE_PATH_KEY: {k: [str(x) for x in v]  for k, v in self.case_map.items()},
-            self.FILTERS_KEY: self.filters
+            self.CASE_PATH_KEY: {
+                k: [str(x) for x in v] for k, v in self.case_map.items()
+            },
+            self.FILTERS_KEY: self.filters,
         }
 
         with open(self.sidecar_path, "w") as fp:
@@ -203,17 +233,56 @@ class Cohort:
     def editorWidget(self, parent: qt.QObject = None) -> "CohortTableWidget":
         return CohortTableWidget(self.model, parent)
 
-    def find_valid_files(self, uid: str, column: str):
-        # Use a black list for the given entry if it doesn't have one yet
-        search_paths = self.case_map.get(uid, [])
-        filters = self.filters.get(column, [])
-        valid_paths = []
-        for sp in search_paths:
-            # TODO: Replace with pathlib.walk when it becomes available
-            for p in sp.rglob("*"):
-                # Skip directories
-                if not p.is_dir() and all([f in str(p) for f in filters]):
-                    valid_paths.append(p)
+    def find_first_valid_file(
+        self, search_paths: list[Path], filters: FilterEntry
+    ) -> Optional[Path]:
+        # Isolate the filters from one another
+        include_values = filters[self.FILTER_INCLUDE_KEY]
+        exclude_values = filters[self.FILTER_EXCLUDE_KEY]
+        # Search every path in turn
+        result = None
+        for p in search_paths:
+            # If the path isn't absolute, root it to our data path
+            if not p.is_absolute():
+                p = self.data_path / p
+            # Only look at files; directories (such as DICOM) are currently not supported for automated cohorts
+            # TODO: Replace with path.walk when it becomes available
+            for r, __, fs in os.walk(p, topdown=True):
+                r = Path(r)
+                for f in fs:
+                    f = r / f
+                    file_string = str(f)
+                    all_includes = len(include_values) == 0 or all(
+                        [i in file_string for i in include_values]
+                    )
+                    no_excludes = len(exclude_values) == 0 or not any(
+                        [i in file_string for i in exclude_values]
+                    )
+                    if all_includes and no_excludes:
+                        result = f
+                        break
+                # Else-continue-break chain, allowing for the break to chain up the loops
+                else:
+                    continue
+                break
+            else:
+                continue
+
+        # If no valid files were found, return empty-handed
+        if result is None:
+            return None
+        # If the result is within the data dir, make it relative
+        elif self.data_path in result.parents:
+            return result.relative_to(self.data_path)
+        else:
+            return result
+
+    def find_column_files(self, column_filters: FilterEntry) -> list[Optional[Path]]:
+        result_map = {}
+        for k, v in self.case_map.items():
+            result_map[k] = self.find_first_valid_file(v, column_filters)
+        sorted_pathlist = [result_map.get(k, None) for k in self.model.indices]
+        return sorted_pathlist
 
 
 ## Generators ##
@@ -240,7 +309,9 @@ def _bids_cases_by_subject(data_path: Path) -> CaseMap:
         logging.warning("No derivatives path found for BIDS directory, skipping.")
     else:
         for s, v in case_map.items():
-            v.extend([p.relative_to(data_path) for p in derivative_path.glob(f"*/{s}/")])
+            v.extend(
+                [p.relative_to(data_path) for p in derivative_path.glob(f"*/{s}/")]
+            )
     # Sort the results to make them easier to work with
     case_map = {k: case_map[k] for k in sorted(case_map.keys())}
     return case_map
@@ -261,7 +332,10 @@ def _bids_cases_by_session(data_path: Path) -> CaseMap:
     else:
         case_map = {}
         for (subject, session), val_list in data_map.items():
-            val_list.extend([p.relative_to(data_path) for p in derivative_path.glob(f"*/{subject}/{session}/")])
+            val_list.extend([
+                p.relative_to(data_path)
+                for p in derivative_path.glob(f"*/{subject}/{session}/")
+            ])
             case_map[f"{subject}_{session}"] = val_list
     # Sort the results to make them easier to work with
     case_map = {k: case_map[k] for k in sorted(case_map.keys())}
@@ -365,7 +439,7 @@ class CohortTableModel(CSVBackedTableModel):
                 return self.indices[section]
         return None
 
-    def setHeaderData(self, section, orientation, value, role = ...):
+    def setHeaderData(self, section, orientation, value, role=...):
         if role == qt.Qt.EditRole:
             if orientation == qt.Qt.Horizontal:
                 self.header[section] = value
@@ -489,7 +563,9 @@ class CohortEditorDialog(qt.QDialog):
         def onNewFeatureClicked():
             dialog = FeatureEditorDialog(self._cohort)
             if dialog.exec():
-                pass
+                # Without this, the cells rapidly bloat for some reason
+                cohortWidget.tableView.resizeColumnsToContents()
+                cohortWidget.tableView.resizeRowsToContents()
 
         newFeatureButton.clicked.connect(onNewFeatureClicked)
 
@@ -545,7 +621,9 @@ class FeatureEditorDialog(qt.QDialog):
 
         # Track whether changes have been made since this dialog was opened
         self.has_changed = False
-        def mark_changed(): self.has_changed = True
+
+        def mark_changed():
+            self.has_changed = True
 
         # Initial setup
         self.setWindowTitle(_("Add New Feature"))
@@ -599,6 +677,7 @@ class FeatureEditorDialog(qt.QDialog):
         buttonBox.setStandardButtons(
             qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel
         )
+
         def onButtonClicked(button: qt.QPushButton):
             button_role = buttonBox.buttonRole(button)
             if button_role == qt.QDialogButtonBox.RejectRole:
@@ -610,6 +689,7 @@ class FeatureEditorDialog(qt.QDialog):
                 self.accept()
             else:
                 raise ValueError("Pressed a button with an invalid role!")
+
         buttonBox.clicked.connect(onButtonClicked)
         layout.addWidget(buttonBox)
 
@@ -619,9 +699,7 @@ class FeatureEditorDialog(qt.QDialog):
             msg = qt.QMessageBox()
             msg.setWindowTitle("Are you sure?")
             msg.setText("You have unsaved changes. Do you want to close anyways?")
-            msg.setStandardButtons(
-                qt.QMessageBox.Yes | qt.QMessageBox.No
-            )
+            msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
             result = msg.exec()
             # If the user backs out, return early to do nothing.
             if result != qt.QMessageBox.Yes:
@@ -636,15 +714,28 @@ class FeatureEditorDialog(qt.QDialog):
         # Parse the contents of our GUI elements, stripping leading/trailing whitespace
         label = self.nameField.text.strip()
         filter_entry: FilterEntry = {
-            Cohort.FILTER_INCLUDE_KEY: [s.strip() for s in self.includeField.text.split(",")],
-            Cohort.FILTER_EXCLUDE_KEY: [s.strip() for s in self.excludeField.text.split(",")]
+            Cohort.FILTER_INCLUDE_KEY: [
+                s.strip() for s in self.includeField.text.split(",")
+            ],
+            Cohort.FILTER_EXCLUDE_KEY: [
+                s.strip() for s in self.excludeField.text.split(",")
+            ],
         }
 
+        # Clean up "blank" filters which may have slipped through
+        filter_entry[Cohort.FILTER_INCLUDE_KEY] = [
+            x for x in filter_entry[Cohort.FILTER_INCLUDE_KEY] if x != ""
+        ]
+        filter_entry[Cohort.FILTER_EXCLUDE_KEY] = [
+            x for x in filter_entry[Cohort.FILTER_EXCLUDE_KEY] if x != ""
+        ]
+
         # If this an updated feature, rename the feature to this new name
-        # TODO
+        if self._reference_feature:
+            self._cohort.rename_filter(self._reference_feature, label)
 
         # Update cohort to use the new filter
         self._cohort.set_filter(label, filter_entry)
 
-        # Save the reslt
+        # Save the result
         self._cohort.save()

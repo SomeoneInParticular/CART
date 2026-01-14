@@ -70,7 +70,7 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
             self.load()
         # If the file doesn't exist (we're creating it), set the data to be blank
         else:
-            self._csv_data = np.empty((0, 0), str)
+            self._csv_data = np.empty((0, 0), dtype="object")
 
     @property
     def csv_path(self):
@@ -149,28 +149,37 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         self._csv_data = np.insert(self._csv_data, column, "", axis=1)
         self.endInsertColumns()
 
-    def addRow(self, row_idx: int, contents: "npt.NDArray[str]"):
-        # Create the new row; offset by 1, as the row is inserted BEFORE the desired index
-        self.insertRow(row_idx+1)
-        # Set contents of column directly and notify any watching widgets
-        self.csv_data[row_idx, :] = contents
+    def setRow(self, row_idx, contents: "npt.NDArray[str]"):
+        # "Trim" the contents to the same size, padding with blanks if needed.
+        trimmed_contents = contents.copy()
+        trimmed_contents.resize([self.columnCount()])
+        trimmed_contents[trimmed_contents == 0] = ""
+        self.csv_data[row_idx, :] = trimmed_contents
         self.dataChanged(
-            self.createIndex(row_idx, 0),
-            self.createIndex(row_idx, self.columnCount())
+            self.createIndex(row_idx, 0), self.createIndex(row_idx, self.columnCount())
         )
 
-    def addColumn(self, col_idx: int, contents: "npt.NDArray[str]"):
-        # Insert a new column; offset by 1, as the column is inserted BEFORE the desired index
-        self.insertColumn(col_idx+1)
+    def setColumn(self, col_idx, contents: "npt.NDArray[str]"):
         # "Trim" the contents to the same size, padding with blanks if needed.
         trimmed_contents = contents.copy()
         trimmed_contents.resize([self.rowCount()])
         trimmed_contents[trimmed_contents == 0] = ""
         self.csv_data[:, col_idx] = trimmed_contents
         self.dataChanged(
-            self.createIndex(0, col_idx),
-            self.createIndex(self.rowCount(), col_idx)
+            self.createIndex(0, col_idx), self.createIndex(self.rowCount(), col_idx)
         )
+
+    def addRow(self, row_idx: int, contents: "npt.NDArray[str]"):
+        # Create the new row; offset by 1, as the row is inserted BEFORE the desired index
+        self.insertRow(row_idx+1)
+        # Update the new row's contents
+        self.setRow(row_idx, contents)
+
+    def addColumn(self, col_idx: int, contents: "npt.NDArray[str]"):
+        # Insert a new column first; offset by 1, as the column is inserted BEFORE the desired index
+        self.insertColumn(col_idx+1)
+        # Update the new column's contents
+        self.setColumn(col_idx, contents)
 
     def flags(self, __: qt.QModelIndex) -> "qt.Qt.ItemFlags":
         # Mark all elements as enabled, selectable, and editable
@@ -183,7 +192,7 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         # Reset the backing data to contain the contents of the CSV file
         try:
             with open(self.csv_path, 'r') as fp:
-                new_data = np.array([r for r in csv.reader(fp)])
+                new_data = np.array([r for r in csv.reader(fp)], dtype="object")
                 self._csv_data = new_data
         except Exception as e:
             # Blank the CSV data outright if an error occurred
