@@ -8,6 +8,7 @@ from typing import Optional, Protocol, TYPE_CHECKING
 import numpy as np
 from numpy import typing as npt
 
+import ctk
 import qt
 from slicer.i18n import tr as _
 
@@ -558,6 +559,16 @@ class CohortEditorDialog(qt.QDialog):
 
         # Add Case (Row) + Add Feature (Column) buttons
         newCaseButton = qt.QPushButton(_("New Case"))
+
+        def onNewCaseClicked():
+            dialog = CaseEditorDialog(self._cohort)
+            if dialog.exec():
+                # Without this, the cells rapidly bloat for some reason
+                cohortWidget.tableView.resizeColumnsToContents()
+                cohortWidget.tableView.resizeRowsToContents()
+
+        newCaseButton.clicked.connect(onNewCaseClicked)
+
         newFeatureButton = qt.QPushButton(_("New Feature"))
 
         def onNewFeatureClicked():
@@ -739,3 +750,159 @@ class FeatureEditorDialog(qt.QDialog):
 
         # Save the result
         self._cohort.save()
+
+
+class CaseEditorDialog(qt.QDialog):
+    def __init__(
+        self, cohort: Cohort, case_id: str = None, parent: qt.QObject = None
+    ):
+        """
+        Dialog for editing (or creating) new Features within a cohort.
+
+        :param cohort: The Cohort to apply the edits to
+        :param case_id: The name of the case to edit. If None, will create a feature with
+            the user specified name instead.
+        :param parent: Parent widget, as required by QT.
+        """
+        super().__init__(parent)
+
+        # Backing cohort manager
+        self._cohort = cohort
+
+        # Reference feature name
+        self._reference_case = case_id
+
+        # Track whether changes have been made since this dialog was opened
+        self.has_changed = False
+
+        def mark_changed():
+            self.has_changed = True
+
+        # Initial setup
+        self.setWindowTitle(_("Add New Case"))
+        self.setMinimumSize(500, self.minimumHeight)
+        layout = qt.QFormLayout(self)
+
+        # Name Field
+        nameLabel = qt.QLabel(_("Case Name:"))
+        nameField = qt.QLineEdit()
+        if case_id:
+            nameField.setText(case_id)
+        nameField.setPlaceholderText(_("e.g. sub-001, sub001_ses002"))
+        nameField.textChanged.connect(mark_changed)
+        nameTooltip = _(
+            "An identifier for this case. Should be unique to the cohort; ideally, it should also "
+            "implicitly reference the data it will refer to as well "
+            "(i.e. sub-001 refers to data in sub-001 associated directories)."
+        )
+        nameLabel.setToolTip(nameTooltip)
+        nameField.setToolTip(nameTooltip)
+        self.nameField = nameField
+        layout.addRow(nameLabel, nameField)
+
+        # Search path list
+        searchPathLabels = qt.QLabel(_("Search Paths: "))
+        searchPathList = qt.QListWidget()
+
+        layout.addRow(searchPathLabels)
+        layout.addRow(searchPathList)
+
+        # Button panel
+        addButton = qt.QPushButton("Add")
+        removeButton = qt.QPushButton("Remove")
+        removeButton.setEnabled(False)
+
+        def onAddClicked():
+            fileDialog = qt.QFileDialog()
+            fileDialog.setDirectory(str(cohort.data_path))
+            fileDialog.setFileMode(qt.QFileDialog.Directory)
+            if fileDialog.exec():
+                d = fileDialog.selectedFiles()[0]
+                d = qt.QListWidgetItem(d)
+                searchPathList.addItem(d)
+        addButton.clicked.connect(onAddClicked)
+
+        def onItemSelectionChanged():
+            removeButton.setEnabled(len(searchPathList.selectedIndexes()) > 0)
+        searchPathList.itemSelectionChanged.connect(onItemSelectionChanged)
+
+        def onRemoveClicked():
+            for i in searchPathList.selectedItems():
+                searchPathList.takeItem(searchPathList.row(i))
+        removeButton.clicked.connect(onRemoveClicked)
+
+        # Make them side-by-side and add them to the layout
+        w = qt.QWidget()
+        l = qt.QHBoxLayout(w)
+        l.addWidget(addButton)
+        l.addWidget(removeButton)
+        layout.addRow(w)
+
+        # Ok/Cancel Buttons
+        buttonBox = qt.QDialogButtonBox()
+        buttonBox.setStandardButtons(
+            qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel
+        )
+
+        def onButtonClicked(button: qt.QPushButton):
+            button_role = buttonBox.buttonRole(button)
+            if button_role == qt.QDialogButtonBox.RejectRole:
+                # Delegate to "onCancel" to prevent immediate closing
+                self.onCancel()
+            elif button_role == qt.QDialogButtonBox.AcceptRole:
+                # Apply the requested changes to the cohort before closing.
+                self.apply_changes()
+                self.accept()
+            else:
+                raise ValueError("Pressed a button with an invalid role!")
+
+        buttonBox.clicked.connect(onButtonClicked)
+        layout.addWidget(buttonBox)
+
+    def onCancel(self):
+        # If we have changed anything, confirm we want to exit first
+        if self.has_changed:
+            msg = qt.QMessageBox()
+            msg.setWindowTitle("Are you sure?")
+            msg.setText("You have unsaved changes. Do you want to close anyways?")
+            msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
+            result = msg.exec()
+            # If the user backs out, return early to do nothing.
+            if result != qt.QMessageBox.Yes:
+                return
+        # Otherwise, exit the program with a "rejection" signal
+        self.reject()
+
+    def apply_changes(self):
+        # # Only run the (relatively) expensive update if something has changed
+        # if not self.has_changed:
+        #     return
+        # # Parse the contents of our GUI elements, stripping leading/trailing whitespace
+        # label = self.nameField.text.strip()
+        # filter_entry: FilterEntry = {
+        #     Cohort.FILTER_INCLUDE_KEY: [
+        #         s.strip() for s in self.includeField.text.split(",")
+        #     ],
+        #     Cohort.FILTER_EXCLUDE_KEY: [
+        #         s.strip() for s in self.excludeField.text.split(",")
+        #     ],
+        # }
+        #
+        # # Clean up "blank" filters which may have slipped through
+        # filter_entry[Cohort.FILTER_INCLUDE_KEY] = [
+        #     x for x in filter_entry[Cohort.FILTER_INCLUDE_KEY] if x != ""
+        # ]
+        # filter_entry[Cohort.FILTER_EXCLUDE_KEY] = [
+        #     x for x in filter_entry[Cohort.FILTER_EXCLUDE_KEY] if x != ""
+        # ]
+        #
+        # # If this an updated feature, rename the feature to this new name
+        # if self._reference_case:
+        #     self._cohort.rename_filter(self._reference_case, label)
+        #
+        # # Update cohort to use the new filter
+        # self._cohort.set_filter(label, filter_entry)
+        #
+        # # Save the result
+        # self._cohort.save()
+        pass
