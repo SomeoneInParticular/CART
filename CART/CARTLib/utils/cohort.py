@@ -151,8 +151,8 @@ class Cohort:
     def save_sidecar(self):
         sidecar_data = {
             self.VERSION_KEY: COHORT_VERSION,
-            self.CASE_PATH_KEY: {k: str(v) for k, v in self.case_map.items()},
-            self.FILTERS_KEY: {k: str(v) for k, v in self.filters.items()},
+            self.CASE_PATH_KEY: {k: [str(x) for x in v]  for k, v in self.case_map.items()},
+            self.FILTERS_KEY: self.filters
         }
 
         with open(self.sidecar_path, "w") as fp:
@@ -240,7 +240,7 @@ def _bids_cases_by_subject(data_path: Path) -> CaseMap:
         logging.warning("No derivatives path found for BIDS directory, skipping.")
     else:
         for s, v in case_map.items():
-            v.extend([p for p in derivative_path.glob(f"*/{s}/*/")])
+            v.extend([p.relative_to(data_path) for p in derivative_path.glob(f"*/{s}/")])
     # Sort the results to make them easier to work with
     case_map = {k: case_map[k] for k in sorted(case_map.keys())}
     return case_map
@@ -261,7 +261,7 @@ def _bids_cases_by_session(data_path: Path) -> CaseMap:
     else:
         case_map = {}
         for (subject, session), val_list in data_map.items():
-            val_list.extend(derivative_path.glob(f"*/{subject}/{session}/*"))
+            val_list.extend([p.relative_to(data_path) for p in derivative_path.glob(f"*/{subject}/{session}/")])
             case_map[f"{subject}_{session}"] = val_list
     # Sort the results to make them easier to work with
     case_map = {k: case_map[k] for k in sorted(case_map.keys())}
