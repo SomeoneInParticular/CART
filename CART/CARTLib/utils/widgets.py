@@ -153,7 +153,9 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         # "Trim" the contents to the same size, padding with blanks if needed.
         trimmed_contents = contents.copy()
         trimmed_contents.resize([self.columnCount()])
-        trimmed_contents[trimmed_contents == 0] = ""
+        # Prevent a ValueError resulting from Python trying to parse an empty list to a float
+        if trimmed_contents.shape[0] > 0:
+            trimmed_contents[trimmed_contents == 0] = ""
         self.csv_data[row_idx, :] = trimmed_contents
         self.dataChanged(
             self.createIndex(row_idx, 0), self.createIndex(row_idx, self.columnCount())
@@ -163,7 +165,9 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         # "Trim" the contents to the same size, padding with blanks if needed.
         trimmed_contents = contents.copy()
         trimmed_contents.resize([self.rowCount()])
-        trimmed_contents[trimmed_contents == 0] = ""
+        # Prevent a ValueError resulting from Python trying to parse an empty list to a float
+        if trimmed_contents.shape[0] > 0:
+            trimmed_contents[trimmed_contents == 0] = ""
         self.csv_data[:, col_idx] = trimmed_contents
         self.dataChanged(
             self.createIndex(0, col_idx), self.createIndex(self.rowCount(), col_idx)
