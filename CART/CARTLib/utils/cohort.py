@@ -98,8 +98,48 @@ class Cohort:
         # Get-only; use the add/remove functions instead, or edit the returned dict directly
         return self._case_map
 
-    def reset_case_map(self):
-        self._case_map = dict()
+    def set_case_map(self, case_label: str, search_paths: list[Path]):
+        """
+        Set the filter associated with a given feature label in the cohort
+
+        :param case_label: The label for the new case (and its search paths).
+            If a case already exists with this label, replaces it; otherwise, a new case is created.
+        :param search_paths: The paths that should be searched for this case.
+        """
+        # Get the list of paths for this case
+        new_paths = self.find_row_files(search_paths)
+        new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
+
+        # If this is a new case, create a new column to match
+        if case_label not in self.case_map.keys():
+            row_idx = self.model.rowCount()
+            self.model.addRow(row_idx, new_paths)
+            # Set the header to this new label
+            self.model.setHeaderData(
+                row_idx, qt.Qt.Vertical, case_label, qt.Qt.EditRole
+            )
+        # Otherwise, replace the row's values with the newly found paths
+        else:
+            # Find the column position which matches our feature label
+            row_idx = np.argwhere(self.model.indices == case_label).flatten()[0]
+            # Change the model's contents to our new list of paths
+            self.model.setRow(row_idx, new_paths)
+
+        # Save the new filter for later
+        self.case_map[case_label] = search_paths
+
+    def rename_case_map(self, old_name: str, new_name: str):
+        # Check if a case map with this name already exists
+        if old_name not in self.case_map.keys():
+            raise ValueError(f"Cannot rename case map '{old_name}'; it doesn't exist!")
+        # Update the backing model
+        row_idx = np.argwhere(self.model.indices == old_name).flatten()[0]
+        self.model.setHeaderData(
+            row_idx, qt.Qt.Vertical, new_name, qt.Qt.EditRole
+        )
+        # Update the filter map to reflect the change
+        case_map_entry = self.case_map.pop(old_name)
+        self.case_map[new_name] = case_map_entry
 
     @property
     def filters(self) -> FilterMap:
@@ -156,9 +196,6 @@ class Cohort:
         # Update the filter map to reflect the change
         filter_map = self.filters.pop(old_name)
         self.filters[new_name] = filter_map
-
-    def reset_filters(self):
-        self._filters = dict()
 
     @property
     def sidecar_data(self) -> dict:
@@ -277,6 +314,13 @@ class Cohort:
             return result.relative_to(self.data_path)
         else:
             return result
+
+    def find_row_files(self, search_paths: list[Path]) -> list[Optional[Path]]:
+        result_map = {}
+        for k, v in self.filters.items():
+            result_map[k] = self.find_first_valid_file(search_paths, v)
+        sorted_pathlist = [result_map.get(k, None) for k in self.model.header]
+        return sorted_pathlist
 
     def find_column_files(self, column_filters: FilterEntry) -> list[Optional[Path]]:
         result_map = {}
@@ -806,6 +850,7 @@ class CaseEditorDialog(qt.QDialog):
 
         layout.addRow(searchPathLabels)
         layout.addRow(searchPathList)
+        self.searchPathList = searchPathList
 
         # Button panel
         addButton = qt.QPushButton("Add")
@@ -874,35 +919,26 @@ class CaseEditorDialog(qt.QDialog):
         self.reject()
 
     def apply_changes(self):
-        # # Only run the (relatively) expensive update if something has changed
-        # if not self.has_changed:
-        #     return
-        # # Parse the contents of our GUI elements, stripping leading/trailing whitespace
-        # label = self.nameField.text.strip()
-        # filter_entry: FilterEntry = {
-        #     Cohort.FILTER_INCLUDE_KEY: [
-        #         s.strip() for s in self.includeField.text.split(",")
-        #     ],
-        #     Cohort.FILTER_EXCLUDE_KEY: [
-        #         s.strip() for s in self.excludeField.text.split(",")
-        #     ],
-        # }
-        #
-        # # Clean up "blank" filters which may have slipped through
-        # filter_entry[Cohort.FILTER_INCLUDE_KEY] = [
-        #     x for x in filter_entry[Cohort.FILTER_INCLUDE_KEY] if x != ""
-        # ]
-        # filter_entry[Cohort.FILTER_EXCLUDE_KEY] = [
-        #     x for x in filter_entry[Cohort.FILTER_EXCLUDE_KEY] if x != ""
-        # ]
-        #
-        # # If this an updated feature, rename the feature to this new name
-        # if self._reference_case:
-        #     self._cohort.rename_filter(self._reference_case, label)
-        #
-        # # Update cohort to use the new filter
-        # self._cohort.set_filter(label, filter_entry)
-        #
-        # # Save the result
-        # self._cohort.save()
-        pass
+        # Only run the (relatively) expensive update if something has changed
+        if not self.has_changed:
+            return
+
+        # Parse the contents of our GUI elements, stripping leading/trailing whitespace
+        label = self.nameField.text.strip()
+        search_paths: list[Path] = []
+        for i in range(self.searchPathList.count):
+            p = Path(self.searchPathList.item(i).text())
+            if self._cohort.data_path in p.parents:
+                search_paths.append(p.relative_to(self._cohort.data_path))
+            else:
+                search_paths.append(p)
+
+        # If this is an updated case, rename it to match
+        if self._reference_case:
+            self._cohort.rename_case_map(self._reference_case, label)
+
+        # Insert it into our cohort
+        self._cohort.set_case_map(label, search_paths)
+
+        # Save the result
+        self._cohort.save()
