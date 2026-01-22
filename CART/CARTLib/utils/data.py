@@ -317,7 +317,6 @@ def save_markups_to_nifti(
     :param markup_node: The markup node whose contents should be saved
     :param reference_volume: A reference volume, for converting RAS -> IJK co-ordinates
     :param path: Path to a (presumably `.nii`) file where the data should be saved
-    :param profile: Profile config; used to build the JSON sidecar
     """
     # Build the RAS (world) -> IJK (voxel) transform function
     ras_to_kji_transform = vtk.vtkMatrix4x4()
@@ -466,6 +465,7 @@ def save_json_sidecar(main_file_path: Path, sidecar_data: dict):
 GENERATED_BY_KEY = "GeneratedBy"
 
 
+# noinspection PyUnusedLocal
 @singledispatch
 def add_generated_by_entry(
         sidecar_data: Any,
