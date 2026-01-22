@@ -95,6 +95,17 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
             return None
         return self._csv_data[1:]
 
+    @property
+    def editable(self) -> bool:
+        return qt.Qt.ItemIsEditable in self._flags
+
+    @editable.setter
+    def editable(self, new_val: bool):
+        if new_val:
+            self._flags = self._flags | qt.Qt.ItemIsEditable
+        else:
+            self._flags = qt.Qt.ItemIsEnabled | qt.Qt.ItemIsSelectable
+
     # Querying
     def __getitem__(self, item):
         if self.csv_data is None:
@@ -186,7 +197,7 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         self.setColumn(col_idx, contents)
 
     def flags(self, __: qt.QModelIndex) -> "qt.Qt.ItemFlags":
-        # Mark all elements as enabled, selectable, and editable
+        # Return the current set of flags for the model
         return self._flags
 
     ## I/O ##
