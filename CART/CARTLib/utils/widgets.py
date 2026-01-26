@@ -235,13 +235,14 @@ class CSVBackedTableWidget(qt.QStackedWidget):
 
         # The table widget itself; shown when the CSV is valid
         self._model = model
-        self.tableView = qt.QTableView()
-        self.tableView.setModel(model)
-        self.tableView.show()
-        self.tableView.horizontalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
-        self.tableView.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
-        self.tableView.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
-        self.addWidget(self.tableView)
+        tableView = qt.QTableView()
+        tableView.setModel(model)
+        tableView.show()
+        tableView.horizontalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
+        tableView.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
+        tableView.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
+        self._tableView = tableView
+        self.addWidget(self._tableView)
 
         # Placeholder message; shown when no CSV is selected
         default_msg = _(
@@ -294,6 +295,19 @@ class CSVBackedTableWidget(qt.QStackedWidget):
         # Defer to our backing model
         self.model.csv_path = new_path
         self.refresh()
+
+    @property
+    def tableView(self):
+        return self._tableView
+
+    @tableView.setter
+    def tableView(self, new_view: qt.QTableView):
+        was_viewing_table = self.currentWidget() == self._tableView
+        self.removeWidget(self._tableView)
+        self._tableView = new_view
+        self.addWidget(new_view)
+        if was_viewing_table:
+            self.setCurrentWidget(self._tableView)
 
     def save(self):
         # Defer to our backing model

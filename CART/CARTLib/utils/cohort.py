@@ -493,6 +493,38 @@ class CohortTableModel(CSVBackedTableModel):
             self.headerDataChanged(orientation, section, section)
 
 
+class CohortTableView(qt.QTableView):
+    """
+    Provides a default context menu for use w/ this class of widgets.
+
+    Generally, however, you should use CohortTableWidget (below) instead.
+    """
+    def __init__(self):
+        super().__init__()
+
+        self.horizontalHeader().setSectionResizeMode(
+            qt.QHeaderView.ResizeToContents
+        )
+        self.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
+        self.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
+
+    def contextMenuEvent(self, event: "qt.QContextMenuEvent"):
+        # If the index is not value, end here
+        pos = event.pos()
+        idx = self.indexAt(pos)
+        if not idx.isValid():
+            return
+
+        # Generate a context menu
+        menu = qt.QMenu(self)
+        test_action = menu.addAction('Test')
+        test_action.triggered.connect(
+            lambda: print("Test Triggered!")
+        )
+
+        # Show it to the user
+        menu.popup(self.viewport().mapToGlobal(pos))
+
 class CohortTableWidget(CSVBackedTableWidget):
     """
     Simple implementation for viewing the contents of a CSV file in Qt.
@@ -502,6 +534,11 @@ class CohortTableWidget(CSVBackedTableWidget):
 
     def __init__(self, model: CohortTableModel, parent: qt.QWidget = None):
         super().__init__(model, parent)
+
+        # Swap to our (contex-menu providing) table view class.
+        self.tableView = CohortTableView()
+        self.tableView.setModel(model)
+        self.refresh()
 
     @classmethod
     def from_path(cls, csv_path):
