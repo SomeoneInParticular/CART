@@ -95,12 +95,13 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
             return None
         return self._csv_data[1:]
 
-    @property
-    def editable(self) -> bool:
-        return qt.Qt.ItemIsEditable in self._flags
+    # KO: For reasons beyond me, this cannot be set as a property.
+    #   PythonQT downcasts this table to a class that lacks the property
+    #   when you try...
+    def is_editable(self) -> bool:
+        return qt.Qt.ItemIsEditable & self._flags != 0
 
-    @editable.setter
-    def editable(self, new_val: bool):
+    def set_editable(self, new_val: bool):
         if new_val:
             self._flags = self._flags | qt.Qt.ItemIsEditable
         else:

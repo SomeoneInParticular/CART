@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Protocol, TYPE_CHECKING
+from typing import Optional, Protocol, TYPE_CHECKING, Callable
 
 import numpy as np
 from numpy import typing as npt
@@ -268,8 +268,24 @@ class Cohort:
             )
         self._filters = {k: v for k, v in filter_data.items()}
 
+    ## GUI Elements ##
     def editorWidget(self, parent: qt.QObject = None) -> "CohortTableWidget":
-        return CohortTableWidget(self.model, parent)
+        widget = CohortTableWidget(self.model, parent)
+        widget.tableView.context_generator = lambda idx: self.newContextMenu(idx, widget)
+        return widget
+
+    def newContextMenu(self, idx: qt.QModelIndex, parent: qt.QObject = None) -> Optional[qt.QMenu]:
+        # If our model isn't editable, it shouldn't have a context menu
+        if not self._model.is_editable():
+            return None
+
+        # Generate a context menu
+        menu = qt.QMenu(parent)
+        test_action = menu.addAction("Test")
+        test_action.triggered.connect(lambda: print("Test Triggered!"))
+
+        # Return the menu
+        return menu
 
     def find_first_valid_file(
         self, search_paths: list[Path], filters: FilterEntry
@@ -502,25 +518,24 @@ class CohortTableView(qt.QTableView):
     def __init__(self):
         super().__init__()
 
+        # Change the layout to be more sensible
         self.horizontalHeader().setSectionResizeMode(
             qt.QHeaderView.ResizeToContents
         )
         self.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
         self.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
 
+        # Track a "context generator" function for this view
+        self.context_generator: Callable[[qt.QModelIndex], Optional[qt.QMenu]] = None
+
     def contextMenuEvent(self, event: "qt.QContextMenuEvent"):
-        # If the index is not value, end here
-        pos = event.pos()
-        idx = self.indexAt(pos)
-        if not idx.isValid():
+        # If we don't have a context menu generator, do nothing
+        if self.context_generator is None:
             return
 
-        # Generate a context menu
-        menu = qt.QMenu(self)
-        test_action = menu.addAction('Test')
-        test_action.triggered.connect(
-            lambda: print("Test Triggered!")
-        )
+        # Otherwise, use the generator to build the menu and show it
+        pos = event.pos()
+        menu = self.context_generator(pos)
 
         # Show it to the user
         menu.popup(self.viewport().mapToGlobal(pos))
@@ -632,7 +647,7 @@ class CohortEditorDialog(qt.QDialog):
         layout = qt.QVBoxLayout(self)
 
         # Main table widget
-        cohortWidget = CohortTableWidget(self._cohort.model)
+        cohortWidget = self._cohort.editorWidget()
         cohortWidget.setFrameShape(qt.QFrame.Panel)
         cohortWidget.setFrameShadow(qt.QFrame.Sunken)
         cohortWidget.setLineWidth(3)
