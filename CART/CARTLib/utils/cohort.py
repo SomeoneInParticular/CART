@@ -281,11 +281,32 @@ class Cohort:
 
         # Generate a context menu
         menu = qt.QMenu(parent)
-        test_action = menu.addAction("Test")
-        test_action.triggered.connect(lambda: print("Test Triggered!"))
+
+        # Add row-specific actions
+        self.addRowActions(menu, idx)
+        self.addColumnActions(menu, idx)
 
         # Return the menu
         return menu
+
+    def addRowActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
+        # Modification action
+        editAction = menu.addAction(_("Modify Search Paths"))
+        def _modifyRow():
+            row_id = self.model.indices[idx.row()]
+            dialog = CaseEditorDialog(self, row_id)
+            dialog.exec()
+        editAction.triggered.connect(_modifyRow)
+
+
+    def addColumnActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
+        # Modification action
+        editAction = menu.addAction(_("Modify Feature Filters"))
+        def _modifyRow():
+            col_id = self.model.header[idx.column()]
+            dialog = FeatureEditorDialog(self, col_id)
+            dialog.exec()
+        editAction.triggered.connect(_modifyRow)
 
     def find_first_valid_file(
         self, search_paths: list[Path], filters: FilterEntry
@@ -535,7 +556,8 @@ class CohortTableView(qt.QTableView):
 
         # Otherwise, use the generator to build the menu and show it
         pos = event.pos()
-        menu = self.context_generator(pos)
+        idx = self.indexAt(pos)
+        menu = self.context_generator(idx)
 
         # Show it to the user
         menu.popup(self.viewport().mapToGlobal(pos))
@@ -755,6 +777,9 @@ class FeatureEditorDialog(qt.QDialog):
 
         includeLabel = qt.QLabel(_("Include:"))
         includeField = qt.QLineEdit()
+        if feature_name:
+            include_vals = self._cohort.filters.get(feature_name, {}).get(Cohort.FILTER_INCLUDE_KEY, [])
+            includeField.setText(", ".join(include_vals))
         includeField.textChanged.connect(mark_changed)
         includeTooltip = _(
             "Comma-separated elements that a file MUST have to be used for this feature. "
@@ -768,6 +793,9 @@ class FeatureEditorDialog(qt.QDialog):
 
         excludeLabel = qt.QLabel(_("Exclude:"))
         excludeField = qt.QLineEdit()
+        if feature_name:
+            exclude_vals = self._cohort.filters.get(feature_name, {}).get(Cohort.FILTER_EXCLUDE_KEY, [])
+            excludeField.setText(", ".join(exclude_vals))
         excludeField.textChanged.connect(mark_changed)
         excludeTooltip = _(
             "Comma-separated elements that a file MUST NOT have to be used for this feature. "
@@ -899,7 +927,15 @@ class CaseEditorDialog(qt.QDialog):
         # Search path list
         searchPathLabels = qt.QLabel(_("Search Paths: "))
         searchPathList = qt.QListWidget()
-
+        if case_id:
+            path_entries = cohort.case_map.get(case_id, [])
+            for p in path_entries:
+                if p.is_absolute():
+                    searchPathList.addItem(str(p))
+                else:
+                    searchPathList.addItem(str(cohort.data_path / p))
+        searchPathList.model().rowsInserted.connect(mark_changed)
+        searchPathList.model().rowsRemoved.connect(mark_changed)
         layout.addRow(searchPathLabels)
         layout.addRow(searchPathList)
         self.searchPathList = searchPathList
