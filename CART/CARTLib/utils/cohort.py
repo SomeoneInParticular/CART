@@ -38,6 +38,12 @@ class Cohort:
         # Tracker for the model tracking the CSV data
         self._model: CohortTableModel = CohortTableModel(csv_path)
 
+        # Whenever the model's contents changes, mark ourselves as having changed too
+        self.has_changed = False
+        def _onModelChanged():
+            self.has_changed = True
+        self._model.dataChanged.connect(_onModelChanged)
+
         # Track the data path for later
         self.data_path = data_path
 
@@ -208,8 +214,11 @@ class Cohort:
     FILTERS_KEY = "filters"
 
     def save(self):
-        self.save_csv()
-        self.save_sidecar()
+        # Only try and save if something has changed since we last loaded
+        if self.has_changed:
+            self.save_csv()
+            self.save_sidecar()
+            self.has_changed = False
 
     def save_csv(self):
         self._model.save()
@@ -229,6 +238,7 @@ class Cohort:
     def load(self):
         self.load_csv()
         self.load_sidecar()
+        self.has_changed = False
 
     def load_csv(self):
         # Delegate to our backing model
@@ -297,7 +307,6 @@ class Cohort:
             dialog = CaseEditorDialog(self, row_id)
             dialog.exec()
         editAction.triggered.connect(_modifyRow)
-
 
     def addColumnActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
         # Modification action
@@ -712,14 +721,32 @@ class CohortEditorDialog(qt.QDialog):
         def onButtonClicked(button: qt.QPushButton):
             button_role = buttonBox.buttonRole(button)
             if button_role == qt.QDialogButtonBox.RejectRole:
-                self.reject()
+                self.onCancel()
             elif button_role == qt.QDialogButtonBox.AcceptRole:
+                # Only save changes to the cohort if
+                self._cohort.save()
                 self.accept()
             else:
                 raise ValueError("Pressed a button with an invalid role!")
 
         buttonBox.clicked.connect(onButtonClicked)
         layout.addWidget(buttonBox)
+
+    def onCancel(self):
+        # If we have changed anything, confirm we want to exit first
+        if self._cohort.has_changed:
+            reply = qt.QMessageBox.question(
+                self,
+                "Are you sure?",
+                "You have unsaved changes. Do you want to close anyways?",
+                qt.QMessageBox.Yes | qt.QMessageBox.No,
+                qt.QMessageBox.No,
+            )
+            # If the user backs out, return early and do nothing.
+            if reply != qt.QMessageBox.Yes:
+                return
+        # Otherwise, exit the program with a "rejection" signal
+        self.reject()
 
     @classmethod
     def from_paths(cls, csv_path: Path, data_path: Path):
@@ -871,9 +898,6 @@ class FeatureEditorDialog(qt.QDialog):
 
         # Update cohort to use the new filter
         self._cohort.set_filter(label, filter_entry)
-
-        # Save the result
-        self._cohort.save()
 
 
 class CaseEditorDialog(qt.QDialog):
@@ -1027,6 +1051,3 @@ class CaseEditorDialog(qt.QDialog):
 
         # Insert it into our cohort
         self._cohort.set_case_map(label, search_paths)
-
-        # Save the result
-        self._cohort.save()
