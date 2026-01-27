@@ -55,7 +55,7 @@ class Cohort:
             self.load_sidecar()
         else:
             # If no sidecar is to be used, generate blank cohort/filter entries
-            self._case_map: CaseMap = dict()
+            self._case_path_map: CaseMap = dict()
             self._filters: FilterMap = dict()
 
     @classmethod
@@ -99,27 +99,26 @@ class Cohort:
         return self.csv_path.with_suffix(".json")
 
     @property
-    def case_map(self) -> CaseMap:
+    def case_path_map(self) -> CaseMap:
         """
-        Search paths for each case in the cohort.
+        Map of case name -> search paths for said case
         """
-        # Get-only; use the add/remove functions instead, or edit the returned dict directly
-        return self._case_map
+        return self._case_path_map
 
-    def set_case_map(self, case_label: str, search_paths: list[Path]):
+    def set_case_paths(self, case_label: str, search_paths: list[Path]):
         """
-        Set the filter associated with a given feature label in the cohort
+        Set the search paths for a given case map in the cohort
 
-        :param case_label: The label for the new case (and its search paths).
+        :param case_label: The label for the case (and its search paths).
             If a case already exists with this label, replaces it; otherwise, a new case is created.
-        :param search_paths: The paths that should be searched for this case.
+        :param search_paths: The paths that should be searched when finding files for this case.
         """
         # Get the list of paths for this case
         new_paths = self.find_row_files(search_paths)
         new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
 
         # If this is a new case, create a new column to match
-        if case_label not in self.case_map.keys():
+        if case_label not in self.case_path_map.keys():
             row_idx = self.model.rowCount()
             self.model.addRow(row_idx, new_paths)
             # Set the header to this new label
@@ -134,18 +133,18 @@ class Cohort:
             self.model.setRow(row_idx, new_paths)
 
         # Save the new filter for later
-        self.case_map[case_label] = search_paths
+        self.case_path_map[case_label] = search_paths
 
-    def rename_case_map(self, old_name: str, new_name: str):
+    def rename_case(self, old_name: str, new_name: str):
         # Check if a case map with this name already exists
-        if old_name not in self.case_map.keys():
+        if old_name not in self.case_path_map.keys():
             raise ValueError(f"Cannot rename case map '{old_name}'; it doesn't exist!")
         # Update the backing model
         row_idx = np.argwhere(self.model.indices == old_name).flatten()[0]
         self.model.setHeaderData(row_idx, qt.Qt.Vertical, new_name, qt.Qt.EditRole)
         # Update the filter map to reflect the change
-        case_map_entry = self.case_map.pop(old_name)
-        self.case_map[new_name] = case_map_entry
+        case_map_entry = self.case_path_map.pop(old_name)
+        self.case_path_map[new_name] = case_map_entry
 
     @property
     def filters(self) -> FilterMap:
@@ -227,7 +226,7 @@ class Cohort:
         sidecar_data = {
             self.VERSION_KEY: COHORT_VERSION,
             self.CASE_PATH_KEY: {
-                k: [str(x) for x in v] for k, v in self.case_map.items()
+                k: [str(x) for x in v] for k, v in self.case_path_map.items()
             },
             self.FILTERS_KEY: self.filters,
         }
@@ -248,14 +247,14 @@ class Cohort:
         # If this is for a not-yet-created cohort...
         if not self.csv_path:
             # ... reset everything and end
-            self._case_map = {}
+            self._case_path_map = {}
             self._filters = {}
             self._model._csv_data = None
             return
         # If we're just missing the sidecar...
         elif not self.sidecar_path.exists():
             # ... just reset the relevant contents instead
-            self._case_map = {}
+            self._case_path_map = {}
             self._filters = {}
             return
         # Otherwise, use the sidecar's contents to update our values
@@ -268,7 +267,7 @@ class Cohort:
             raise ValueError(
                 f"Cannot load sidecar, '{self.CASE_PATH_KEY}' was malformed!"
             )
-        self._case_map = {k: [Path(x) for x in v] for k, v in case_data.items()}
+        self._case_path_map = {k: [Path(x) for x in v] for k, v in case_data.items()}
 
         # Update the filters
         filter_data = case_path_data.get(self.FILTERS_KEY, {})
@@ -378,7 +377,7 @@ class Cohort:
 
     def find_column_files(self, column_filters: FilterEntry) -> list[Optional[Path]]:
         result_map = {}
-        for k, v in self.case_map.items():
+        for k, v in self.case_path_map.items():
             result_map[k] = self.find_first_valid_file(v, column_filters)
         sorted_pathlist = [result_map.get(k, None) for k in self.model.indices]
         return sorted_pathlist
@@ -967,7 +966,7 @@ class CaseEditorDialog(qt.QDialog):
         searchPathLabels = qt.QLabel(_("Search Paths: "))
         searchPathList = qt.QListWidget()
         if case_id:
-            path_entries = cohort.case_map.get(case_id, [])
+            path_entries = cohort.case_path_map.get(case_id, [])
             for p in path_entries:
                 if p.is_absolute():
                     searchPathList.addItem(str(p))
@@ -1065,7 +1064,7 @@ class CaseEditorDialog(qt.QDialog):
 
         # If this is an updated case, rename it to match
         if self._reference_case:
-            self._cohort.rename_case_map(self._reference_case, label)
+            self._cohort.rename_case(self._reference_case, label)
 
         # Insert it into our cohort
-        self._cohort.set_case_map(label, search_paths)
+        self._cohort.set_case_paths(label, search_paths)
