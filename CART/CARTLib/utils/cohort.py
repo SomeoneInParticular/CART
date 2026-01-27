@@ -733,9 +733,11 @@ class CohortEditorDialog(qt.QDialog):
         def onButtonClicked(button: qt.QPushButton):
             button_role = buttonBox.buttonRole(button)
             if button_role == qt.QDialogButtonBox.RejectRole:
-                self.onCancel()
+                # Confirm the user wants to reject any changes first
+                if self.confirmReject():
+                    self.reject()
             elif button_role == qt.QDialogButtonBox.AcceptRole:
-                # Only save changes to the cohort if
+                # Only save changes to the cohort when confirmed!
                 self._cohort.save()
                 self.accept()
             else:
@@ -744,7 +746,15 @@ class CohortEditorDialog(qt.QDialog):
         buttonBox.clicked.connect(onButtonClicked)
         layout.addWidget(buttonBox)
 
-    def onCancel(self):
+    def closeEvent(self, event):
+        # Confirm that the user wants to reject any changes they made first
+        if self.confirmReject():
+            event.accept()
+        # Otherwise, boot them back
+        else:
+            event.ignore()
+
+    def confirmReject(self) -> bool:
         # If we have changed anything, confirm we want to exit first
         if self._cohort.has_changed:
             reply = qt.QMessageBox.question(
@@ -754,11 +764,9 @@ class CohortEditorDialog(qt.QDialog):
                 qt.QMessageBox.Yes | qt.QMessageBox.No,
                 qt.QMessageBox.No,
             )
-            # If the user backs out, return early and do nothing.
-            if reply != qt.QMessageBox.No:
-                return
-        # Otherwise, exit the program with a "rejection" signal
-        self.reject()
+            return reply == qt.QMessageBox.Yes
+        # Otherwise always proceed (as there's nothing to be lost)
+        return True
 
     @classmethod
     def from_paths(cls, csv_path: Path, data_path: Path):
