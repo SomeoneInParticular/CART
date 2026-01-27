@@ -756,7 +756,7 @@ class CohortEditorDialog(qt.QDialog):
                 qt.QMessageBox.No,
             )
             # If the user backs out, return early and do nothing.
-            if reply != qt.QMessageBox.Yes:
+            if reply != qt.QMessageBox.No:
                 return
         # Otherwise, exit the program with a "rejection" signal
         self.reject()
