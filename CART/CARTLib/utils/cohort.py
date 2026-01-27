@@ -573,6 +573,11 @@ class CohortTableView(qt.QTableView):
         # Otherwise, use the generator to build the menu and show it
         pos = event.pos()
         idx = self.indexAt(pos)
+
+        # If the corresponding index is invalid, end here
+        if not idx.isValid():
+            return
+
         menu = self.context_generator(idx)
 
         # Show it to the user
