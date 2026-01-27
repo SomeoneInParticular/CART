@@ -40,8 +40,10 @@ class Cohort:
 
         # Whenever the model's contents changes, mark ourselves as having changed too
         self.has_changed = False
+
         def _onModelChanged():
             self.has_changed = True
+
         self._model.dataChanged.connect(_onModelChanged)
 
         # Track the data path for later
@@ -140,9 +142,7 @@ class Cohort:
             raise ValueError(f"Cannot rename case map '{old_name}'; it doesn't exist!")
         # Update the backing model
         row_idx = np.argwhere(self.model.indices == old_name).flatten()[0]
-        self.model.setHeaderData(
-            row_idx, qt.Qt.Vertical, new_name, qt.Qt.EditRole
-        )
+        self.model.setHeaderData(row_idx, qt.Qt.Vertical, new_name, qt.Qt.EditRole)
         # Update the filter map to reflect the change
         case_map_entry = self.case_map.pop(old_name)
         self.case_map[new_name] = case_map_entry
@@ -281,10 +281,14 @@ class Cohort:
     ## GUI Elements ##
     def editorWidget(self, parent: qt.QObject = None) -> "CohortTableWidget":
         widget = CohortTableWidget(self.model, parent)
-        widget.tableView.context_generator = lambda idx: self.newContextMenu(idx, widget)
+        widget.tableView.context_generator = lambda idx: self.newContextMenu(
+            idx, widget
+        )
         return widget
 
-    def newContextMenu(self, idx: qt.QModelIndex, parent: qt.QObject = None) -> Optional[qt.QMenu]:
+    def newContextMenu(
+        self, idx: qt.QModelIndex, parent: qt.QObject = None
+    ) -> Optional[qt.QMenu]:
         # If our model isn't editable, it shouldn't have a context menu
         if not self._model.is_editable():
             return None
@@ -302,19 +306,23 @@ class Cohort:
     def addRowActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
         # Modification action
         editAction = menu.addAction(_("Modify Search Paths"))
+
         def _modifyRow():
             row_id = self.model.indices[idx.row()]
             dialog = CaseEditorDialog(self, row_id)
             dialog.exec()
+
         editAction.triggered.connect(_modifyRow)
 
     def addColumnActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
         # Modification action
         editAction = menu.addAction(_("Modify Feature Filters"))
+
         def _modifyRow():
             col_id = self.model.header[idx.column()]
             dialog = FeatureEditorDialog(self, col_id)
             dialog.exec()
+
         editAction.triggered.connect(_modifyRow)
 
     def find_first_valid_file(
@@ -545,13 +553,12 @@ class CohortTableView(qt.QTableView):
 
     Generally, however, you should use CohortTableWidget (below) instead.
     """
+
     def __init__(self):
         super().__init__()
 
         # Change the layout to be more sensible
-        self.horizontalHeader().setSectionResizeMode(
-            qt.QHeaderView.ResizeToContents
-        )
+        self.horizontalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
         self.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
         self.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
 
@@ -570,6 +577,7 @@ class CohortTableView(qt.QTableView):
 
         # Show it to the user
         menu.popup(self.viewport().mapToGlobal(pos))
+
 
 class CohortTableWidget(CSVBackedTableWidget):
     """
@@ -805,7 +813,9 @@ class FeatureEditorDialog(qt.QDialog):
         includeLabel = qt.QLabel(_("Include:"))
         includeField = qt.QLineEdit()
         if feature_name:
-            include_vals = self._cohort.filters.get(feature_name, {}).get(Cohort.FILTER_INCLUDE_KEY, [])
+            include_vals = self._cohort.filters.get(feature_name, {}).get(
+                Cohort.FILTER_INCLUDE_KEY, []
+            )
             includeField.setText(", ".join(include_vals))
         includeField.textChanged.connect(mark_changed)
         includeTooltip = _(
@@ -821,7 +831,9 @@ class FeatureEditorDialog(qt.QDialog):
         excludeLabel = qt.QLabel(_("Exclude:"))
         excludeField = qt.QLineEdit()
         if feature_name:
-            exclude_vals = self._cohort.filters.get(feature_name, {}).get(Cohort.FILTER_EXCLUDE_KEY, [])
+            exclude_vals = self._cohort.filters.get(feature_name, {}).get(
+                Cohort.FILTER_EXCLUDE_KEY, []
+            )
             excludeField.setText(", ".join(exclude_vals))
         excludeField.textChanged.connect(mark_changed)
         excludeTooltip = _(
@@ -901,9 +913,7 @@ class FeatureEditorDialog(qt.QDialog):
 
 
 class CaseEditorDialog(qt.QDialog):
-    def __init__(
-        self, cohort: Cohort, case_id: str = None, parent: qt.QObject = None
-    ):
+    def __init__(self, cohort: Cohort, case_id: str = None, parent: qt.QObject = None):
         """
         Dialog for editing (or creating) new Features within a cohort.
 
@@ -977,15 +987,18 @@ class CaseEditorDialog(qt.QDialog):
                 d = fileDialog.selectedFiles()[0]
                 d = qt.QListWidgetItem(d)
                 searchPathList.addItem(d)
+
         addButton.clicked.connect(onAddClicked)
 
         def onItemSelectionChanged():
             removeButton.setEnabled(len(searchPathList.selectedIndexes()) > 0)
+
         searchPathList.itemSelectionChanged.connect(onItemSelectionChanged)
 
         def onRemoveClicked():
             for i in searchPathList.selectedItems():
                 searchPathList.takeItem(searchPathList.row(i))
+
         removeButton.clicked.connect(onRemoveClicked)
 
         # Make them side-by-side and add them to the layout
