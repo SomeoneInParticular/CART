@@ -134,6 +134,7 @@ class Cohort:
 
         # Save the new filter for later
         self.case_path_map[case_label] = search_paths
+        self.has_changed = True
 
     def rename_case(self, old_name: str, new_name: str):
         # Check if a case map with this name already exists
@@ -145,6 +146,7 @@ class Cohort:
         # Update the filter map to reflect the change
         case_map_entry = self.case_path_map.pop(old_name)
         self.case_path_map[new_name] = case_map_entry
+        self.has_changed = True
 
     @property
     def filters(self) -> FilterMap:
@@ -190,6 +192,7 @@ class Cohort:
 
         # Save the new filter for later
         self.filters[filter_label] = filter_entry
+        self.has_changed = True
 
     def rename_filter(self, old_name: str, new_name: str):
         # Check that there's actually a filter to rename
@@ -201,6 +204,7 @@ class Cohort:
         # Update the filter map to reflect the change
         filter_map = self.filters.pop(old_name)
         self.filters[new_name] = filter_map
+        self.has_changed = True
 
     @property
     def sidecar_data(self) -> dict:
