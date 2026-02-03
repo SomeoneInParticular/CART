@@ -1,4 +1,5 @@
 from pathlib import Path
+from textwrap import dedent
 from typing import TYPE_CHECKING, Optional, Callable
 
 import ctk
@@ -162,10 +163,10 @@ class JobSetupWizard(qt.QWizard):
         self._cohortPage = _CohortWizardPage(data_hook, output_hook, self)
 
         # Add initial pages
-        self.addPage(self._dataPage)
-        self.addPage(self._cohortPage)
         self.addPage(self.introPage())
+        self.addPage(self._dataPage)
         self.addPage(self._taskPage)
+        self.addPage(self._cohortPage)
         self.addPage(self.conclusionPage())
 
     ## Page Management ##
@@ -183,6 +184,9 @@ class JobSetupWizard(qt.QWizard):
             "CART will use the information you specify here to determine what data "
             "it should use, what you would like to do to it, and where the results "
             "should be saved."
+            "\n\n"
+            "If you have any questions or concerns, please do not "
+            "hesitate to open an issue on the CART repository"
         ))
         label.setWordWrap(True)
         layout.addWidget(label)
@@ -346,11 +350,20 @@ class _TaskWizardPage(qt.QWizardPage):
 
         # Basic Attributes
         self.setTitle(_("Task Selection"))
-        layout = qt.QVBoxLayout()
+        layout = qt.QFormLayout()
         self.setLayout(layout)
 
         # Task selection
-        taskSelectionLabel = qt.QLabel(_("Please select a task for this job:"))
+        taskDescriptionText = qt.QLabel(_(
+            "The job's 'Task' determines what you want to do to your data. Examples include "
+            "managing segmentations, placing markup labels, and classifying samples."
+            "\n\n"
+            "Select a Task using the dropdown below to display its intended use, considerations for "
+            "how to use it, and any other relevant information its developer may have provided."
+        ))
+        taskDescriptionText.setWordWrap(True)
+        layout.addRow(taskDescriptionText)
+        taskSelectionLabel = qt.QLabel(_("Task: "))
         taskSelectionWidget = qt.QComboBox()
         taskSelectionWidget.addItems(list(
             CART_TASK_REGISTRY.keys()
@@ -360,12 +373,11 @@ class _TaskWizardPage(qt.QWizardPage):
         taskSelectionWidget.setCurrentIndex(-1)
         taskSelectionLabel.setBuddy(taskSelectionWidget)
         self.registerField(SELECTED_TASK_FIELD + "*", taskSelectionWidget)
-        layout.addWidget(taskSelectionLabel)
-        layout.addWidget(taskSelectionWidget)
+        layout.addRow(taskSelectionLabel, taskSelectionWidget)
 
         # Task description
         taskDescriptionWidget = qt.QTextEdit(_(
-            "Please select a task; details about the selected task will then appear here."
+            "Details about your selected task will appear here."
         ))
         # Make it fill out all available space
         taskDescriptionWidget.setSizePolicy(
@@ -398,7 +410,7 @@ class _TaskWizardPage(qt.QWizardPage):
         taskSelectionWidget.currentTextChanged.connect(onSelectedTaskChanged)
         self.taskSelectionWidget = taskSelectionWidget
         # Add it to the layout
-        layout.addWidget(taskDescriptionWidget)
+        layout.addRow(taskDescriptionWidget)
 
     @property
     def selected_task(self) -> Optional[TaskBaseClass]:
@@ -434,8 +446,26 @@ class _CohortWizardPage(qt.QWizardPage):
         layout = qt.QFormLayout()
         self.setLayout(layout)
 
+        # Wizard help for this page
+        cohortDescriptionText = qt.QLabel(
+            _(
+                "The job's 'Cohort' dictates how data in your dataset will be organized and, "
+                "by extension, iterated through. CART will load each row ('case') in this file, "
+                "one-at-a-time, prompting you to complete the Task you selected prior before "
+                "loading the next. Each column ('feature') represents a resource each case may have; "
+                "this is usually a file on your computer, such as an imaging volume, organ segmentation, "
+                "or positional label markup that should be associated with each given case."
+                "\n\n"
+                "If you do not already have a Cohort file for the dataset you wish to process, you can "
+                "select 'New' below to generate one from scratch. You can also edit an existing cohort "
+                "file by selecting it below and clicking 'Edit'."
+            )
+        )
+        cohortDescriptionText.setWordWrap(True)
+        layout.addRow(cohortDescriptionText)
+
         # Directory selection button
-        cohortFileLabel = qt.QLabel(_("Cohort File"))
+        cohortFileLabel = qt.QLabel(_("Cohort File: "))
         cohortFileSelector: qt.QWidget = ctk.ctkPathLineEdit()
         cohortFileSelector.filters = ctk.ctkPathLineEdit.Files
         cohortFileSelector.nameFilters = [
