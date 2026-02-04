@@ -7,7 +7,6 @@ from typing import Optional, TYPE_CHECKING
 import vtk
 import ctk
 import qt
-import slicer
 from slicer import vtkMRMLScalarVolumeNode
 from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
@@ -122,7 +121,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         setupWidgetsGroup.setLayout(layout)
 
         # A button to manually start (or change) a CART job
-        if GLOBAL_CONFIG_PATH.exists():
+        if self.logic.has_run_before():
             button_text = _("Start/Resume Job")
         else:
             button_text = _("Set Up CART")
@@ -140,7 +139,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     ## Connections ##
     def startButtonPressed(self):
         # If this is the first time CART has been run, ask if they want to initialize
-        if not GLOBAL_CONFIG_PATH.exists():
+        if not self.logic.has_run_before():
             self.initialSetupPrompt()
             return
         # If they haven't run a job before, ask if they want to do so
@@ -322,6 +321,10 @@ class CARTLogic(ScriptedLoadableModuleLogic):
     def register_job_config(self, job_config: JobProfileConfig):
         self.master_profile_config.register_new_job(job_config)
         self.master_profile_config.save()
+
+    def has_run_before(self):
+        # Just checks if we've defined an author before or not
+        return self.author is not None
 
     ## Task Management ##
     def load_registered_tasks(self):

@@ -831,17 +831,12 @@ class CARTConfig(DictBackedConfig):
         handled by whatever is requesting the configuration be loaded!
         """
         # If our specified configuration file doesn't exist, copy the default to make one
-        if not GLOBAL_CONFIG_PATH.exists():
-            print("No configuration file found, creating a new one!")
-            with open(DEFAULT_FILE) as cf:
-                # Load the data
-                self._backing_dict = json.load(cf)
-                # And immediately save it, creating a copy
-                self.save()
-        # Otherwise, load the configuration as-is
-        else:
+        if GLOBAL_CONFIG_PATH.exists():
             with open(self.config_path) as cf:
                 self._backing_dict = json.load(cf)
+        else:
+            # If there isn't a file, just create a blank
+            self._backing_dict = dict()
 
     def save_without_parent(self):
         """
