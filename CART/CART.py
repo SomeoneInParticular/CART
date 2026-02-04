@@ -123,7 +123,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Job Management Buttons
         # TODO
 
-
         # A button to manually start a CART job
         startButton = qt.QPushButton("Start")
         startButton.clicked.connect(self.startButtonPressed)
@@ -134,6 +133,22 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Add it to our overall GUI
         self.layout.addWidget(self.setupWidgetsGroup)
+
+        # Add the widget group for the task's GUI
+        taskWidgetsGroup = ctk.ctkCollapsibleGroupBox()
+        taskWidgetsGroup.setTitle(_("Active Job"))
+        taskWidgetsGroup.collapsed = True
+        taskWidgetsGroup.enabled = False
+        taskLayout = qt.QVBoxLayout(taskWidgetsGroup)
+
+        # Generate a dummy widget for the task to insert its widgets into
+        taskWidget = qt.QWidget(taskWidgetsGroup)
+        taskLayout.addWidget(taskWidget)
+        self.taskWidget = taskWidget
+
+        # Add it to our layout, closed initially
+        self.layout.addWidget(taskWidgetsGroup)
+        self.taskWidgetGroup = taskWidgetsGroup
 
         # Push it all to the top of the widget
         self.layout.addStretch()
@@ -194,10 +209,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         )
 
         if response == qt.QMessageBox.Yes:
-            self.logic.set_active_job(self.logic.last_job_name)
-            print(self.logic.active_job_config.backing_dict)
-        else:
-            print("-" * 100)
+            self.initJob(self.logic.last_job_name)
 
     def runInitialSetup(self):
         initSetupWizard = CARTSetupWizard(None)
@@ -215,7 +227,19 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If we got an "accept" signal, create the job config and initialize it
         if result == qt.QDialog.Accepted:
             new_config = jobSetupWizard.generate_new_config(self.logic)
-            self.logic.set_active_job(new_config.name)
+            self.initJob(new_config.name)
+
+    ## Job Management ##
+    def initJob(self, job_name: str):
+        # Initialize the job on the logic-side first
+        self.logic.set_active_job(job_name)
+
+        # Update the GUI to match
+        self.logic.init_task_gui(self.taskWidget)
+
+        # Expand the task widget's container, if any
+        self.taskWidgetGroup.collapsed = False
+        self.taskWidgetGroup.enabled = True
 
     ## View Management ##
     def cleanup(self) -> None:
@@ -245,7 +269,6 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.active_job_config: Optional[JobProfileConfig] = None
         self._data_manager: Optional[DataManager] = None
         self._task_instance: Optional[TaskBaseClass] = None
-        self._data_unit_factory: Optional[DataUnitFactory] = None
 
         # Logging
         self.logger = logging.getLogger("CARTLogic")
@@ -307,18 +330,50 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         if not job_file.exists() or not job_file.is_file():
             raise ValueError(f"Cannot set job '{job_name}' as active; its corresponding config file does not exist!")
 
-        # Unload the previous job TODO
-        print(f"Unloaded previous job")
-
-        # Initiate the new job
+        # Get and load the job's config
         job_profile = JobProfileConfig(file_path=job_file)
         job_profile.reload()
+
+        # Initialize the job's task
+        new_task_cls = CART_TASK_REGISTRY.get(job_profile.task, None)
+        if new_task_cls is None:
+            raise ValueError(
+                f"Could not load job '{job_profile.name}', "
+                f"no task of name '{job_profile.task}' has been registered."
+            )
+        # TODO: Allow user selection of this instead
+        duf = list(new_task_cls.getDataUnitFactories().values())[0]
+
+        # Initialize the data loader using the job's settings
+        data_manager = DataManager(
+            cohort_file=job_profile.cohort_path,
+            data_source=job_profile.data_path,
+            data_unit_factory=duf,
+            # TODO: Allow user configuration of this
+            cache_size=2
+        )
+
+        # Initialize the new task
+        new_task = new_task_cls(job_profile)
+
+        # Unload the previous task
+        # TODO
+
+        # Install the new task and give it its first data unit!
+        self._data_manager = data_manager
+        self._task_instance = new_task
+        self._task_instance.receive(self._data_manager.current_data_unit())
+
+        # Initialize the new task
         self.active_job_config = job_profile
         print("Job profile loaded!")
-        # TODO: Initialize the task as well
 
         # Update the config to use this as our last job
         self.master_profile_config.set_last_job(job_name)
+
+    def init_task_gui(self, containerWidget: qt.QWidget):
+        if self._task_instance:
+            self._task_instance.setup(containerWidget)
 
     def register_job_config(self, job_config: JobProfileConfig):
         self.master_profile_config.register_new_job(job_config)

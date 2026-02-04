@@ -53,6 +53,9 @@ class DataManager:
         # The data unit factory to parse case information with
         self.data_unit_factory: DataUnitFactory = data_unit_factory
 
+        # Load the data from file
+        self.load_cases()
+
     def get_cache_size(self):
         return self._get_data_unit.cache_info().maxsize
 
