@@ -1,6 +1,5 @@
 from pathlib import Path
-from textwrap import dedent
-from typing import TYPE_CHECKING, Optional, Callable
+from typing import TYPE_CHECKING, Optional
 
 import ctk
 import qt
