@@ -238,6 +238,7 @@ class JobSetupWizard(qt.QWizard):
         new_config.name = self.job_name
         new_config.data_path = self.data_path
         new_config.output_path = self.output_path
+        new_config.task = self.selected_task
         new_config.cohort_path = self.cohort_path
         new_config.save()
 
@@ -410,11 +411,16 @@ class _TaskWizardPage(qt.QWizardPage):
         layout.addRow(taskDescriptionWidget)
 
     @property
-    def selected_task(self) -> Optional[TaskBaseClass]:
+    def selected_task(self) -> Optional[str]:
         # Helper method to parse
         selected_idx = self.field(SELECTED_TASK_FIELD)
         task_name = self.taskSelectionWidget.itemText(selected_idx)
-        return CART_TASK_REGISTRY.get(task_name, None)
+        # Confirm this is a valid task before returning the result
+        task_class = CART_TASK_REGISTRY.get(task_name, None)
+        if task_class is None:
+            return None
+        else:
+            return task_name
 
     def isComplete(self):
         return self.selected_task is not None

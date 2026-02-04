@@ -506,6 +506,17 @@ class JobProfileConfig(DictBackedConfig):
         self.backing_dict[self.COHORT_FILE_KEY] = path_str
         self.has_changed = True
 
+    TASK_KEY = "task"
+
+    @property
+    def task(self) -> str:
+        return self.get_or_default(self.TASK_KEY, None)
+
+    @task.setter
+    def task(self, new_task: str):
+        self._backing_dict[self.TASK_KEY] = new_task
+        self.has_changed = True
+
     ## Abstract Methods ##
     @classmethod
     def default_config_label(cls) -> str:
