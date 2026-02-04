@@ -158,9 +158,7 @@ class JobSetupWizard(qt.QWizard):
         # Workarounds for fields not playing nicely w/ CTK widgets
         self._dataPage = _DataWizardPage(self)
         self._taskPage = _TaskWizardPage(self)
-        def data_hook(): return self.data_path
-        def output_hook(): return self.output_path
-        self._cohortPage = _CohortWizardPage(data_hook, output_hook, self)
+        self._cohortPage = _CohortWizardPage(self)
 
         # Add initial pages
         self.addPage(self.introPage())
@@ -431,8 +429,6 @@ class _CohortWizardPage(qt.QWizardPage):
     """
     def __init__(
             self,
-            data_hook: Callable[[], Path],
-            output_hook: Callable[[], Path],
             parent=None):
         """
         The data path hook should return a path containing the file a cohort editor should search
@@ -492,10 +488,11 @@ class _CohortWizardPage(qt.QWizardPage):
         ))
         def onCreateClick():
             # Create and show the creator dialog
-            data_path = data_hook()
+            data_path = self.wizard().data_path
+            output_path = self.wizard().output_path
             dialog = NewCohortDialog(data_path)
             self.mediateCohortCreation(
-                dialog, data_path, output_hook(), cohortFileSelector, cohortPreviewWidget
+                dialog, data_path, output_path, cohortFileSelector, cohortPreviewWidget
             )
 
         createNewButton.clicked.connect(onCreateClick)
@@ -509,7 +506,8 @@ class _CohortWizardPage(qt.QWizardPage):
         ))
         def onEditClick():
             # Create and show the editor dialog
-            dialog = CohortEditorDialog.from_paths(self.cohort_path, data_hook())
+            data_path = self.wizard().data_path
+            dialog = CohortEditorDialog.from_paths(self.cohort_path, data_path)
             self.mediateCohortEditor(dialog, cohortPreviewWidget)
         editCohortButton.clicked.connect(onEditClick)
         buttonLayout.addWidget(editCohortButton)
