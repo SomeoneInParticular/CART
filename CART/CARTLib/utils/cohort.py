@@ -70,7 +70,7 @@ class Cohort:
         # Generate the cohort instance, backed by this new CSV file
         cohort = cls(csv_path, data_path, use_sidecar=True)
         # Manually update its case map to match
-        cohort._case_map = case_map
+        cohort._case_path_map = case_map
         # Immediately save the sidecar as well, for parity
         cohort.save_sidecar()
 
@@ -176,7 +176,7 @@ class Cohort:
         new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
 
         # If this is a new feature, create a new column to match
-        if filter_label not in self.filters.keys():
+        if filter_label not in self.model.header:
             col_idx = self.model.columnCount()
             self.model.addColumn(col_idx, new_paths)
             # Set the header to this new label
