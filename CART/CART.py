@@ -16,7 +16,7 @@ from CARTLib.core.DataManager import DataManager
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.core.SetupWizard import CARTSetupWizard, JobSetupWizard
 from CARTLib.utils import CART_PATH, CART_VERSION
-from CARTLib.utils.config import GLOBAL_CONFIG_PATH, GLOBAL_CONFIG, JobProfileConfig, MasterProfileConfig
+from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
 
 if TYPE_CHECKING:
@@ -77,9 +77,6 @@ class CART(ScriptedLoadableModule):
 
     @staticmethod
     def init_env():
-        # Load our configuration
-        GLOBAL_CONFIG.load_from_json()
-
         # Add CARTLib to the Python Path for ease of (re-)use
         import sys
 
@@ -106,7 +103,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Start button; fallback to start CART setup if the user backs out
         self.setupWidgetsGroup: ctk.ctkCollapsibleGroupBox = None
-        self.startButton: qt.QPushButton = None
 
     def setup(self) -> None:
         """
@@ -117,24 +113,30 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Dropdown to contain setup widgets, so they can be hidden once we're done
         setupWidgetsGroup = ctk.ctkCollapsibleGroupBox()
         setupWidgetsGroup.setTitle(_("Job Setup"))
-        layout = qt.QFormLayout()
-        setupWidgetsGroup.setLayout(layout)
+        layout = qt.QVBoxLayout(setupWidgetsGroup)
 
-        # A button to manually start (or change) a CART job
-        if self.logic.has_run_before():
-            button_text = _("Start/Resume Job")
-        else:
-            button_text = _("Set Up CART")
-        startButton = qt.QPushButton(button_text)
+        # Job selection dropdown
+        jobSelectorComboBox = qt.QComboBox()
+        jobSelectorComboBox.addItems(self.logic.registered_jobs_names)
+        layout.addWidget(jobSelectorComboBox)
+
+        # Job Management Buttons
+        # TODO
+
+
+        # A button to manually start a CART job
+        startButton = qt.QPushButton("Start")
         startButton.clicked.connect(self.startButtonPressed)
         layout.addWidget(startButton)
 
         # Track everything for later
         self.setupWidgetsGroup = setupWidgetsGroup
-        self.startButton = startButton
 
         # Add it to our overall GUI
         self.layout.addWidget(self.setupWidgetsGroup)
+
+        # Push it all to the top of the widget
+        self.layout.addStretch()
 
     ## Connections ##
     def startButtonPressed(self):
