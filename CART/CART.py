@@ -2,7 +2,7 @@ import importlib
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Tuple
 
 import vtk
 import ctk
@@ -98,11 +98,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Initialize our logic instance
         self.logic: CARTLogic = CARTLogic()
 
-        # "Dummy" widget, in which the Task GUI will be placed
-        self.taskWidget: qt.QWidget = None
+        # Core widgets, which can be swapped on the fly
+        self.mainWidget: qt.QStackedWidget = None
+        self.configWidgetIndex = -1
+        self.jobWidgetIndex = -1
 
-        # Start button; fallback to start CART setup if the user backs out
-        self.setupWidgetsGroup: ctk.ctkCollapsibleGroupBox = None
+        # Widget which holds the task-specific GUI elements
+        self.taskSubWidget: qt.QWidget = None
 
     def setup(self) -> None:
         """
@@ -110,48 +112,58 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         ScriptedLoadableModuleWidget.setup(self)
 
-        # Dropdown to contain setup widgets, so they can be hidden once we're done
-        setupWidgetsGroup = ctk.ctkCollapsibleGroupBox()
-        setupWidgetsGroup.setTitle(_("Job Setup"))
-        layout = qt.QVBoxLayout(setupWidgetsGroup)
+        # The stacking widget, which will hold our sub-menus
+        mainWidget = qt.QStackedWidget(self.parent)
+
+        # Set up the configuration widget
+        configWidget = self._setupConfigurationWidget()
+        self.configWidgetIndex = mainWidget.addWidget(configWidget)
+
+        # Set up the job widget
+        jobWidget, taskWidget = self._setupJobWidget()
+        self.taskSubWidget = taskWidget
+        self.jobWidgetIndex = mainWidget.addWidget(jobWidget)
+
+        # Insert the widget into our main layout
+        self.layout.addWidget(mainWidget)
+        self.mainWidget = mainWidget
+
+        # Add a stretch to push everything to the top (seriously, why is this not default?)
+        self.layout.addStretch()
+
+    def _setupConfigurationWidget(self) -> qt.QWidget:
+        # Setup
+        mainWidget = qt.QWidget(self.parent)
+        layout = qt.QVBoxLayout(mainWidget)
 
         # Job selection dropdown
-        jobSelectorComboBox = qt.QComboBox()
+        jobSelectorComboBox = qt.QComboBox(mainWidget)
         jobSelectorComboBox.addItems(self.logic.registered_jobs_names)
         layout.addWidget(jobSelectorComboBox)
 
-        # Job Management Buttons
-        # TODO
-
-        # A button to manually start a CART job
+        # Start button, which initializes the job for the config selected
         startButton = qt.QPushButton("Start")
         startButton.clicked.connect(self.startButtonPressed)
         layout.addWidget(startButton)
 
-        # Track everything for later
-        self.setupWidgetsGroup = setupWidgetsGroup
+        # Add a stretch to push everything to the top
+        layout.addStretch()
 
-        # Add it to our overall GUI
-        self.layout.addWidget(self.setupWidgetsGroup)
+        return mainWidget
 
-        # Add the widget group for the task's GUI
-        taskWidgetsGroup = ctk.ctkCollapsibleGroupBox()
-        taskWidgetsGroup.setTitle(_("Active Job"))
-        taskWidgetsGroup.collapsed = True
-        taskWidgetsGroup.enabled = False
-        taskLayout = qt.QVBoxLayout(taskWidgetsGroup)
+    def _setupJobWidget(self) -> Tuple[qt.QWidget, qt.QWidget]:
+        # Setup
+        mainWidget = qt.QWidget(self.parent)
+        layout = qt.QVBoxLayout(mainWidget)
 
-        # Generate a dummy widget for the task to insert its widgets into
-        taskWidget = qt.QWidget(taskWidgetsGroup)
-        taskLayout.addWidget(taskWidget)
-        self.taskWidget = taskWidget
+        # Add the widget in which the task's GUI will be inserted
+        taskWidget = qt.QWidget(mainWidget)
+        layout.addWidget(taskWidget)
 
-        # Add it to our layout, closed initially
-        self.layout.addWidget(taskWidgetsGroup)
-        self.taskWidgetGroup = taskWidgetsGroup
+        # Add a stretch to push everything to the top
+        layout.addStretch()
 
-        # Push it all to the top of the widget
-        self.layout.addStretch()
+        return mainWidget, taskWidget
 
     ## Connections ##
     def startButtonPressed(self):
@@ -235,11 +247,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic.set_active_job(job_name)
 
         # Update the GUI to match
-        self.logic.init_task_gui(self.taskWidget)
+        self.logic.init_task_gui(self.taskSubWidget)
 
         # Expand the task widget's container, if any
-        self.taskWidgetGroup.collapsed = False
-        self.taskWidgetGroup.enabled = True
+        self.mainWidget.setCurrentIndex(self.jobWidgetIndex)
 
     ## View Management ##
     def cleanup(self) -> None:
@@ -370,10 +381,6 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Update the config to use this as our last job
         self.master_profile_config.set_last_job(job_name)
-
-    def init_task_gui(self, containerWidget: qt.QWidget):
-        if self._task_instance:
-            self._task_instance.setup(containerWidget)
 
     def register_job_config(self, job_config: JobProfileConfig):
         self.master_profile_config.register_new_job(job_config)
@@ -508,6 +515,31 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Save the config immediately to preserve the changes
         self.master_profile_config.save()
+
+    def init_task_gui(self, containerWidget: qt.QWidget):
+        # Return early (with a message) if there's no task to use
+        if self._task_instance is None:
+            self.logger.warning(
+                f"Tried to initialize a task's GUI before the task was created!"
+            )
+            return
+
+        # Initialize the task's GUI itself
+        self._task_instance.setup(containerWidget)
+
+        # Apply the current data-unit's layout to the Slicer GUI
+        self.refresh_layout()
+
+    ## Case Management ##
+    def refresh_layout(self):
+        if self._data_manager is None:
+            self.logger.warning(
+                f"No data manager current exists, cannot apply a data unit layout!"
+            )
+            return
+
+        # Apply the layout of the current data unit
+        self._data_manager.current_data_unit().layout_handler.apply_layout()
 
     ## Config Management ##
     def save_master_config(self):
