@@ -4,7 +4,7 @@ from typing import Optional
 import qt
 import slicer
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-from CARTLib.utils.config import ProfileConfig
+from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import showSuccessPrompt
 from slicer.i18n import tr as _
@@ -19,7 +19,7 @@ from RapidMarkupUnit import RapidMarkupUnit
 class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
     README_PATH = Path(__file__).parent / "README.md"
 
-    def __init__(self, profile: ProfileConfig):
+    def __init__(self, profile: JobProfileConfig):
         super().__init__(profile)
 
         # GUI and data

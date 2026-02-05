@@ -10,7 +10,7 @@ import slicer
 import vtk
 
 from CARTLib.core.DataUnitBase import DataUnitBase
-from CARTLib.utils.config import ProfileConfig
+from CARTLib.utils.config import MasterProfileConfig
 from CARTLib.core.LayoutManagement import Orientation, LayoutHandler
 
 
@@ -298,7 +298,7 @@ def save_markups_to_nifti(
         markup_node: "vtk.vtkMRMLMarkupsFiducialNode",
         reference_volume: "vtk.vtkMRMLScalarVolumeNode",
         path: Path,
-        profile: Optional[ProfileConfig] = None):
+        profile: Optional[MasterProfileConfig] = None):
     """
     Saves a set of markup labels to a NiFTI file.
 
@@ -375,8 +375,8 @@ def save_markups_to_nifti(
         if profile:
             sidecar_data["GeneratedBy"] = [{
                 "Name": "CART",
-                "Profile": profile.label,
-                "Role": profile.role,
+                "Author": profile.author,
+                "Position": profile.position,
                 "Date": creation_time
             }]
         # Otherwise, just note that this was created by CART

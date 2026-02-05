@@ -4,7 +4,7 @@ from enum import Enum
 from functools import cached_property
 from pathlib import Path
 
-from CARTLib.utils.config import ProfileConfig
+from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.data import save_markups_to_json, save_markups_to_nifti
 
 from RapidMarkupUnit import RapidMarkupUnit
@@ -58,7 +58,7 @@ class RapidMarkupOutputManager:
 
     ## PROPERTIES ##
     @property
-    def profile_config(self) -> ProfileConfig:
+    def profile_config(self) -> JobProfileConfig:
         """
         Wrapper for accessing the parent (profile) config; allows us to
         suppress the "incorrect type" warning once, rather than everywhere

@@ -4,7 +4,7 @@ from datetime import datetime
 from functools import cached_property
 from pathlib import Path
 
-from CARTLib.utils.config import ProfileConfig, JobProfileConfig
+from CARTLib.utils.config import JobProfileConfig
 
 from GenericClassificationUnit import GenericClassificationUnit
 

@@ -3,7 +3,6 @@ import qt
 from CARTLib.utils.config import (
     DictBackedConfig,
     ConfigDialog,
-    ProfileConfig,
     JobProfileConfig,
 )
 
