@@ -7,7 +7,7 @@ import ctk
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.examples.GenericClassification.GenericClassificationOutputManager import GenericClassificationOutputManager
-from CARTLib.utils.config import ProfileConfig
+from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import showSuccessPrompt
 
@@ -28,7 +28,7 @@ class GenericClassificationTask(TaskBaseClass[GenericClassificationUnit]):
     """
     README_PATH = Path(__file__).parent / "README.md"
 
-    def __init__(self, profile: ProfileConfig):
+    def __init__(self, profile: JobProfileConfig):
         super().__init__(profile)
 
         # Track the active GUI instance, if any
@@ -57,16 +57,9 @@ class GenericClassificationTask(TaskBaseClass[GenericClassificationUnit]):
 
     @cached_property
     def output_manager(self):
-        return GenericClassificationOutputManager(
-            self.profile, self.output_path
-        )
+        return GenericClassificationOutputManager(self.profile)
 
     def setup(self, container: qt.QWidget):
-        # Prompt for an output path
-        self.output_path = self._promptForOutput()
-        if not self.output_path:
-            raise ValueError("No output path provided, terminating.")
-
         # Try to retrieve the last-used class map from the metadata
         self.class_map = self.output_manager.read_metadata()
 
@@ -74,65 +67,6 @@ class GenericClassificationTask(TaskBaseClass[GenericClassificationUnit]):
         self.gui = GenericClassificationGUI(self)
         gui_layout = self.gui.setup()
         container.setLayout(gui_layout)
-
-    def _promptForOutput(self):
-        """
-        Prompt the user to provide an output path
-        """
-        prompt = qt.QDialog()
-        prompt.setWindowTitle("Select Output Path")
-
-        # Create a layout for the dialog
-        layout = qt.QVBoxLayout()
-        prompt.setLayout(layout)
-
-        # Instruction label
-        instructionLabel = qt.QLabel(
-            "Specify where this task should save its results:"
-        )
-        instructionLabel.setWordWrap(True)
-        layout.addWidget(instructionLabel)
-
-        # Add a path-line edit button, forcing it to select only directories
-        pathLineEdit = ctk.ctkPathLineEdit()
-        pathLineEdit.setToolTip(
-            "Specify file path for classification results."
-        )
-        pathLineEdit.filters = ctk.ctkPathLineEdit.Dirs
-        layout.addWidget(pathLineEdit)
-
-        # Add a "confirm" button
-        buttonBox = qt.QDialogButtonBox()
-        buttonBox.setStandardButtons(
-            qt.QDialogButtonBox.Ok
-        )
-        def onClick(_):
-            # If not path has been provided, encourage the user to select one
-            if pathLineEdit.currentPath.strip() is "":
-                msg = qt.QMessageBox()
-                msg.setWindowTitle("Missing Path")
-                msg.setText("Please provide a valid output path.")
-                msg.setStandardButtons(
-                    qt.QMessageBox.Ok
-                )
-                msg.exec()
-            else:
-                prompt.accept()
-        buttonBox.clicked.connect(onClick)
-        layout.addWidget(buttonBox)
-
-        # Make the prompt a bit wider
-        prompt.resize(300, prompt.minimumHeight)
-
-        # Show the prompt
-        result = prompt.exec()
-
-        # If the result is an "accept" signal, try to return the resulting path
-        if result:
-            return Path(pathLineEdit.currentPath)
-
-        # Otherwise, return none
-        return None
 
     def receive(self, data_unit: GenericClassificationUnit):
         # Track the data unit for later

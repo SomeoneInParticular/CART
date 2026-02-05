@@ -8,7 +8,7 @@ import slicer
 from slicer.i18n import tr as _
 
 from CARTLib.core.DataUnitBase import DataUnitBase
-from CARTLib.utils.config import ProfileConfig
+from CARTLib.utils.config import JobProfileConfig
 
 # Generic type hint class for anything which is a subclass of DataUnitBase
 D = TypeVar("D", bound=DataUnitBase)
@@ -38,7 +38,7 @@ class TaskBaseClass(ABC, Generic[D]):
     with debugging, but (like all type hints) is not enforced by us or Python
     itself.!
     """
-    def __init__(self, profile: ProfileConfig):
+    def __init__(self, profile: JobProfileConfig):
         """
         Basic constructor.
 
@@ -50,7 +50,7 @@ class TaskBaseClass(ABC, Generic[D]):
         """
         # Track the profile for later; we often want to stratify our task by
         # the profile that is running it.
-        self.profile: ProfileConfig = profile
+        self.profile: JobProfileConfig = profile
 
         # Create a logger to track the goings-on of this task.
         self.logger = logging.getLogger(f"{__class__.__name__}")
