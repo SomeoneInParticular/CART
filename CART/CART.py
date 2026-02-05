@@ -2,7 +2,7 @@ import importlib
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING, Tuple
+from typing import Optional, TYPE_CHECKING, Tuple, Callable
 
 import vtk
 import ctk
@@ -106,6 +106,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Widget which holds the task-specific GUI elements
         self.taskSubWidget: qt.QWidget = None
 
+        # List of things to do when the job is changed
+        # TODO: Make this a proper QT signal, or something similar
+        self.onJobChanged: list[Callable[[str], None]] = list()
+
+        # List of things to do when the case is changed
+        # TODO: Make this a proper QT signal, or something similar
+        self.onCaseChanged: list[Callable[[int], None]] = list()
+
+        # List of keyboard shortcuts to be installed/uninstalled within this widget
+        self.keyboardShortcuts = []
+
     def setup(self) -> None:
         """
         Called when the user opens the CART module within Slicer for the first time.
@@ -156,6 +167,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         mainWidget = qt.QWidget(self.parent)
         layout = qt.QVBoxLayout(mainWidget)
 
+        # Add the iteration panel
+        caseSelectionPanel = self._caseSelectionPanel()
+        layout.addWidget(caseSelectionPanel)
+
         # Add the widget in which the task's GUI will be inserted
         taskWidget = qt.QWidget(mainWidget)
         layout.addWidget(taskWidget)
@@ -164,6 +179,65 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         layout.addStretch()
 
         return mainWidget, taskWidget
+
+    def _caseSelectionPanel(self) -> qt.QWidget:
+        # Setup
+        buttonPanel = qt.QWidget(None)
+        layout = qt.QHBoxLayout(buttonPanel)
+
+        # Define each of the buttons
+        previousIncompleteButton = qt.QToolButton()
+        previousIncompleteButton.setText("<<")
+        previousIncompleteButton.setToolTip(_("Jump to the Previous Incomplete Case"))
+        previousIncompleteButton.clicked.connect(self.previousIncompleteCasePressed)
+        self.onCaseChanged.append(
+            lambda __: previousIncompleteButton.setEnabled(self.logic.has_previous_case())
+        )
+
+        previousButton = qt.QToolButton()
+        previousButton.setText("<")
+        previousButton.setToolTip(_("Switch to the Previous Case"))
+        previousButton.clicked.connect(self.previousCasePressed)
+        self.onCaseChanged.append(
+            lambda __: previousButton.setEnabled(self.logic.has_previous_case())
+        )
+
+        nextButton = qt.QToolButton()
+        nextButton.setText(">")
+        nextButton.setToolTip(_("Switch to the Next Case"))
+        nextButton.clicked.connect(self.nextCasePressed)
+        self.onCaseChanged.append(
+            lambda __: nextButton.setEnabled(self.logic.has_next_case())
+        )
+
+        nextIncompleteButton = qt.QToolButton()
+        nextIncompleteButton.setText(">>")
+        nextIncompleteButton.setToolTip(_("Jump to the Next Incomplete Case"))
+        nextIncompleteButton.clicked.connect(self.nextIncompleteCasePressed)
+        self.onCaseChanged.append(
+            lambda __: nextIncompleteButton.setEnabled(self.logic.has_next_case())
+        )
+
+        # Define a selector/viewer for the current case
+        caseSelector = qt.QComboBox(None)
+        def updateCaseOptions(__):
+            caseSelector.clear()
+            caseSelector.addItems(self.logic.data_manager.valid_uids)
+        self.onJobChanged.append(updateCaseOptions)
+        def syncCaseSelector(idx: int):
+            caseSelector.setCurrentIndex(idx)
+        self.onCaseChanged.append(syncCaseSelector)
+        caseSelector.currentIndexChanged.connect(self.selectCaseAt)
+
+        # Add them each to the panel
+        layout.addWidget(previousIncompleteButton, 1)
+        layout.addWidget(previousButton, 1)
+        layout.addWidget(caseSelector, 10)
+        layout.addWidget(nextButton, 1)
+        layout.addWidget(nextIncompleteButton, 1)
+
+        # Return the result
+        return buttonPanel
 
     ## Connections ##
     def startButtonPressed(self):
@@ -178,6 +252,62 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Otherwise, ask if they want to resume their last job
         else:
             self.resumePrompt()
+
+    def nextCasePressed(self):
+        # Request the logic switch to the next case
+        self.logic.next_case()
+
+        # Refresh the viewed layout of CART
+        self.logic.refresh_layout()
+
+        # Emit our case-changed signal
+        self.caseChanged()
+
+    def nextIncompleteCasePressed(self):
+        # Request the logic switch to the next case
+        self.logic.next_incomplete_case()
+
+        # Refresh the viewed layout of CART
+        self.logic.refresh_layout()
+
+        # Emit our case-changed signal
+        self.caseChanged()
+
+    def previousCasePressed(self):
+        # Request the logic switch to the next case
+        self.logic.previous_case()
+
+        # Refresh the viewed layout of CART
+        self.logic.refresh_layout()
+
+        # Emit our case-changed signal
+        self.caseChanged()
+
+    def previousIncompleteCasePressed(self):
+        # Request the logic switch to the next case
+        self.logic.previous_incomplete_case()
+
+        # Refresh the viewed layout of CART
+        self.logic.refresh_layout()
+
+        # Emit our case-changed signal
+        self.caseChanged()
+
+    def selectCaseAt(self, idx):
+        # Request the logic switch to the next case
+        self.logic.select_case(idx)
+
+        # Refresh the viewed layout of CART
+        self.logic.refresh_layout()
+
+        # Emit our case-changed signal
+        self.caseChanged()
+
+    def caseChanged(self):
+        # Scuffed, but this doesn't crash at least!
+        case_idx = self.logic.data_manager.current_case_index
+        for f in self.onCaseChanged:
+            f(case_idx)
 
     ## User Prompts ##
     def initialSetupPrompt(self):
@@ -252,6 +382,18 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Expand the task widget's container, if any
         self.mainWidget.setCurrentIndex(self.jobWidgetIndex)
 
+        # "Emit" the job-changed signal
+        self.jobChanged()
+
+        # "Emit" the case-changed signal
+        self.caseChanged()
+
+    def jobChanged(self):
+        # I love QT signals not working!
+        job_name = self.logic.active_job_config.name
+        for f in self.onJobChanged:
+            f(job_name)
+
     ## View Management ##
     def cleanup(self) -> None:
         """
@@ -306,6 +448,11 @@ class CARTLogic(ScriptedLoadableModuleLogic):
     @position.setter
     def position(self, new_position: str):
         self.master_profile_config.position = new_position
+
+    @property
+    def data_manager(self):
+        # Get only to prevent horrific bugs
+        return self._data_manager
 
     ## Job Management ##
     @property
@@ -531,6 +678,57 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         self.refresh_layout()
 
     ## Case Management ##
+    def has_next_case(self):
+        if self._data_manager is None:
+            return False
+        return self._data_manager.has_next_case()
+
+    def next_case(self):
+        if self._data_manager and self._data_manager.has_next_case():
+            # If this was somehow done without an active task, return
+            if self._task_instance is None:
+                return
+            # Iterate to the next data unit and update everything
+            new_unit = self._data_manager.next()
+            self._task_instance.receive(new_unit)
+
+    def next_incomplete_case(self):
+        if self._data_manager and self._data_manager.has_next_case():
+            # If this was somehow done without an active task, return
+            if self._task_instance is None:
+                return
+            # Iterate to the next incomplete data unit and update everything
+            new_unit = self._data_manager.next_incomplete(self._task_instance)
+            self._task_instance.receive(new_unit)
+
+    def has_previous_case(self):
+        if self._data_manager is None:
+            return False
+        return self._data_manager.has_previous_case()
+
+    def previous_case(self):
+        if self._data_manager and self._data_manager.has_previous_case():
+            # If this was somehow done without an active task, return
+            if self._task_instance is None:
+                return
+            # Iterate to the prior data unit and update everything
+            new_unit = self._data_manager.previous()
+            self._task_instance.receive(new_unit)
+
+    def previous_incomplete_case(self):
+        if self._data_manager and self._data_manager.has_previous_case():
+            # If this was somehow done without an active task, return
+            if self._task_instance is None:
+                return
+            # Iterate to the prior incomplete data unit and update everything
+            new_unit = self._data_manager.previous_incomplete(self._task_instance)
+            self._task_instance.receive(new_unit)
+
+    def select_case(self, idx: int):
+        if self._data_manager and self._task_instance:
+            new_unit = self._data_manager.select_unit_at(idx)
+            self._task_instance.receive(new_unit)
+
     def refresh_layout(self):
         if self._data_manager is None:
             self.logger.warning(
