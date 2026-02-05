@@ -225,11 +225,15 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Define a selector/viewer for the current case
         caseSelector = qt.QComboBox(None)
         def updateCaseOptions(__):
+            caseSelector.blockSignals(True)
             caseSelector.clear()
             caseSelector.addItems(self.logic.data_manager.valid_uids)
+            caseSelector.blockSignals(False)
         self.onJobChanged.append(updateCaseOptions)
         def syncCaseSelector(idx: int):
+            caseSelector.blockSignals(True)
             caseSelector.setCurrentIndex(idx)
+            caseSelector.blockSignals(False)
         self.onCaseChanged.append(syncCaseSelector)
         caseSelector.currentIndexChanged.connect(self.selectCaseAt)
 
@@ -686,6 +690,8 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             if self._task_instance is None:
                 return
             # Iterate to the next data unit and update everything
+            # TODO: Restore configuration option for this
+            self._task_instance.save()
             new_unit = self._data_manager.next()
             self._task_instance.receive(new_unit)
 
@@ -695,6 +701,8 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             if self._task_instance is None:
                 return
             # Iterate to the next incomplete data unit and update everything
+            # TODO: Restore configuration option for this
+            self._task_instance.save()
             new_unit = self._data_manager.next_incomplete(self._task_instance)
             self._task_instance.receive(new_unit)
 
@@ -709,6 +717,8 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             if self._task_instance is None:
                 return
             # Iterate to the prior data unit and update everything
+            # TODO: Restore configuration option for this
+            self._task_instance.save()
             new_unit = self._data_manager.previous()
             self._task_instance.receive(new_unit)
 
@@ -718,11 +728,15 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             if self._task_instance is None:
                 return
             # Iterate to the prior incomplete data unit and update everything
+            # TODO: Restore configuration option for this
+            self._task_instance.save()
             new_unit = self._data_manager.previous_incomplete(self._task_instance)
             self._task_instance.receive(new_unit)
 
     def select_case(self, idx: int):
         if self._data_manager and self._task_instance:
+            # TODO: Restore configuration option for this
+            self._task_instance.save()
             new_unit = self._data_manager.select_unit_at(idx)
             self._task_instance.receive(new_unit)
 
