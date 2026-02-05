@@ -373,6 +373,7 @@ class MasterProfileConfig(DictBackedConfig):
                 continue
             new_registry[k] = v
         self.backing_dict[self.REGISTERED_JOB_KEY] = new_registry
+        self.has_changed = True
 
     VERSION_KEY = "version"
 

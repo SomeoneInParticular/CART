@@ -106,6 +106,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Widget which holds the task-specific GUI elements
         self.taskSubWidget: qt.QWidget = None
 
+        # List of things to do when the list of registered jobs changes
+        # TODO: Make this a proper QT signal, or something similar
+        self.onJobListChanged: list[Callable[[], None]] = list()
+
         # List of things to do when the job is changed
         # TODO: Make this a proper QT signal, or something similar
         self.onJobChanged: list[Callable[[str], None]] = list()
@@ -147,18 +151,85 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         mainWidget = qt.QWidget(self.parent)
         layout = qt.QVBoxLayout(mainWidget)
 
-        # Job selection dropdown
-        jobSelectorComboBox = qt.QComboBox(mainWidget)
-        jobSelectorComboBox.addItems(self.logic.registered_jobs_names)
-        layout.addWidget(jobSelectorComboBox)
-
-        # Start button, which initializes the job for the config selected
-        startButton = qt.QPushButton("Start")
-        startButton.clicked.connect(self.startButtonPressed)
-        layout.addWidget(startButton)
+        # Button panel for creating, editing, or deleting jobs
+        jobManagementPanel = self._jobManagementPanel()
+        layout.addWidget(jobManagementPanel)
 
         # Add a stretch to push everything to the top
         layout.addStretch()
+
+        return mainWidget
+
+    def _jobManagementPanel(self) -> qt.QWidget:
+        # Setup
+        mainWidget = qt.QWidget(None)
+        layout = qt.QVBoxLayout(mainWidget)
+
+        # Job selection dropdown
+        jobSelectorComboBox = qt.QComboBox(None)
+        def updateJobSelector():
+            jobSelectorComboBox.clear()
+            jobSelectorComboBox.addItems(self.logic.registered_jobs_names)
+            if len(self.logic.registered_jobs_names) > 0:
+                jobSelectorComboBox.setEnabled(True)
+                jobSelectorComboBox.setCurrentIndex(0)
+            else:
+                jobSelectorComboBox.setEnabled(False)
+        updateJobSelector()
+        self.onJobListChanged.append(updateJobSelector)
+
+        layout.addWidget(jobSelectorComboBox)
+
+        # Button panel for Job editing operations
+        buttonPanel = qt.QWidget(None)
+        buttonPanelLayout = qt.QHBoxLayout(buttonPanel)
+        layout.addWidget(buttonPanel)
+
+        # "New" button
+        newButton = qt.QPushButton(_("New"))
+        newButton.setToolTip(_("Create a new Job"))
+        newButton.clicked.connect(
+            lambda: self.runNewJobSetup()
+        )
+        buttonPanelLayout.addWidget(newButton)
+
+        # "Edit" button
+        editButton = qt.QPushButton(_("Edit"))
+        editButton.setToolTip(_("Edit the Job's configuration"))
+        def onJobEdit():
+            # TODO
+            msg = qt.QMessageBox()
+            msg.setWindowTitle("WIP")
+            msg.setText(_("This feature is currently WIP; sorry!"))
+            msg.exec()
+        editButton.clicked.connect(onJobEdit)
+        buttonPanelLayout.addWidget(editButton)
+        self.onJobListChanged.append(
+            lambda: editButton.setEnabled(jobSelectorComboBox.isEnabled())
+        )
+
+        # "Delete" button
+        deleteButton = qt.QPushButton(_("Delete"))
+        deleteButton.setToolTip(_("Delete the Job configuration"))
+        def onJobDelete():
+            self.logic.delete_job_config(jobSelectorComboBox.currentText)
+            self.jobListChanged()
+        deleteButton.clicked.connect(onJobDelete)
+        buttonPanelLayout.addWidget(deleteButton)
+        self.onJobListChanged.append(
+            lambda: deleteButton.setEnabled(jobSelectorComboBox.isEnabled())
+        )
+
+        # Start button; initializes the job, or walks the user through job setup if there isn't one
+        startButton = qt.QPushButton("Start")
+        startButton.setToolTip(_("Start CART!"))
+        def onStartClicked():
+            if jobSelectorComboBox.isEnabled():
+                self.start(jobSelectorComboBox.currentText)
+            else:
+                self.start()
+        startButton.clicked.connect(onStartClicked)
+        layout.addWidget(startButton)
 
         return mainWidget
 
@@ -256,18 +327,20 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         return layoutPanel
 
     ## Connections ##
-    def startButtonPressed(self):
+    def start(self, job_name= None):
         # If this is the first time CART has been run, ask if they want to initialize
         if not self.logic.has_run_before():
             self.initialSetupPrompt()
-            return
         # If they haven't run a job before, ask if they want to do so
-        elif self.logic.last_job_path is None or not self.logic.last_job_path.exists():
+        elif job_name is None:
             self.jobSetupPrompt()
-            return
+        # If the job is corrupted (somehow), have them re-build it
+        elif self.logic.registered_jobs[job_name] is None:
+            # TODO: Make a custom prompt for this
+            self.jobSetupPrompt()
         # Otherwise, ask if they want to resume their last job
         else:
-            self.resumePrompt()
+            self.initJob(job_name)
 
     def nextCasePressed(self):
         # Request the logic switch to the next case
@@ -344,19 +417,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if response == qt.QMessageBox.Yes:
             self.runNewJobSetup()
 
-    def resumePrompt(self):
-        # noinspection PyTypeChecker
-        response = qt.QMessageBox.question(
-            None,
-            _("Resume?"),
-            _("Would you like to resume the last job you ran within CART?"),
-            qt.QMessageBox.Yes | qt.QMessageBox.No,
-            qt.QMessageBox.Yes
-        )
-
-        if response == qt.QMessageBox.Yes:
-            self.initJob(self.logic.last_job_name)
-
     def runInitialSetup(self):
         initSetupWizard = CARTSetupWizard(None)
         result = initSetupWizard.exec()
@@ -374,6 +434,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if result == qt.QDialog.Accepted:
             new_config = jobSetupWizard.generate_new_config(self.logic)
             self.initJob(new_config.name)
+            self.jobListChanged()
 
     ## Job Management ##
     def initJob(self, job_name: str):
@@ -391,6 +452,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # "Emit" the case-changed signal
         self.caseChanged()
+
+    def jobListChanged(self):
+        # QT!!!!!!!!!!!!!!!
+        for f in self.onJobListChanged:
+            f()
 
     def jobChanged(self):
         # I love QT signals not working!
@@ -469,16 +535,15 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Shortcut function for easy reference.
         return list(self.master_profile_config.registered_jobs.keys())
 
-    @property
-    def last_job_name(self):
-        return self.master_profile_config.last_job[0]
-
-    @property
-    def last_job_path(self) -> Optional[Path]:
-        if self.master_profile_config.last_job is None:
-            return None
-        else:
-            return Path(self.master_profile_config.last_job[1])
+    def delete_job_config(self, job_name: str):
+        # Remove the job entry from our registered jobs
+        job_path = self.registered_jobs.pop(job_name, None)
+        # If there was a corresponding job w/ a valid config path, delete it too
+        if job_path and (job_path := Path(job_path)).exists():
+            job_path.unlink()
+        # Save our master config to preserve the change
+        self.master_profile_config.has_changed = True
+        self.master_profile_config.save()
 
     def set_active_job(self, job_name: str):
         """
@@ -532,6 +597,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Update the config to use this as our last job
         self.master_profile_config.set_last_job(job_name)
+        self.master_profile_config.save()
 
     def register_job_config(self, job_config: JobProfileConfig):
         self.master_profile_config.register_new_job(job_config)
