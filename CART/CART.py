@@ -5,7 +5,10 @@ from pathlib import Path
 from typing import Optional, TYPE_CHECKING, Tuple, Callable
 
 import vtk
+from numpy.f2py.crackfortran import previous_context
+
 import qt
+import slicer.util
 from CARTLib.core.LayoutManagement import OrientationButtonArrayWidget
 from slicer import vtkMRMLScalarVolumeNode
 from slicer.ScriptedLoadableModule import *
@@ -499,6 +502,28 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         for f in self.onJobChanged:
             f(job_name)
 
+    ## Keyboard Shortcuts ##
+    def installKeyboardShortcuts(self):
+        # Next/Previous Case
+        nextShortcut = qt.QShortcut(slicer.util.mainWindow())
+        nextShortcut.setKey(qt.QKeySequence(qt.QKeySequence.MoveToNextPage))
+        nextShortcut.activated.connect(
+            self.nextCasePressed
+        )
+        self.keyboardShortcuts.append(nextShortcut)
+
+        previousShortcut = qt.QShortcut(slicer.util.mainWindow())
+        previousShortcut.setKey(qt.QKeySequence(qt.QKeySequence.MoveToPreviousPage))
+        previousShortcut.activated.connect(
+            self.previousCasePressed
+        )
+
+    def uninstallKeyboardShortcuts(self):
+        for kbs in self.keyboardShortcuts:
+            kbs.activated.disconnect()
+            kbs.setParent(None)
+        self.keyboardShortcuts = []
+
     ## View Management ##
     def cleanup(self) -> None:
         """
@@ -510,9 +535,15 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Delegate to our logic to have tasks properly update
         self.logic.enter()
 
+        # Install our keyboard shortcuts
+        self.installKeyboardShortcuts()
+
     def exit(self):
         # Delegate to our logic to have tasks properly update
         self.logic.exit()
+
+        # Remove our keyboard shortcuts
+        self.uninstallKeyboardShortcuts()
 
 
 #
