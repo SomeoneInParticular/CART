@@ -175,7 +175,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 jobSelectorComboBox.setCurrentIndex(0)
             else:
                 jobSelectorComboBox.setEnabled(False)
-        updateJobSelector()
         self.onJobListChanged.append(updateJobSelector)
 
         layout.addWidget(jobSelectorComboBox)
@@ -230,6 +229,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 self.start()
         startButton.clicked.connect(onStartClicked)
         layout.addWidget(startButton)
+
+        # "Emit" our signal to sync everything up
+        self.jobListChanged()
 
         return mainWidget
 
