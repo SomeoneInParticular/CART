@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Optional, TYPE_CHECKING, Tuple, Callable
 
 import vtk
-from numpy.f2py.crackfortran import previous_context
 
 import qt
 import slicer.util
