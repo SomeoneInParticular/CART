@@ -308,7 +308,7 @@ class Cohort:
 
     def addRowActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
         # Modification action
-        editAction = menu.addAction(_("Modify Search Paths"))
+        editAction = menu.addAction(_("Modify Case"))
 
         def _modifyRow():
             row_id = self.model.indices[idx.row()]
@@ -319,7 +319,7 @@ class Cohort:
 
     def addColumnActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
         # Modification action
-        editAction = menu.addAction(_("Modify Feature Filters"))
+        editAction = menu.addAction(_("Modify Feature"))
 
         def _modifyRow():
             col_id = self.model.header[idx.column()]
@@ -532,6 +532,21 @@ class CohortTableModel(CSVBackedTableModel):
         data = self._csv_data[1:, 0]
         return data
 
+    def data(self, index: qt.QModelIndex, role=qt.Qt.DisplayRole):
+        # If this is a tooltip role, add the corresponding tooltip
+        if role == qt.Qt.ToolTipRole and self.is_editable():
+            row_name = self.indices[index.row()]
+            col_name = self.header[index.column()]
+            return _(
+                "Double-click to manually set the value of this cell.\n"
+                "Right click to edit the settings for the entire case "
+                f"({row_name}) or feature ({col_name});\n"
+                "This will update ALL cells for that row/column!"
+            )
+        # Otherwise, delegate to the superclass
+        return super().data(index, role)
+
+
     def headerData(self, section: int, orientation: qt.Qt.Orientation, role: int = ...):
         # Note; "section" -> column for Horizontal, row for Vertical
         if role == qt.Qt.DisplayRole:
@@ -702,6 +717,13 @@ class CohortEditorDialog(qt.QDialog):
 
         # Add Case (Row) + Add Feature (Column) buttons
         newCaseButton = qt.QPushButton(_("New Case"))
+        newCaseButton.setToolTip(
+            _(
+                "Add a new case (row) to the cohort. All features (columns) "
+                "will be automatically populated with corresponding files "
+                "wherever possible."
+            )
+        )
 
         def onNewCaseClicked():
             dialog = CaseEditorDialog(self._cohort)
@@ -713,6 +735,13 @@ class CohortEditorDialog(qt.QDialog):
         newCaseButton.clicked.connect(onNewCaseClicked)
 
         newFeatureButton = qt.QPushButton(_("New Feature"))
+        newFeatureButton.setToolTip(
+            _(
+                "Add a new feature (column) to the cohort. All cases (rows) "
+                "will be automatically populated with corresponding files "
+                "wherever possible"
+            )
+        )
 
         def onNewFeatureClicked():
             dialog = FeatureEditorDialog(self._cohort)
