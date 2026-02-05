@@ -70,7 +70,7 @@ class RapidMarkupOutputManager:
     @property
     def profile_label(self) -> str:
         # Simple alias to sidestep a common argument chain
-        return self.profile_config.label
+        return self.profile_config.name
 
     @property
     def output_dir(self) -> Path:

@@ -30,13 +30,13 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         self.markups: list[tuple[str, Optional[str]]] = []
         self.untracked_markups: dict[str, list[str]] = {}
 
-        # Output management
-        self._output_format: Optional[RapidMarkupOutputManager.OutputFormat] = None
-        self._output_dir: Optional[Path] = None
-        self._output_manager: Optional[RapidMarkupOutputManager] = None
-
         # Config management
         self.config = RapidMarkupConfig(parent_config=self.profile)
+
+        # Output management
+        self._output_manager: RapidMarkupOutputManager = RapidMarkupOutputManager(
+            self.config, output_dir=self.output_dir
+        )
 
     @classmethod
     def description(cls):
@@ -45,31 +45,6 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
 
     def setup(self, container: qt.QWidget) -> None:
         print(f"Running {self.__class__.__name__} setup!")
-
-        if self.config.last_used_output and self.config.last_used_markups:
-            if slicer.util.confirmYesNoDisplay(
-                "A previous run of this task was found; would you like to load it?"
-            ):
-                self.markups = [
-                    (l, None) for l in self.config.last_used_markups
-                ]
-                self.output_dir = self.config.last_used_output
-
-        if self.output_dir is None:
-            # Prompt the user with the setup GUI
-            prompt = RapidMarkupSetupPrompt(self)
-            setup_successful = prompt.exec()
-
-            # If the setup failed, error out to prevent further task init
-            if not setup_successful:
-                raise AssertionError(
-                    f"Failed to set up for {self.__class__.__name__}")
-
-            self.output_dir = prompt.get_output()
-
-            # If the user still didn't provide an output, end here
-            if self.output_dir is None:
-                raise ValueError("Cannot initialize task without an output directory!")
 
         # Initialize our GUI
         self.gui = RapidMarkupGUI(self)
@@ -97,26 +72,7 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
 
     @property
     def output_dir(self) -> Path:
-        return self._output_dir
-
-    @output_dir.setter
-    def output_dir(self, new_path: Path):
-        """
-        This setter handles a few things:
-          * Ensures the directory is valid before overwriting it
-          * Invalidates relevant cached values
-        """
-        # if the path doesn't exist, or is invalid, notify the user and end
-        if not (new_path and new_path.exists() and new_path.is_dir()):
-            self.on_bad_output()
-            return
-
-        # Update our output directory directly
-        self._output_dir = new_path
-
-        # Update the output manager's directory to match, if it exists
-        if self._output_manager:
-            self.output_manager.output_dir = new_path
+        return self.profile.output_path
 
     @property
     def output_format(self) -> RapidMarkupOutputManager.OutputFormat:
@@ -129,16 +85,11 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
 
         # Update the output manager's format to match, if it exists
         if self._output_manager:
-            self.output_manager.output_format = new_format
+            self.config.output_format = new_format
 
     @property
     def output_manager(self):
-        # Pseudo-cached read-only property, allowing for lazy generation
-        if not self._output_manager:
-            self._output_manager = RapidMarkupOutputManager(
-                self.config,
-                self.output_dir
-            )
+        # Read-only to prevent horrible things
         return self._output_manager
 
     ## Unit Management ##
