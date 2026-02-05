@@ -198,14 +198,19 @@ class JobSetupWizard(qt.QWizard):
 
         # Introduction text
         label = qt.QLabel(_(
-            "This wizard will help you define a 'job' in CART. "
-            "CART will use the information you specify here to determine what data "
-            "it should use, what you would like to do to it, and where the results "
-            "should be saved."
+            "This wizard will help you define a 'Job' for CART to run, in three stages:\n"
+            "   1. Selecting your data (where you want CART to look, and where it should save things).\n"
+            "   2. Choosing the task you want to run for this Job.\n"
+            "   3. Defining the how you want to iterate through the data.\n"
+            "\n"
+            "If you are unsure of something, you can hover over most elements in this Wizard;"
+            "after a second or two, a tooltip will appear with more details about it!"
             "\n\n"
-            "If you have any questions or concerns, please do not "
-            "hesitate to open an issue on the CART repository"
+            "If you have any further question, the CART repository has more detailed documentation "
+            "on how CART and its built-in tasks work. You can also open an issue there if you have "
+            "any questions, or would like to make a feature request; don't be shy!"
         ))
+        label.setToolTip(_("See?"))
         label.setWordWrap(True)
         layout.addWidget(label)
 
@@ -307,8 +312,15 @@ class _DataWizardPage(qt.QWizardPage):
         # Job name
         jobNameLabel = qt.QLabel(_("Job Name:"))
         jobNameEntry = qt.QLineEdit()
+        jobNameTooltip = _(
+            "This is the name that CART will use to track this Job; if you want to "
+            "resume this Job after restarting Slicer, you would select the name you specify "
+            "here before clicking 'Start' in CART. As such, don't use a previous job's name!"
+        )
+        jobNameLabel.setToolTip(jobNameTooltip)
+        jobNameEntry.setToolTip(jobNameTooltip)
         jobNameEntry.setPlaceholderText(_(
-            "Should not match a previous job's name."
+            "i.e. SpineSegReview, VesselClassification, BrainMarkup"
         ))
         jobNameLabel.setBuddy(jobNameEntry)
         self.registerField(JOB_NAME_FIELD, jobNameEntry)
@@ -317,11 +329,15 @@ class _DataWizardPage(qt.QWizardPage):
         # Data path
         dataPathLabel = qt.QLabel(_("Input Path:"))
         dataPathEntry: qt.QWidget = ctk.ctkPathLineEdit()
+        dataPathToolTip = _(
+            "This should be a directory containing any data files you wish to use. "
+            "Unless you specify absolute path's in your cohort (done later), this "
+            "directory will be used as the 'root' directory when CART tries to find"
+            "files to load."
+        )
+        dataPathLabel.setToolTip(dataPathToolTip)
+        dataPathEntry.setToolTip(dataPathToolTip)
         dataPathEntry.filters = ctk.ctkPathLineEdit.Dirs
-        dataPathEntry.setToolTip(_(
-            "This should be a directory containing the data files you wish to use. "
-            "It is used as the 'root' for any files in your cohort which do point to absolute paths."
-        ))
         dataPathLabel.setBuddy(dataPathEntry)
         # Workaround to CTK not playing nicely w/ "registerField"
         self._dataPathEntry = dataPathEntry
@@ -330,12 +346,17 @@ class _DataWizardPage(qt.QWizardPage):
         # Output path
         outputPathLabel = qt.QLabel(_("Output Path:"))
         outputPathEntry: qt.QWidget = ctk.ctkPathLineEdit()
+        outputPathToolTip = _(
+            "This is the directory the results/output of your Job be placed within. "
+            "You should usually specify an empty directory for this to avoid data loss; "
+            "if you explicitly want to overwrite your input data, however, you can use "
+            "the 'Input Path' you specified above here too. WARNING; Each task (selected "
+            "next) handles data output differently; read its documentation carefully before "
+            "selecting an output directory that already contains files within it!"
+        )
+        outputPathLabel.setToolTip(outputPathToolTip)
+        outputPathEntry.setToolTip(outputPathToolTip)
         outputPathEntry.filters = ctk.ctkPathLineEdit.Dirs
-        outputPathEntry.setToolTip(_(
-            "The directory the results/output of the job should be placed in. "
-            "What is saved, and in what structure, depends on which task "
-            "you are running (selected next)."
-        ))
         outputPathLabel.setBuddy(outputPathEntry)
         # Workaround to CTK not playing nicely w/ "registerField"
         self._outputPathEntry = outputPathEntry
@@ -416,7 +437,15 @@ class _TaskWizardPage(qt.QWizardPage):
         taskDescriptionText.setWordWrap(True)
         layout.addRow(taskDescriptionText)
         taskSelectionLabel = qt.QLabel(_("Task: "))
-        taskSelectionWidget = qt.QComboBox()
+        taskSelectionWidget = qt.QComboBox(None)
+        taskSelectionToolTip = _(
+            "If the details provided by the Task description below are insufficient, check out "
+            "its formal documentation. If you installed the Task yourself, the repository you "
+            "downloaded it from will likely have it. Otherwise, check the CART repo's \"examples\" "
+            "directory; all tasks installed in CART by default are stored there."
+        )
+        taskSelectionLabel.setToolTip(taskSelectionToolTip)
+        taskSelectionWidget.setToolTip(taskSelectionToolTip)
         taskSelectionWidget.addItems(list(
             CART_TASK_REGISTRY.keys()
         ))
@@ -533,15 +562,19 @@ class _CohortWizardPage(qt.QWizardPage):
         # Directory selection button
         cohortFileLabel = qt.QLabel(_("Cohort File: "))
         cohortFileSelector: qt.QWidget = ctk.ctkPathLineEdit()
+        cohortFileToolTip = _(
+            "If in doubt, create a Cohort file from scratch; given your dataset is in a BIDS-like format, "
+            "CART will determine the best way to organized it into 'cases' for you. Even if it isn't, you "
+            "can manually specify the folder(s) which contain data relevant to each case you want as well. "
+            "Each feature can then be defined via file filters to auto-select each case's relevant file; then"
+            "you're done!"
+        )
+        cohortFileLabel.setToolTip(cohortFileToolTip)
+        cohortFileSelector.setToolTip(cohortFileToolTip)
         cohortFileSelector.filters = ctk.ctkPathLineEdit.Files
         cohortFileSelector.nameFilters = [
             "CSV files (*.csv)",
         ]
-        cohortFileLabel.setToolTip(_(
-            "The cohort file; defines the contents of each case you want to iterate through, "
-            "and the order they will be iterated through. If you don't already have a cohort "
-            "file for your data/task, click 'New' below to create on interactively."
-        ))
         # Workaround to CTK not playing nicely w/ "registerField"
         self._cohortFileSelector = cohortFileSelector
         layout.addRow(cohortFileLabel, cohortFileSelector)
@@ -572,7 +605,8 @@ class _CohortWizardPage(qt.QWizardPage):
         editCohortButton = qt.QPushButton(_("Edit"))
         editCohortButton.setEnabled(False)
         editCohortButton.setToolTip(_(
-            "Modify the selected cohort file to add, remove, or change its cases and/or columns."
+            "Modifies the selected cohort file; you can add, remove, or change each case and/or "
+            "feature this way."
         ))
         def onEditClick():
             # Create and show the editor dialog
@@ -586,7 +620,7 @@ class _CohortWizardPage(qt.QWizardPage):
         previewCohortButton = qt.QPushButton(_("Preview"))
         previewCohortButton.setEnabled(False)
         previewCohortButton.setToolTip(_(
-            "Preview the selected cohort file. The contents will appear in the widget below."
+            "Preview the selected cohort file; the contents will appear in the widget below."
         ))
         buttonLayout.addWidget(previewCohortButton)
 
