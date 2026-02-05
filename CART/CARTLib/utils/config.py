@@ -533,7 +533,7 @@ class JobProfileConfig(DictBackedConfig):
             return self._file_path
         else:
             # Format the job name to create our corresponding filename
-            default_filename = self.name.lower().replace(" ", "_") + ".json"
+            default_filename = self.name.replace(" ", "_") + ".json"
             new_file = JOB_PROFILE_DIR / default_filename
             self._file_path = new_file
             return new_file
