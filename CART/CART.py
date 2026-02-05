@@ -323,7 +323,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def _layoutPanel(self):
         layoutPanel = OrientationButtonArrayWidget()
         def onNewCase(__: int):
-            new_unit = self.logic.data_manager.current_data_unit()
+            new_unit = self.logic.data_manager.select_current_unit()
             layoutPanel.changeLayoutHandler(new_unit.layout_handler, True)
         self.onCaseChanged.append(onNewCase)
         return layoutPanel
