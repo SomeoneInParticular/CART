@@ -7,6 +7,7 @@ from typing import Optional, TYPE_CHECKING, Tuple, Callable
 import vtk
 import ctk
 import qt
+from CARTLib.core.LayoutManagement import OrientationButtonArrayWidget, LayoutHandler
 from slicer import vtkMRMLScalarVolumeNode
 from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
@@ -171,6 +172,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         caseSelectionPanel = self._caseSelectionPanel()
         layout.addWidget(caseSelectionPanel)
 
+        # Add the layout panel
+        layoutPanel = self._layoutPanel()
+        layout.addWidget(layoutPanel)
+
         # Add the widget in which the task's GUI will be inserted
         taskWidget = qt.QWidget(mainWidget)
         layout.addWidget(taskWidget)
@@ -239,6 +244,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Return the result
         return buttonPanel
 
+    def _layoutPanel(self):
+        layoutPanel = OrientationButtonArrayWidget()
+        def onNewCase(__: int):
+            new_unit = self.logic.data_manager.current_data_unit()
+            layoutPanel.changeLayoutHandler(new_unit.layout_handler, True)
+        self.onCaseChanged.append(onNewCase)
+        return layoutPanel
+
     ## Connections ##
     def startButtonPressed(self):
         # If this is the first time CART has been run, ask if they want to initialize
@@ -257,18 +270,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Request the logic switch to the next case
         self.logic.next_case()
 
-        # Refresh the viewed layout of CART
-        self.logic.refresh_layout()
-
         # Emit our case-changed signal
         self.caseChanged()
 
     def nextIncompleteCasePressed(self):
         # Request the logic switch to the next case
         self.logic.next_incomplete_case()
-
-        # Refresh the viewed layout of CART
-        self.logic.refresh_layout()
 
         # Emit our case-changed signal
         self.caseChanged()
@@ -277,9 +284,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Request the logic switch to the next case
         self.logic.previous_case()
 
-        # Refresh the viewed layout of CART
-        self.logic.refresh_layout()
-
         # Emit our case-changed signal
         self.caseChanged()
 
@@ -287,18 +291,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Request the logic switch to the next case
         self.logic.previous_incomplete_case()
 
-        # Refresh the viewed layout of CART
-        self.logic.refresh_layout()
-
         # Emit our case-changed signal
         self.caseChanged()
 
     def selectCaseAt(self, idx):
         # Request the logic switch to the next case
         self.logic.select_case(idx)
-
-        # Refresh the viewed layout of CART
-        self.logic.refresh_layout()
 
         # Emit our case-changed signal
         self.caseChanged()
@@ -308,6 +306,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         case_idx = self.logic.data_manager.current_case_index
         for f in self.onCaseChanged:
             f(case_idx)
+
+        # Always refresh the layout afterward
+        self.logic.refresh_layout()
 
     ## User Prompts ##
     def initialSetupPrompt(self):
@@ -673,9 +674,6 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Initialize the task's GUI itself
         self._task_instance.setup(containerWidget)
-
-        # Apply the current data-unit's layout to the Slicer GUI
-        self.refresh_layout()
 
     ## Case Management ##
     def has_next_case(self):
