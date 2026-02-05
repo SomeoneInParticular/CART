@@ -5,16 +5,15 @@ from pathlib import Path
 from typing import Optional, TYPE_CHECKING, Tuple, Callable
 
 import vtk
-import ctk
 import qt
-from CARTLib.core.LayoutManagement import OrientationButtonArrayWidget, LayoutHandler
+from CARTLib.core.LayoutManagement import OrientationButtonArrayWidget
 from slicer import vtkMRMLScalarVolumeNode
 from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
 
 from CARTLib.core.DataManager import DataManager
-from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from CARTLib.core.TaskBaseClass import TaskBaseClass
 from CARTLib.core.SetupWizard import CARTSetupWizard, JobSetupWizard
 from CARTLib.utils import CART_PATH, CART_VERSION
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
@@ -191,7 +190,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         layout = qt.QHBoxLayout(buttonPanel)
 
         # Define each of the buttons
-        previousIncompleteButton = qt.QToolButton()
+        previousIncompleteButton = qt.QToolButton(None)
         previousIncompleteButton.setText("<<")
         previousIncompleteButton.setToolTip(_("Jump to the Previous Incomplete Case"))
         previousIncompleteButton.clicked.connect(self.previousIncompleteCasePressed)
@@ -199,7 +198,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             lambda __: previousIncompleteButton.setEnabled(self.logic.has_previous_case())
         )
 
-        previousButton = qt.QToolButton()
+        previousButton = qt.QToolButton(None)
         previousButton.setText("<")
         previousButton.setToolTip(_("Switch to the Previous Case"))
         previousButton.clicked.connect(self.previousCasePressed)
@@ -207,7 +206,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             lambda __: previousButton.setEnabled(self.logic.has_previous_case())
         )
 
-        nextButton = qt.QToolButton()
+        nextButton = qt.QToolButton(None)
         nextButton.setText(">")
         nextButton.setToolTip(_("Switch to the Next Case"))
         nextButton.clicked.connect(self.nextCasePressed)
@@ -215,7 +214,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             lambda __: nextButton.setEnabled(self.logic.has_next_case())
         )
 
-        nextIncompleteButton = qt.QToolButton()
+        nextIncompleteButton = qt.QToolButton(None)
         nextIncompleteButton.setText(">>")
         nextIncompleteButton.setToolTip(_("Jump to the Next Incomplete Case"))
         nextIncompleteButton.clicked.connect(self.nextIncompleteCasePressed)
@@ -414,6 +413,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 #
 # CARTLogic
 #
+# noinspection PyUnresolvedReferences
 class CARTLogic(ScriptedLoadableModuleLogic):
     def __init__(self):
         ScriptedLoadableModuleLogic.__init__(self)
