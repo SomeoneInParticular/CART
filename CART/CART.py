@@ -196,11 +196,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         editButton = qt.QPushButton(_("Edit"))
         editButton.setToolTip(_("Edit the Job's configuration"))
         def onJobEdit():
-            # TODO
-            msg = qt.QMessageBox()
-            msg.setWindowTitle("WIP")
-            msg.setText(_("This feature is currently WIP; sorry!"))
-            msg.exec()
+            currentJob: str = jobSelectorComboBox.currentText
+            jobPath = self.logic.registered_jobs.get(currentJob, None)
+            if jobPath is None:
+                # TODO: add a notification that the config file doesn't exist,
+                #  and ask the user if they want to re-do it.
+                jobConfig = JobProfileConfig()
+                jobConfig.name = currentJob
+            else:
+                jobConfig = JobProfileConfig(file_path=Path(jobPath))
+                jobConfig.reload()
+            self.runJobEdit(jobConfig)
         editButton.clicked.connect(onJobEdit)
         buttonPanelLayout.addWidget(editButton)
         self.onJobListChanged.append(
@@ -451,7 +457,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # If we got an "accept" signal, create the job config and initialize it
         if result == qt.QDialog.Accepted:
-            new_config = jobSetupWizard.generate_new_config(self.logic)
+            new_config = jobSetupWizard.save_config(self.logic)
+            self.initJob(new_config.name)
+            self.jobListChanged()
+
+    def runJobEdit(self, config: JobProfileConfig = None):
+        jobSetupWizard = JobSetupWizard(None, config)
+        result = jobSetupWizard.exec()
+
+        # If we got an "accept" signal, create the job config and initialize it
+        if result == qt.QDialog.Accepted:
+            new_config = jobSetupWizard.save_config(self.logic)
             self.initJob(new_config.name)
             self.jobListChanged()
 

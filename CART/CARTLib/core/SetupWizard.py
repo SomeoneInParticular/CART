@@ -144,7 +144,14 @@ class CARTSetupWizard(qt.QWizard):
 
 
 class JobSetupWizard(qt.QWizard):
-    def __init__(self, parent):
+    def __init__(self, parent, config: JobProfileConfig = None):
+        """
+        Wizard for setting up a Job for use within CART.
+
+        :param parent: Parent QT Widget
+        :param config: Reference job config to update. If none is provided,
+            a new config instance will be made, and need to be saved.
+        """
         super().__init__(parent)
 
         # Standard elements
@@ -160,11 +167,27 @@ class JobSetupWizard(qt.QWizard):
         self._cohortPage = _CohortWizardPage(self)
 
         # Add initial pages
-        self.addPage(self.introPage())
+        if config is None:
+            # Only add the introduction page if this is a brand-new job
+            self.addPage(self.introPage())
         self.addPage(self._dataPage)
         self.addPage(self._taskPage)
         self.addPage(self._cohortPage)
         self.addPage(self.conclusionPage())
+
+        # Generate our backing configuration
+        if config is None:
+            self.config = JobProfileConfig()
+        else:
+            self.config = config
+            self._initFields()
+
+    def _initFields(self):
+        self.job_name = self.config.name
+        self.data_path = self.config.data_path
+        self.output_path = self.config.output_path
+        self.selected_task = self.config.task
+        self.cohort_path = self.config.cohort_path
 
     ## Page Management ##
     @staticmethod
@@ -215,37 +238,56 @@ class JobSetupWizard(qt.QWizard):
     def job_name(self) -> str:
         return self.field(JOB_NAME_FIELD)
 
+    @job_name.setter
+    def job_name(self, new_name: str):
+        self.setField(JOB_NAME_FIELD, new_name)
+
     @property
     def data_path(self) -> Optional[Path]:
         return self._dataPage.data_path
+
+    @data_path.setter
+    def data_path(self, new_path: Path):
+        self._dataPage.data_path = new_path
 
     @property
     def output_path(self):
         return self._dataPage.output_path
 
+    @output_path.setter
+    def output_path(self, new_path: Path):
+        self._dataPage.output_path = new_path
+
     @property
-    def selected_task(self) -> Optional[TaskBaseClass]:
+    def selected_task(self) -> Optional[str]:
         return self._taskPage.selected_task
+
+    @selected_task.setter
+    def selected_task(self, new_task: str):
+        self._taskPage.selected_task = new_task
 
     @property
     def cohort_path(self) -> Optional[Path]:
         # Delegate property, due to the unique checks required for the cohort path
         return self._cohortPage.cohort_path
 
-    def generate_new_config(self, logic: "CARTLogic") -> JobProfileConfig:
+    @cohort_path.setter
+    def cohort_path(self, new_path: Path):
+        self._cohortPage.cohort_path = new_path
+
+    def save_config(self, logic: "CARTLogic") -> JobProfileConfig:
         # Generate the new config and immediately save it
-        new_config = JobProfileConfig()
-        new_config.name = self.job_name
-        new_config.data_path = self.data_path
-        new_config.output_path = self.output_path
-        new_config.task = self.selected_task
-        new_config.cohort_path = self.cohort_path
-        new_config.save()
+        self.config.name = self.job_name
+        self.config.data_path = self.data_path
+        self.config.output_path = self.output_path
+        self.config.task = self.selected_task
+        self.config.cohort_path = self.cohort_path
+        self.config.save()
 
         # Register the new job
-        logic.register_job_config(new_config)
+        logic.register_job_config(self.config)
 
-        return new_config
+        return self.config
 
 ## Wizard Pages ##
 class _DataWizardPage(qt.QWizardPage):
@@ -311,6 +353,10 @@ class _DataWizardPage(qt.QWizardPage):
     def job_name(self) -> str:
         return self.field(JOB_NAME_FIELD)
 
+    @job_name.setter
+    def job_name(self, new_str):
+        self.field(JOB_NAME_FIELD, new_str)
+
     @property
     def data_path(self) -> Optional[Path]:
         # Workaround to CTK not playing nicely w/ "registerField"
@@ -319,6 +365,11 @@ class _DataWizardPage(qt.QWizardPage):
             return None
         return Path(path)
 
+    @data_path.setter
+    def data_path(self, new_path: Path):
+        path_str = str(new_path)
+        self._dataPathEntry.currentPath = path_str
+
     @property
     def output_path(self) -> Optional[Path]:
         # Workaround to CTK not playing nicely w/ "registerField"
@@ -326,6 +377,11 @@ class _DataWizardPage(qt.QWizardPage):
         if not path:
             return None
         return Path(path)
+
+    @output_path.setter
+    def output_path(self, new_path: Path):
+        path_str = str(new_path)
+        self._outputPathEntry.currentPath = path_str
 
     def isComplete(self):
         # If we don't have a job name yet, return false immediately
@@ -421,6 +477,17 @@ class _TaskWizardPage(qt.QWizardPage):
             return None
         else:
             return task_name
+
+    @selected_task.setter
+    def selected_task(self, new_task: str):
+        task_class = CART_TASK_REGISTRY.get(new_task, None)
+        print(new_task)
+        print(task_class)
+        if task_class is None:
+            self.setField(SELECTED_TASK_FIELD, -1)
+        else:
+            idx = self.taskSelectionWidget.findText(new_task)
+            self.setField(SELECTED_TASK_FIELD, idx)
 
     def isComplete(self):
         return self.selected_task is not None
@@ -560,6 +627,16 @@ class _CohortWizardPage(qt.QWizardPage):
         if not path:
             return None
         return Path(path)
+
+    @cohort_path.setter
+    def cohort_path(self, new_path: Path):
+        if self._cohortFileSelector is None:
+            return
+        if new_path is None:
+            self._cohortFileSelector.currentPath = ""
+        else:
+            path_str = str(new_path)
+            self._cohortFileSelector.currentPath = path_str
 
     def is_current_path_valid(self):
         cohort_path = self.cohort_path
