@@ -525,7 +525,6 @@ class CARTLogic(ScriptedLoadableModuleLogic):
 
         # Initialize the new task
         self.active_job_config = job_profile
-        print("Job profile loaded!")
 
         # Update the config to use this as our last job
         self.master_profile_config.set_last_job(job_name)
