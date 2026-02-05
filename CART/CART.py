@@ -244,6 +244,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         caseSelectionPanel = self._caseSelectionPanel()
         layout.addWidget(caseSelectionPanel)
 
+        # Add the save button w/ proper padding
+        savePanel = self._savePanel()
+        layout.addWidget(savePanel)
+
         # Add the layout panel
         layoutPanel = self._layoutPanel()
         layout.addWidget(layoutPanel)
@@ -318,6 +322,19 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         layout.addWidget(nextIncompleteButton, 1)
 
         # Return the result
+        return buttonPanel
+
+    def _savePanel(self) -> qt.QWidget:
+        buttonPanel = qt.QWidget(None)
+        buttonPanelLayout = qt.QHBoxLayout(buttonPanel)
+
+        saveButton = qt.QPushButton(_("Save"))
+        saveButton.clicked.connect(self.logic.save_case)
+
+        buttonPanelLayout.addStretch(1)
+        buttonPanelLayout.addWidget(saveButton, 10)
+        buttonPanelLayout.addStretch(1)
+
         return buttonPanel
 
     def _layoutPanel(self):
@@ -807,6 +824,10 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             self._task_instance.save()
             new_unit = self._data_manager.select_unit_at(idx)
             self._task_instance.receive(new_unit)
+
+    def save_case(self):
+        if self._data_manager and self._task_instance:
+            self._task_instance.save()
 
     def refresh_layout(self):
         if self._data_manager is None:
