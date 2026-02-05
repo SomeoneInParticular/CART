@@ -5,7 +5,7 @@ import qt
 import slicer
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-from CARTLib.utils.config import JobProfileConfig
+from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import showSuccessPrompt
 
@@ -23,8 +23,8 @@ class SegmentationReviewTask(
 ):
     README_PATH = Path(__file__).parent / "README.md"
 
-    def __init__(self, profile: JobProfileConfig):
-        super().__init__(profile)
+    def __init__(self, master_profile: MasterProfileConfig, job_profile: JobProfileConfig):
+        super().__init__(master_profile, job_profile)
 
         # Local Attributes
         self.gui: Optional[SegmentationReviewGUI] = None
@@ -33,12 +33,12 @@ class SegmentationReviewTask(
 
         # Configuration
         self.config: SegmentationReviewConfig = SegmentationReviewConfig(
-            parent_config=self.profile
+            parent_config=self.job_profile
         )
 
         # Output manager
         self.output_manager = SegmentationReviewOutputManager(
-            config=self.profile
+            config=self.job_profile
         )
 
     @classmethod
@@ -48,11 +48,11 @@ class SegmentationReviewTask(
 
     @property
     def output_dir(self) -> Optional[Path]:
-        return self.profile.output_path
+        return self.job_profile.output_path
 
     @output_dir.setter
     def output_dir(self, new_dir: Path):
-        self.profile.output_path = new_dir
+        self.job_profile.output_path = new_dir
 
     @property
     def csv_log_path(self) -> Optional[Path]:

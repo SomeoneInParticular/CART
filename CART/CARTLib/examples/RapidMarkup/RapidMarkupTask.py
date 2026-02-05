@@ -4,7 +4,7 @@ from typing import Optional
 import qt
 import slicer
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-from CARTLib.utils.config import JobProfileConfig
+from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import showSuccessPrompt
 from slicer.i18n import tr as _
@@ -19,8 +19,8 @@ from RapidMarkupUnit import RapidMarkupUnit
 class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
     README_PATH = Path(__file__).parent / "README.md"
 
-    def __init__(self, profile: JobProfileConfig):
-        super().__init__(profile)
+    def __init__(self, master_profile: MasterProfileConfig, job_profile: JobProfileConfig):
+        super().__init__(master_profile, job_profile)
 
         # GUI and data
         self.gui: Optional[RapidMarkupGUI] = None
@@ -31,11 +31,11 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         self.untracked_markups: dict[str, list[str]] = {}
 
         # Config management
-        self.config = RapidMarkupConfig(parent_config=self.profile)
+        self.config = RapidMarkupConfig(parent_config=self.job_profile)
 
         # Output management
         self._output_manager: RapidMarkupOutputManager = RapidMarkupOutputManager(
-            self.config, output_dir=self.output_dir
+            self.config, self.master_profile, output_dir=self.output_dir
         )
 
     @classmethod
@@ -72,7 +72,7 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
 
     @property
     def output_dir(self) -> Path:
-        return self.profile.output_path
+        return self.job_profile.output_path
 
     @property
     def output_format(self) -> RapidMarkupOutputManager.OutputFormat:

@@ -4,7 +4,7 @@ from enum import Enum
 from functools import cached_property
 from pathlib import Path
 
-from CARTLib.utils.config import JobProfileConfig
+from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.data import save_markups_to_json, save_markups_to_nifti
 
 from RapidMarkupUnit import RapidMarkupUnit
@@ -40,6 +40,7 @@ class RapidMarkupOutputManager:
     def __init__(
         self,
         config: "RapidMarkupConfig",
+        master_config: "MasterProfileConfig",
         output_dir: Path
     ):
         """
@@ -54,6 +55,7 @@ class RapidMarkupOutputManager:
 
         # Core attributes
         self.config = config
+        self.master_config = master_config
         self.output_dir = output_dir
 
     ## PROPERTIES ##
@@ -164,7 +166,7 @@ class RapidMarkupOutputManager:
                 markup_node=markup_node,
                 reference_volume=data_unit.primary_volume_node,
                 path=markup_output_file,
-                profile=self.profile_config
+                master_profile=self.master_config
             )
         # If the user asked to save to an invalid output format,
         # yell at them for it and end.

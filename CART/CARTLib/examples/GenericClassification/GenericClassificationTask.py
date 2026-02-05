@@ -7,7 +7,7 @@ import ctk
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.examples.GenericClassification.GenericClassificationOutputManager import GenericClassificationOutputManager
-from CARTLib.utils.config import JobProfileConfig
+from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import showSuccessPrompt
 
@@ -28,8 +28,8 @@ class GenericClassificationTask(TaskBaseClass[GenericClassificationUnit]):
     """
     README_PATH = Path(__file__).parent / "README.md"
 
-    def __init__(self, profile: JobProfileConfig):
-        super().__init__(profile)
+    def __init__(self, master_profile: MasterProfileConfig, job_profile: JobProfileConfig):
+        super().__init__(master_profile, job_profile)
 
         # Track the active GUI instance, if any
         self.gui: Optional[GenericClassificationGUI] = None
@@ -57,7 +57,7 @@ class GenericClassificationTask(TaskBaseClass[GenericClassificationUnit]):
 
     @cached_property
     def output_manager(self):
-        return GenericClassificationOutputManager(self.profile)
+        return GenericClassificationOutputManager(self.job_profile)
 
     def setup(self, container: qt.QWidget):
         # Try to retrieve the last-used class map from the metadata

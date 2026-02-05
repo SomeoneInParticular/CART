@@ -298,7 +298,7 @@ def save_markups_to_nifti(
         markup_node: "vtk.vtkMRMLMarkupsFiducialNode",
         reference_volume: "vtk.vtkMRMLScalarVolumeNode",
         path: Path,
-        profile: Optional[MasterProfileConfig] = None):
+        master_profile: Optional[MasterProfileConfig] = None):
     """
     Saves a set of markup labels to a NiFTI file.
 
@@ -316,7 +316,7 @@ def save_markups_to_nifti(
     :param markup_node: The markup node whose contents should be saved
     :param reference_volume: A reference volume, for converting RAS -> IJK co-ordinates
     :param path: Path to a (presumably `.nii`) file where the data should be saved
-    :param profile: Profile config; used to build the JSON sidecar
+    :param master_profile: Profile config; used to build the JSON sidecar
     """
     # Build the RAS (world) -> IJK (voxel) transform function
     ras_to_kji_transform = vtk.vtkMatrix4x4()
@@ -372,11 +372,11 @@ def save_markups_to_nifti(
         sidecar_data = {}
         creation_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # If we have a user profile, add its contents to the GeneratedBy entry
-        if profile:
+        if master_profile:
             sidecar_data["GeneratedBy"] = [{
                 "Name": "CART",
-                "Author": profile.author,
-                "Position": profile.position,
+                "Author": master_profile.author,
+                "Position": master_profile.position,
                 "Date": creation_time
             }]
         # Otherwise, just note that this was created by CART

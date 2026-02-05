@@ -10,8 +10,6 @@ from CARTLib.utils.cohort import cohort_from_generator, CohortTableWidget, Cohor
 from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
 
-from .TaskBaseClass import TaskBaseClass
-
 if TYPE_CHECKING:
     # Avoid a cyclical import
     from CART import CARTLogic

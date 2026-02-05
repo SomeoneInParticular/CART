@@ -617,7 +617,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         )
 
         # Initialize the new task
-        new_task = new_task_cls(job_profile)
+        new_task = new_task_cls(self.master_profile_config, job_profile)
 
         # Unload the previous task
         # TODO

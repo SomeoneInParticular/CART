@@ -8,7 +8,7 @@ import slicer
 from slicer.i18n import tr as _
 
 from CARTLib.core.DataUnitBase import DataUnitBase
-from CARTLib.utils.config import JobProfileConfig
+from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 
 # Generic type hint class for anything which is a subclass of DataUnitBase
 D = TypeVar("D", bound=DataUnitBase)
@@ -38,19 +38,17 @@ class TaskBaseClass(ABC, Generic[D]):
     with debugging, but (like all type hints) is not enforced by us or Python
     itself.!
     """
-    def __init__(self, profile: JobProfileConfig):
+    def __init__(self, master_profile: MasterProfileConfig, job_profile: JobProfileConfig):
         """
         Basic constructor.
 
         This is functional on its own, but you will likely want to extend it in
         a subclass.
-
-        TODO: Swap Optional for newer Optional syntax ('D | None');
-         currently only on Python 3.10 and up (which Slicer 5.8 doesn't have)
         """
         # Track the profile for later; we often want to stratify our task by
         # the profile that is running it.
-        self.profile: JobProfileConfig = profile
+        self.master_profile: MasterProfileConfig = master_profile
+        self.job_profile: JobProfileConfig = job_profile
 
         # Create a logger to track the goings-on of this task.
         self.logger = logging.getLogger(f"{__class__.__name__}")
@@ -58,11 +56,11 @@ class TaskBaseClass(ABC, Generic[D]):
     # Aliases for commonly accessed attributes
     @property
     def profile_label(self) -> str:
-        return self.profile.label
+        return self.job_profile.label
 
     @property
     def profile_role(self) -> str:
-        return self.profile.role
+        return self.job_profile.role
 
     @abstractmethod
     def setup(self, container: qt.QWidget):
