@@ -2,7 +2,7 @@ import itertools
 from datetime import datetime
 import json
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Callable
 
 import numpy as np
 
@@ -566,11 +566,15 @@ def create_empty_segmentation_node(
 
 
 ## COHORT STRATIFICATION ##
+VOLUME_PREFIX = "Volume"
+SEGMENTATION_PREFIX = "Segmentation"
+MARKUP_PREFIX = "Markup"
+
 def parse_volumes(
     case_data: dict[str, Any], data_path: Path
 ) -> tuple[list[str], dict[str, Path], str]:
     # Get the keys from the case data
-    volume_keys = extract_case_keys_by_prefix(case_data, "Volume", force_present=True)
+    volume_keys = extract_case_keys_by_prefix(case_data, VOLUME_PREFIX, force_present=True)
 
     # We need at least one volume key; otherwise theirs nothing to reference against
     if len(volume_keys) < 1:
@@ -614,7 +618,7 @@ def parse_segmentations(
 ) -> tuple[list[str], dict[str, Path]]:
     # Parse our segmentation keys
     segmentation_keys = extract_case_keys_by_prefix(
-        case_data, "Segmentation", force_present=False
+        case_data, SEGMENTATION_PREFIX, force_present=False
     )
 
     # If there were none, end here
@@ -637,7 +641,7 @@ def parse_markups(case_data, data_path) -> tuple[list[str], dict[str, Path]]:
     # This would allow us to dry out this code combining all 3 parse_* functions
 
     # Get our list of
-    markup_keys = extract_case_keys_by_prefix(case_data, "Markup", force_present=False)
+    markup_keys = extract_case_keys_by_prefix(case_data, MARKUP_PREFIX, force_present=False)
 
     # Initialize our markup paths
     markup_paths: dict[str, Path] = {
