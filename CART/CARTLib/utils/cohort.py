@@ -14,9 +14,11 @@ from slicer.i18n import tr as _
 
 from .widgets import CSVBackedTableModel, CSVBackedTableWidget
 
-
 ## Type Utils ##
 if TYPE_CHECKING:
+    # Avoid potential cyclic imports
+    from CARTLib.core.TaskBaseClass import TaskBaseClass
+
     # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
     # isn't the same as PyQT5 itself), but it's a LOT better than constant
     # cross-referencing
@@ -34,7 +36,13 @@ COHORT_VERSION = "0.1.0"
 
 ## Core ##
 class Cohort:
-    def __init__(self, csv_path: Path, data_path: Path, use_sidecar: bool = True):
+    def __init__(
+        self,
+        csv_path: Path,
+        data_path: Path,
+        reference_task: "type[TaskBaseClass]" = None,
+        use_sidecar: bool = True
+    ):
         # Tracker for the model tracking the CSV data
         self._model: CohortTableModel = CohortTableModel(csv_path)
 
@@ -49,6 +57,9 @@ class Cohort:
         # Track the data path for later
         self.data_path = data_path
 
+        # Track the reference task for later
+        self.reference_task = reference_task
+
         # JSON sidecar management
         self.use_sidecar = use_sidecar
         if use_sidecar:
@@ -59,7 +70,13 @@ class Cohort:
             self._filters: FilterMap = dict()
 
     @classmethod
-    def from_case_map(cls, csv_path: Path, data_path: Path, case_map: CaseMap):
+    def from_case_map(
+        cls,
+        csv_path: Path,
+        data_path: Path,
+        case_map: CaseMap,
+        reference_task: "TaskBaseClass" = None,
+    ):
         # Exit immediately if the case-map is empty
         if len(case_map) < 1:
             raise ValueError("Cannot create a cohort from an empty case map!")
@@ -68,7 +85,7 @@ class Cohort:
         with open(csv_path, "w") as fp:
             csv.writer(fp).writerows(row_data)
         # Generate the cohort instance, backed by this new CSV file
-        cohort = cls(csv_path, data_path, use_sidecar=True)
+        cohort = cls(csv_path, data_path, reference_task, use_sidecar=True)
         # Manually update its case map to match
         cohort._case_path_map = case_map
         # Immediately save the sidecar as well, for parity
@@ -100,9 +117,7 @@ class Cohort:
 
     @property
     def case_path_map(self) -> CaseMap:
-        """
-        Map of case name -> search paths for said case
-        """
+        # Get-only; use the set/remove functions instead, or edit the returned dict directly
         return self._case_path_map
 
     def set_case_paths(self, case_label: str, search_paths: list[Path]):
@@ -150,7 +165,7 @@ class Cohort:
 
     @property
     def filters(self) -> FilterMap:
-        # Get-only; use the add/remove functions instead, or edit the returned dict directly
+        # Get-only; use the set/remove functions instead, or edit the returned dict directly
         return self._filters
 
     FILTER_INCLUDE_KEY = "include"
@@ -802,9 +817,9 @@ class CohortEditorDialog(qt.QDialog):
         return True
 
     @classmethod
-    def from_paths(cls, csv_path: Path, data_path: Path):
+    def from_paths(cls, csv_path: Path, data_path: Path, reference_task: "type[TaskBaseClass]"):
         # Generate the cohort manager using the provided paths
-        cohort = Cohort(csv_path, data_path)
+        cohort = Cohort(csv_path, data_path, reference_task)
         return cls(cohort)
 
 
@@ -828,33 +843,32 @@ class FeatureEditorDialog(qt.QDialog):
         # Reference feature name
         self._reference_feature = feature_name
 
-        # Track whether changes have been made since this dialog was opened
-        self.has_changed = False
-
-        def mark_changed():
-            self.has_changed = True
-
         # Initial setup
         self.setWindowTitle(_("Add New Feature"))
         self.setMinimumSize(500, self.minimumHeight)
         layout = qt.QFormLayout(self)
 
-        # Data entry fields
+        # The feature name itself (prior to formatting)
         nameLabel = qt.QLabel(_("Feature Name:"))
         nameField = qt.QLineEdit()
         if feature_name:
             nameField.setText(feature_name)
-        nameField.setPlaceholderText(_("e.g. Segmentation_T1w, spinal_reference"))
-        nameField.textChanged.connect(mark_changed)
+        nameField.setPlaceholderText(_("e.g. disk_labels, spinal_T2w, liver_segmentation"))
         nameTooltip = _(
-            "Anything is valid, so long as it does not have any commas. We recommend following your selected "
-            "Task's naming convention to ensure CART runs smoothly, however."
+            "The name should represent what this feature contains at-a-glance. "
+            "You can use any text you like, with the EXCEPTION of commas; any commas "
+            "will be automatically replaced with underscores!"
+            "\n\n"
+            "If the task provides it, you can also select a 'feature type' from the "
+            "drop-down above; doing so will provide a description for that type, and "
+            "ensure this feature's name is formatted in the correct way for the task. "
+            "The feature's label after this formatting has been applied can be seen found below."
         )
         nameLabel.setToolTip(nameTooltip)
         nameField.setToolTip(nameTooltip)
-        self.nameField = nameField
         layout.addRow(nameLabel, nameField)
 
+        # Other input fields
         includeLabel = qt.QLabel(_("Include:"))
         includeField = qt.QLineEdit()
         if feature_name:
@@ -862,7 +876,7 @@ class FeatureEditorDialog(qt.QDialog):
                 Cohort.FILTER_INCLUDE_KEY, []
             )
             includeField.setText(", ".join(include_vals))
-        includeField.textChanged.connect(mark_changed)
+        includeField.textChanged.connect(self.mark_changed)
         includeTooltip = _(
             "Comma-separated elements that a file MUST have to be used for this feature. "
             "This incudes the directory the file is contained within!"
@@ -880,7 +894,7 @@ class FeatureEditorDialog(qt.QDialog):
                 Cohort.FILTER_EXCLUDE_KEY, []
             )
             excludeField.setText(", ".join(exclude_vals))
-        excludeField.textChanged.connect(mark_changed)
+        excludeField.textChanged.connect(self.mark_changed)
         excludeTooltip = _(
             "Comma-separated elements that a file MUST NOT have to be used for this feature. "
             "This incudes the directory the file is contained within!"
@@ -890,6 +904,9 @@ class FeatureEditorDialog(qt.QDialog):
         excludeField.setPlaceholderText(_("e.g. derivatives, masked, brain"))
         self.excludeField = excludeField
         layout.addRow(excludeLabel, excludeField)
+
+        # Field type selection GUI
+        self._generate_field_type_gui(layout, nameField)
 
         # Ok/Cancel Buttons
         buttonBox = qt.QDialogButtonBox()
@@ -912,6 +929,104 @@ class FeatureEditorDialog(qt.QDialog):
         buttonBox.clicked.connect(onButtonClicked)
         layout.addWidget(buttonBox)
 
+        # Track whether changes have been made since this dialog was created
+        self.has_changed = False
+
+    def mark_changed(self):
+        self.has_changed = True
+
+    def _generate_field_type_gui(
+            self,
+            layout: "qt.QFormLayout",
+            nameField: "qt.QLineEdit"
+    ):
+        # Feature type selector and description
+        featureTypeLabel = qt.QLabel(_("Feature Type:"))
+        featureTypeSelector = qt.QComboBox(None)
+        feature_map = {
+            "None": "Do not treat this feature as any specific feature type."
+        }
+        task = self._cohort.reference_task
+        # TODO; Make this user selectable
+        duf_type = list(task.getDataUnitFactories().keys())[0]
+        for k, v in task.feature_types(duf_type).items():
+            feature_map[k] = v
+        featureTypeSelector.addItems(list(feature_map.keys()))
+        featureTypeToolTip = _(
+            "The feature type for this column."
+            "\n\n"
+            "Most tasks will use the name of each feature to determine "
+            "how to process the corresponding resource for each case; "
+            "selecting the correct feature type ensures the task can "
+            "do so successfully."
+        )
+        featureTypeLabel.setToolTip(featureTypeToolTip)
+        featureTypeSelector.setToolTip(featureTypeToolTip)
+        layout.addRow(featureTypeLabel, featureTypeSelector)
+
+        # Add it to the overall layout
+        layout.addRow(featureTypeLabel, featureTypeSelector)
+
+        # Description for the selected feature to help inform the user
+        featureTypeDescriptionBox = ctk.ctkCollapsibleGroupBox()
+        featureTypeDescriptionBox.setTitle(_("Type Description"))
+        featureTypeDescriptionBoxLayout = qt.QVBoxLayout()
+        featureTypeDescriptionBox.setLayout(featureTypeDescriptionBoxLayout)
+        featureTypeDescription = qt.QLabel(_("[PLEASE WAIT]"))
+        featureTypeDescription.setWordWrap(True)
+        featureTypeDescriptionBoxLayout.addWidget(featureTypeDescription)
+
+        def syncDescriptionText(__):
+            new_type = str(featureTypeSelector.currentText)
+            new_desc = feature_map.get(new_type, _("No Description Available"))
+            featureTypeDescription.setText(new_desc)
+
+        featureTypeSelector.currentIndexChanged.connect(syncDescriptionText)
+
+        # Add it to the layout
+        layout.addRow(featureTypeDescriptionBox)
+
+        # Preview of the feature name after processing
+        previewFieldLabel = qt.QLabel(_("Final Name: "))
+        previewField = qt.QLabel("[PLEASE WAIT]")
+        previewFont = qt.QFont()
+        previewFont.setBold(True)
+        previewField.setFont(previewFont)
+        def syncPreviewField():
+            prior_text = str(previewField.text)
+            user_text = nameField.text.strip()
+            t = self._cohort.reference_task
+            # TODO: make this user-selectable
+            duf = list(t.getDataUnitFactories().keys())[0]
+            feature_type = str(featureTypeSelector.currentText)
+            new_text = t.format_feature_label_for_type(user_text, duf, feature_type)
+            if prior_text != new_text:
+                previewField.setText(new_text)
+                self.mark_changed()
+        nameField.textChanged.connect(syncPreviewField)
+        featureTypeSelector.currentIndexChanged.connect(syncPreviewField)
+
+        # Track and add it to our layout
+        self.namePreviewField = previewField
+        w = qt.QWidget(None)
+        l = qt.QHBoxLayout(w)
+        l.addWidget(previewFieldLabel)
+        l.addWidget(previewField)
+        l.addStretch()
+        layout.addRow(w)
+
+        # Run a "sync" to update everything correctly
+        syncDescriptionText(-1)  # Variable is unused, but required.
+        syncPreviewField()
+
+        # Disable feature-type widgets for tasks which do not specify feature types
+        if len(feature_map) < 2:
+            featureTypeSelector.setEnabled(False)
+            featureTypeDescriptionBox.setEnabled(False)
+            disabledToolTip = _("The selected task did specify any feature types.")
+            featureTypeSelector.setToolTip(disabledToolTip)
+            featureTypeDescriptionBox.setToolTip(disabledToolTip)
+
     def onCancel(self):
         # If we have changed anything, confirm we want to exit first
         if self.has_changed:
@@ -931,7 +1046,7 @@ class FeatureEditorDialog(qt.QDialog):
         if not self.has_changed:
             return
         # Parse the contents of our GUI elements, stripping leading/trailing whitespace
-        label = self.nameField.text.strip()
+        label = self.namePreviewField.text.strip()
         filter_entry: FilterEntry = {
             Cohort.FILTER_INCLUDE_KEY: [
                 s.strip() for s in self.includeField.text.split(",")

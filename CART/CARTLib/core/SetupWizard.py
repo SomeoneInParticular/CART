@@ -508,8 +508,6 @@ class _TaskWizardPage(qt.QWizardPage):
     @selected_task.setter
     def selected_task(self, new_task: str):
         task_class = CART_TASK_REGISTRY.get(new_task, None)
-        print(new_task)
-        print(task_class)
         if task_class is None:
             self.setField(SELECTED_TASK_FIELD, -1)
         else:
@@ -610,8 +608,10 @@ class _CohortWizardPage(qt.QWizardPage):
         ))
         def onEditClick():
             # Create and show the editor dialog
-            data_path = self.wizard().data_path
-            dialog = CohortEditorDialog.from_paths(self.cohort_path, data_path)
+            wz: JobSetupWizard = self.wizard()
+            data_path = wz.data_path
+            reference_task = CART_TASK_REGISTRY[wz.selected_task]
+            dialog = CohortEditorDialog.from_paths(self.cohort_path, data_path, reference_task)
             self.mediateCohortEditor(dialog, cohortPreviewWidget)
         editCohortButton.clicked.connect(onEditClick)
         buttonLayout.addWidget(editCohortButton)

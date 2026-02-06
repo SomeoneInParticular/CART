@@ -566,9 +566,11 @@ def create_empty_segmentation_node(
 
 
 ## COHORT STRATIFICATION ##
-VOLUME_PREFIX = "Volume"
-SEGMENTATION_PREFIX = "Segmentation"
-MARKUP_PREFIX = "Markup"
+# TODO: Move these 'parse' functions into CARTStandardUnit
+#  to prevent accidental mis-use
+VOLUME_PREFIX = 'Volume'
+SEGMENTATION_PREFIX = 'Segmentation'
+MARKUP_PREFIX = 'Markup'
 
 def parse_volumes(
     case_data: dict[str, Any], data_path: Path
@@ -664,6 +666,18 @@ class CARTStandardUnit(DataUnitBase):
     COMPLETED_KEY = "completed"
 
     DEFAULT_ORIENTATION = Orientation.AXIAL
+
+    FEATURE_CLASSES = {
+        VOLUME_PREFIX:
+            "An anatomical volume you want to view. "
+            "Must have 'volume' in its name.",
+        SEGMENTATION_PREFIX:
+            "A segmentation label to overlay on viewed volumes. "
+            "Must have 'segmentation' in its name.",
+        MARKUP_PREFIX:
+            "A set of named point markups to indicate on viewed volumes. "
+            "Must have 'markup' in its name."
+    }
 
     def __init__(
         self,
@@ -896,3 +910,32 @@ class CARTStandardUnit(DataUnitBase):
         if self.subject_id is not None:
             self.hierarchy_node.SetItemExpanded(self.subject_id, new_state)
             self.hierarchy_node.SetItemDisplayVisibility(self.subject_id, new_state)
+
+    ## Utilities ##
+    @classmethod
+    def feature_types(cls) -> dict[str, str]:
+        """
+        Report our own valid feature types for Tasks which use this class
+        as a data unit factory
+        """
+        return cls.FEATURE_CLASSES
+
+    @classmethod
+    def feature_label_for(cls, init_label: str, feature_type: str):
+        # Always skip over the "None" feature type
+        if feature_type.lower() == "none":
+            return init_label
+        # Check all prefixes one-at-a-time
+        # TODO; convert this to a switch statement
+        for prefix in [VOLUME_PREFIX, SEGMENTATION_PREFIX, MARKUP_PREFIX]:
+            # If the feature type doesn't match, skip
+            if feature_type != prefix:
+                continue
+            # If the prefix is already in the label, return untouched
+            if prefix in init_label:
+                return init_label
+            # Otherwise, add the prefix to the label and return
+            return f"{prefix}_{init_label}"
+        # If the feature type doesn't match any known type, return unchanged w/ a warning
+        print(f"Unknown feature type '{feature_type}' for a data unit of type '{cls.__name__}'")
+        return init_label

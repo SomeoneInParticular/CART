@@ -38,7 +38,10 @@ class TaskBaseClass(ABC, Generic[D]):
     with debugging, but (like all type hints) is not enforced by us or Python
     itself.!
     """
-    def __init__(self, master_profile: MasterProfileConfig, job_profile: JobProfileConfig):
+
+    def __init__(
+        self, master_profile: MasterProfileConfig, job_profile: JobProfileConfig
+    ):
         """
         Basic constructor.
 
@@ -119,9 +122,9 @@ class TaskBaseClass(ABC, Generic[D]):
         A description for this task, detailing what it should be used for, as well as
         anything else the user should know before they use it.
         """
-        return (_(
+        return _(
             f"'{cls.__name__}' has no description; you should remind the developer to provide one!"
-        ))
+        )
 
     def save_on_iter(self) -> Optional[str]:
         """
@@ -140,7 +143,7 @@ class TaskBaseClass(ABC, Generic[D]):
         else:
             raise ValueError(f"An error occurred during saving: {save_result}")
 
-    def isTaskComplete(self, case_data: dict[str: str]) -> bool:
+    def isTaskComplete(self, case_data: dict[str:str]) -> bool:
         """
         Checks whether a case has been completed or not. How you choose to
         determine this is up to you (probably based on whether appropriate
@@ -241,5 +244,59 @@ class TaskBaseClass(ABC, Generic[D]):
 
         raise NotImplementedError("setup must be implemented in subclasses")
 
-    # TODO: Add standardized metadata which can be referenced by CART to
-    #  build a task list.
+    @classmethod
+    def feature_types(cls, data_factory_label: str) -> dict[str, str]:
+        """
+        Provides a map containing a feature type label and its description
+        for a "class" of feature this task can handle for the given data factory.
+        `data_factory_label` will always be a value defined in `getDataUnitFactories`
+        above.
+
+        For example, if the given data unit factory can handle anatomical
+        volume files and segmentation labels, you might return the following:
+
+        ```
+        {
+            "Volume": "An anatomical volume you want to view. Must have 'volume' in its name.",
+            "Segmentation: "A segmentation label to overlay on viewed volumes. Must have 'segmentation' in its name"
+        }
+        ```
+
+        These are shown to the user during cohort creation, and used in conjunction
+        with `feature_label_for` below to ensure each cohort feature will abide by
+        the format required for this task when using the selected Data Unit Factory.
+
+        By default, this returns an empty dictionary; if CART sees this, it will not
+        provide ANY support to the user during cohort generation, likely result in
+        cohort files which are malformed and/or misleading.
+        """
+        return {}
+
+    @classmethod
+    def format_feature_label_for_type(
+        cls, initial_label: str, data_unit_factory_type: str, feature_type: str
+    ):
+        """
+        Should reformat the "initial" label provided to be recognized as the
+        specified feature type when provided to the specified data unit factory.
+
+        The data unit type will always be one specified by `getDataUnitFactories`,
+        and the feature type will always be one specified by `feature_types` for
+        said data unit factory.
+
+        For example, if we use the following feature types for `feature_types` prior:
+
+        ```
+        {
+            "Volume": "An anatomical volume you want to view. Must have 'volume' in its name.",
+            "Segmentation: "A segmentation label to overlay on viewed volumes. Must have 'segmentataion' in its name"
+        }
+        ```
+
+        An initial label of "T2w" for a "Volume" type could be returned as "volume_T2w";
+        if it were a "Segmentation" type instead, it could be "segmentation_T2w" instead.
+
+        If this is not overridden in a subclass, only the bare-minimum processing
+        (replacing commas with underscores) is applied.
+        """
+        return initial_label.replace(",", "_")

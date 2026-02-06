@@ -259,3 +259,25 @@ class RapidMarkupTask(TaskBaseClass[RapidMarkupUnit]):
         return {
             "Default": RapidMarkupUnit
         }
+
+    @classmethod
+    def feature_types(cls, data_factory_label: str) -> dict[str, str]:
+        # Defer to the data unit itself
+        duf = cls.getDataUnitFactories().get(data_factory_label, None)
+        if duf == RapidMarkupUnit:
+            return RapidMarkupUnit.feature_types()
+        return {}
+
+    @classmethod
+    def format_feature_label_for_type(
+        cls, initial_label: str, data_unit_factory_type: str, feature_type: str
+    ):
+        # Apply default comma processing
+        initial_label = super().format_feature_label_for_type(
+            initial_label, data_unit_factory_type, feature_type
+        )
+        # Defer to the data unit itself for further processing
+        duf = cls.getDataUnitFactories().get(data_unit_factory_type, None)
+        if duf is RapidMarkupUnit:
+            return RapidMarkupUnit.feature_label_for(initial_label, feature_type)
+        return initial_label
