@@ -171,7 +171,6 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         # Offset by 1 to account for the header row
         idx = [row + i + 1 for i in range(count)]
         self._csv_data = np.delete(self._csv_data, idx, axis=0)
-        print(self._csv_data)
         self.endRemoveRows()
 
     def removeColumns(self, column, count, parent = ...):
