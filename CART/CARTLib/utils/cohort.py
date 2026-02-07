@@ -331,18 +331,15 @@ class Cohort:
     ## GUI Elements ##
     def editorWidget(self, parent: qt.QObject = None) -> "CohortTableWidget":
         widget = CohortTableWidget(self.model, parent)
-        widget.tableView.context_generator = lambda idx: self.newContextMenu(
-            idx, widget
-        )
+        if self._model.is_editable():
+            widget.tableView.context_generator = lambda idx: self.newContextMenu(
+                idx, widget
+            )
         return widget
 
     def newContextMenu(
         self, idx: qt.QModelIndex, parent: qt.QObject = None
     ) -> Optional[qt.QMenu]:
-        # If our model isn't editable, it shouldn't have a context menu
-        if not self._model.is_editable():
-            return None
-
         # Generate a context menu
         menu = qt.QMenu(parent)
 
