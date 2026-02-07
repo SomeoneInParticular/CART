@@ -750,6 +750,10 @@ class CohortEditorDialog(qt.QDialog):
     ):
         super().__init__(parent)
 
+        # If the cohort is not editable, reject attempts to edit it
+        if not cohort.model.is_editable():
+            raise ValueError("Cannot edit a un-editable Cohort!")
+
         # Backing cohort manager
         self._cohort = cohort
 
@@ -928,6 +932,10 @@ class FeatureEditorDialog(qt.QDialog):
         :param parent: Parent widget, as required by QT.
         """
         super().__init__(parent)
+
+        # If the cohort is not editable, reject attempts to edit it
+        if not cohort.model.is_editable():
+            raise ValueError("Cannot edit a un-editable Cohort!")
 
         # Backing cohort manager
         self._cohort = cohort
@@ -1175,6 +1183,10 @@ class CaseEditorDialog(qt.QDialog):
         :param parent: Parent widget, as required by QT.
         """
         super().__init__(parent)
+
+        # If the cohort is not editable, reject attempts to edit it
+        if not cohort.model.is_editable():
+            raise ValueError("Cannot edit a un-editable Cohort!")
 
         # Backing cohort manager
         self._cohort = cohort
