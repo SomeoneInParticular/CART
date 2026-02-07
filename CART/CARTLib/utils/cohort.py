@@ -154,13 +154,29 @@ class Cohort:
     def rename_case(self, old_name: str, new_name: str):
         # Check if a case map with this name already exists
         if old_name not in self.case_path_map.keys():
-            raise ValueError(f"Cannot rename case map '{old_name}'; it doesn't exist!")
+            raise ValueError(f"Cannot rename case '{old_name}'; it doesn't exist!")
         # Update the backing model
         row_idx = np.argwhere(self.model.indices == old_name).flatten()[0]
         self.model.setHeaderData(row_idx, qt.Qt.Vertical, new_name, qt.Qt.EditRole)
-        # Update the filter map to reflect the change
+        # Update the case map to reflect the change
         case_map_entry = self.case_path_map.pop(old_name)
         self.case_path_map[new_name] = case_map_entry
+        self.has_changed = True
+
+    def drop_cases(self, names: list[str]):
+        # Check the names before proceeding
+        for name in names:
+            # Check if a case map with this name exists
+            if name not in self.case_path_map.keys():
+                raise ValueError(f"Cannot delete case '{name}'; it doesn't exist!")
+
+        # Do everything in one go to avoid partial corruption
+        for name in names:
+            # Update the backing model
+            row_idx = np.argwhere(self.model.indices == name).flatten()[0]
+            self.model.dropRow(row_idx)
+            # Update the case map
+            self.case_path_map.pop(name)
         self.has_changed = True
 
     @property
@@ -212,7 +228,7 @@ class Cohort:
     def rename_filter(self, old_name: str, new_name: str):
         # Check that there's actually a filter to rename
         if old_name not in self.filters.keys():
-            raise ValueError(f"Cannot rename filter '{old_name}'; it doesn't exist!")
+            raise ValueError(f"Cannot rename feature '{old_name}'; it doesn't exist!")
         # Update the backing model
         col_idx = np.argwhere(self.model.header == old_name).flatten()[0]
         self.model.setHeaderData(col_idx, qt.Qt.Horizontal, new_name, qt.Qt.EditRole)
@@ -220,6 +236,22 @@ class Cohort:
         filter_map = self.filters.pop(old_name)
         self.filters[new_name] = filter_map
         self.has_changed = True
+
+    def drop_filters(self, names: list[str]):
+        # Check the names before proceeding
+        for name in names:
+            # Check if a case map with this name exists
+            if name not in self.filters.keys():
+                raise ValueError(f"Cannot delete feature '{name}'; it doesn't exist!")
+
+        # Do everything in one go to avoid partial corruption
+        for name in names:
+            # Update the backing model
+            col_idx = np.argwhere(self.model.header == name).flatten()[0]
+            self.model.dropColumn(col_idx)
+            # Update the case map
+            self.filters.pop(name)
+            self.has_changed = True
 
     @property
     def sidecar_data(self) -> dict:
@@ -315,13 +347,13 @@ class Cohort:
         menu = qt.QMenu(parent)
 
         # Add row-specific actions
-        self.addRowActions(menu, idx)
-        self.addColumnActions(menu, idx)
+        self.installRowActions(menu, idx)
+        self.installColumnActions(menu, idx)
 
         # Return the menu
         return menu
 
-    def addRowActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
+    def installRowActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
         # Modification action
         editAction = menu.addAction(_("Modify Case"))
 
@@ -332,7 +364,7 @@ class Cohort:
 
         editAction.triggered.connect(_modifyRow)
 
-    def addColumnActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
+    def installColumnActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
         # Modification action
         editAction = menu.addAction(_("Modify Feature"))
 
@@ -561,7 +593,6 @@ class CohortTableModel(CSVBackedTableModel):
         # Otherwise, delegate to the superclass
         return super().data(index, role)
 
-
     def headerData(self, section: int, orientation: qt.Qt.Orientation, role: int = ...):
         # Note; "section" -> column for Horizontal, row for Vertical
         if role == qt.Qt.DisplayRole:
@@ -570,6 +601,13 @@ class CohortTableModel(CSVBackedTableModel):
             elif orientation == qt.Qt.Vertical:
                 return self.indices[section]
         return None
+
+    def removeColumns(self, column, count, parent = ...):
+        self.beginRemoveColumns(parent, column, column + count - 1)
+        # Offset by 1 to account for the new UID column
+        idx = [column + i + 1 for i in range(count)]
+        self._csv_data = np.delete(self._csv_data, idx, axis=1)
+        self.endRemoveColumns()
 
     def setHeaderData(self, section, orientation, value, role=...):
         if role == qt.Qt.EditRole:
@@ -730,47 +768,8 @@ class CohortEditorDialog(qt.QDialog):
         cohortWidget.setLineWidth(3)
         layout.addWidget(cohortWidget)
 
-        # Add Case (Row) + Add Feature (Column) buttons
-        newCaseButton = qt.QPushButton(_("New Case"))
-        newCaseButton.setToolTip(
-            _(
-                "Add a new case (row) to the cohort. All features (columns) "
-                "will be automatically populated with corresponding files "
-                "wherever possible."
-            )
-        )
-
-        def onNewCaseClicked():
-            dialog = CaseEditorDialog(self._cohort)
-            if dialog.exec():
-                # Without this, the cells rapidly bloat for some reason
-                cohortWidget.tableView.resizeColumnsToContents()
-                cohortWidget.tableView.resizeRowsToContents()
-
-        newCaseButton.clicked.connect(onNewCaseClicked)
-
-        newFeatureButton = qt.QPushButton(_("New Feature"))
-        newFeatureButton.setToolTip(
-            _(
-                "Add a new feature (column) to the cohort. All cases (rows) "
-                "will be automatically populated with corresponding files "
-                "wherever possible"
-            )
-        )
-
-        def onNewFeatureClicked():
-            dialog = FeatureEditorDialog(self._cohort)
-            if dialog.exec():
-                # Without this, the cells rapidly bloat for some reason
-                cohortWidget.tableView.resizeColumnsToContents()
-                cohortWidget.tableView.resizeRowsToContents()
-
-        newFeatureButton.clicked.connect(onNewFeatureClicked)
-
-        newXButtonPanel = qt.QHBoxLayout()
-        newXButtonPanel.addWidget(newCaseButton)
-        newXButtonPanel.addWidget(newFeatureButton)
-        layout.addLayout(newXButtonPanel)
+        # Cohort Management Buttons
+        self._addButtons(layout, cohortWidget)
 
         # Ok/Cancel Buttons
         buttonBox = qt.QDialogButtonBox()
@@ -793,6 +792,102 @@ class CohortEditorDialog(qt.QDialog):
 
         buttonBox.clicked.connect(onButtonClicked)
         layout.addWidget(buttonBox)
+
+    def _addButtons(self, layout: "qt.QVBoxLayout", cohortWidget: "CohortTableWidget") -> qt.QGridLayout:
+        # Add Case (Row) + Add Feature (Column) buttons
+        newCaseButton = qt.QPushButton(_("New Case"))
+        newCaseButton.setToolTip(
+            _(
+                "Add a new case (row) to the cohort. All features (columns) "
+                "will be automatically populated with corresponding files "
+                "wherever possible."
+            )
+        )
+
+        def newCaseClicked():
+            dialog = CaseEditorDialog(self._cohort)
+            if dialog.exec():
+                # Without this, the cells rapidly bloat for some reason
+                cohortWidget.tableView.resizeColumnsToContents()
+                cohortWidget.tableView.resizeRowsToContents()
+        newCaseButton.clicked.connect(newCaseClicked)
+
+        newFeatureButton = qt.QPushButton(_("New Feature"))
+        newFeatureButton.setToolTip(
+            _(
+                "Add a new feature (column) to the cohort. All cases (rows) "
+                "will be automatically populated with corresponding files "
+                "wherever possible"
+            )
+        )
+
+        def newFeatureClicked():
+            dialog = FeatureEditorDialog(self._cohort)
+            if dialog.exec():
+                # Without this, the cells rapidly bloat for some reason
+                cohortWidget.tableView.resizeColumnsToContents()
+                cohortWidget.tableView.resizeRowsToContents()
+        newFeatureButton.clicked.connect(newFeatureClicked)
+
+        # Drop Cases (Rows) + Drop Features (Columns) Buttons
+        dropCasesButton = qt.QPushButton(_("Drop Case(s)"))
+        dropCasesButton.setToolTip(
+            _(
+                "Drop the selected case(s) (rows) in the cohort. THIS CANNOT BE UNDONE!"
+            )
+        )
+
+        def dropCasesClicked():
+            # Prompt the user to confirm this is what they want to do
+            msg = qt.QMessageBox()
+            msg.setWindowTitle("Are you sure?")
+            case_names = list({
+                self._cohort.model.indices[idx.row()]
+                for idx in cohortWidget.selectedIndices
+            })
+            case_points = "\n".join(["  * " + c for c in case_names])
+            msg.setText(
+                "You are about to delete the following cases:\n"
+                f"{case_points}\n"
+                f"Are you sure?"
+            )
+            msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
+            # Only apply the deletion if confirmed by the user
+            if msg.exec() == qt.QMessageBox.Yes:
+                self._cohort.drop_cases(case_names)
+        dropCasesButton.clicked.connect(dropCasesClicked)
+
+        dropFeatureButton = qt.QPushButton(_("Drop Feature(s)"))
+        dropFeatureButton.setToolTip(
+            _("Drop the selected feature(s) (columns) in the cohort. THIS CANNOT BE UNDONE!")
+        )
+
+        def dropFeatureClicked():
+            # Prompt the user to confirm this is what they want to do
+            msg = qt.QMessageBox()
+            msg.setWindowTitle("Are you sure?")
+            feature_names = list({
+                self._cohort.model.header[idx.column()]
+                for idx in cohortWidget.selectedIndices
+            })
+            feature_points = "\n".join(["  * " + c for c in feature_names])
+            msg.setText(
+                "You are about to delete the following features:\n"
+                f"{feature_points}\n"
+                f"Are you sure?"
+            )
+            msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
+            # Only apply the deletion if confirmed by the user
+            if msg.exec() == qt.QMessageBox.Yes:
+                self._cohort.drop_filters(feature_names)
+        dropFeatureButton.clicked.connect(dropFeatureClicked)
+
+        buttonPanel = qt.QGridLayout()
+        buttonPanel.addWidget(newCaseButton, 0, 0)
+        buttonPanel.addWidget(newFeatureButton, 0, 1)
+        buttonPanel.addWidget(dropCasesButton, 1, 0)
+        buttonPanel.addWidget(dropFeatureButton, 1, 1)
+        layout.addLayout(buttonPanel)
 
     def closeEvent(self, event):
         # Confirm that the user wants to reject any changes they made first

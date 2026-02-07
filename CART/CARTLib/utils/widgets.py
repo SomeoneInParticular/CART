@@ -152,14 +152,34 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         return self.csv_data.shape[1]
 
     def insertRows(self, row: int, count: int, parent = ...):
-        self.beginInsertRows(parent, row, row+count-1)
-        self._csv_data = np.insert(self._csv_data, row, "", axis=0)
+        self.beginInsertRows(parent, row, row + count - 1)
+        # Numpy inserts iteratively, hence the "replicated" index
+        idx = [row] * count
+        self._csv_data = np.insert(self._csv_data, idx, "", axis=0)
         self.endInsertRows()
 
     def insertColumns(self, column: int, count: int, parent = ...):
-        self.beginInsertColumns(parent, column, column+count-1)
-        self._csv_data = np.insert(self._csv_data, column, "", axis=1)
+        self.beginInsertColumns(parent, column, column + count - 1)
+        # Numpy inserts iteratively, hence the "replicated" index
+        idx = [column] * count
+        self._csv_data = np.insert(self._csv_data, idx, "", axis=1)
         self.endInsertColumns()
+
+    def removeRows(self, row, count, parent = ...):
+        self.beginRemoveRows(parent, row, row + count - 1)
+        # Unlike insertion, numpy does this simultaneously
+        # Offset by 1 to account for the header row
+        idx = [row + i + 1 for i in range(count)]
+        self._csv_data = np.delete(self._csv_data, idx, axis=0)
+        print(self._csv_data)
+        self.endRemoveRows()
+
+    def removeColumns(self, column, count, parent = ...):
+        self.beginRemoveColumns(parent, column, column + count - 1)
+        # Unlike insertion, numpy does this simultaneously
+        idx = [column + i for i in range(count)]
+        self._csv_data = np.delete(self._csv_data, idx, axis=1)
+        self.endRemoveColumns()
 
     def setRow(self, row_idx, contents: "npt.NDArray[str]"):
         # "Trim" the contents to the same size, padding with blanks if needed.
@@ -197,10 +217,19 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         # Update the new column's contents
         self.setColumn(col_idx, contents)
 
+    def dropRow(self, row_idx: int):
+        if row_idx >= self.rowCount():
+            raise ValueError(f"Cannot drop row {row_idx}, index is out of range.")
+        self.removeRow(row_idx)
+
+    def dropColumn(self, col_idx):
+        if col_idx > self.columnCount():
+            raise ValueError(f"Cannot drop column {col_idx}, index is out of range.")
+        self.removeColumn(col_idx)
+
     def flags(self, __: qt.QModelIndex) -> "qt.Qt.ItemFlags":
         # Return the current set of flags for the model
         return self._flags
-
     ## I/O ##
     def load(self):
         # Denote that a full reset is beginning
@@ -324,6 +353,13 @@ class CSVBackedTableWidget(qt.QStackedWidget):
         # If neither of the above, something's gone wrong
         else:
             self.setCurrentWidget(self.errorLabel)
+
+    @property
+    def selectedIndices(self) -> list[qt.QModelIndex]:
+        return self.tableView.selectedIndexes()
+
+    def headerAt(self, idx: int):
+        return self.model.header[idx]
 
 
 ## CART-Tuned Segmentation Editor ##
