@@ -944,7 +944,10 @@ class FeatureEditorDialog(qt.QDialog):
         self._reference_feature = feature_name
 
         # Initial setup
-        self.setWindowTitle(_("Add New Feature"))
+        if feature_name:
+            self.setWindowTitle(_(f"Editing Feature '{feature_name}'"))
+        else:
+            self.setWindowTitle(_("Add New Feature"))
         self.setMinimumSize(500, self.minimumHeight)
         layout = qt.QFormLayout(self)
 
@@ -1020,9 +1023,9 @@ class FeatureEditorDialog(qt.QDialog):
                 # Delegate to "onCancel" to prevent immediate closing
                 self.onCancel()
             elif button_role == qt.QDialogButtonBox.AcceptRole:
-                # Apply the requested changes to the cohort before closing.
-                self.apply_changes()
-                self.accept()
+                # Attempt to apply the requested changes before closing
+                if self.apply_changes():
+                    self.accept()
             else:
                 raise ValueError("Pressed a button with an invalid role!")
 
@@ -1144,9 +1147,21 @@ class FeatureEditorDialog(qt.QDialog):
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed
         if not self.has_changed:
-            return
-        # Parse the contents of our GUI elements, stripping leading/trailing whitespace
+            return True
+
+        # Make sure a feature of this name doesn't already exist
         label = self.namePreviewField.text.strip()
+        if self._reference_feature is None and label in self._cohort.filters.keys():
+            # If it does, show an error and return "False" (no changes made)
+            qt.QMessageBox.critical(
+                None,
+                "Invalid Feature Name",
+                f"A feature of the name '{label}' already exists; please change it to be unique.",
+                qt.QMessageBox.Ok,
+            )
+            return False
+
+        # Parse the contents of our GUI elements, stripping leading/trailing whitespace
         filter_entry: FilterEntry = {
             Cohort.FILTER_INCLUDE_KEY: [
                 s.strip() for s in self.includeField.text.split(",")
@@ -1170,6 +1185,9 @@ class FeatureEditorDialog(qt.QDialog):
 
         # Update cohort to use the new filter
         self._cohort.set_filter(label, filter_entry)
+
+        # Signal that everything ran successfully
+        return True
 
 
 class CaseEditorDialog(qt.QDialog):
@@ -1195,7 +1213,11 @@ class CaseEditorDialog(qt.QDialog):
         self._reference_case = case_id
 
         # Initial setup
-        self.setWindowTitle(_("Add New Case"))
+        # Initial setup
+        if case_id:
+            self.setWindowTitle(_(f"Editing Case '{case_id}'"))
+        else:
+            self.setWindowTitle(_("Add New Case"))
         self.setMinimumSize(500, self.minimumHeight)
         layout = qt.QFormLayout(self)
 
@@ -1279,8 +1301,8 @@ class CaseEditorDialog(qt.QDialog):
                 self.onCancel()
             elif button_role == qt.QDialogButtonBox.AcceptRole:
                 # Apply the requested changes to the cohort before closing.
-                self.apply_changes()
-                self.accept()
+                if self.apply_changes():
+                    self.accept()
             else:
                 raise ValueError("Pressed a button with an invalid role!")
 
@@ -1309,10 +1331,21 @@ class CaseEditorDialog(qt.QDialog):
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed
         if not self.has_changed:
-            return
+            return True
+
+        # Make sure a case with this name doesn't already exist
+        label = self.nameField.text.strip()
+        if self._reference_case is None and label in self._cohort.case_path_map.keys():
+            # If it does, show an error and return "False" (no changes made)
+            qt.QMessageBox.critical(
+                None,
+                "Invalid Case Name",
+                f"A case with the name '{label}' already exists; please change it to be unique.",
+                qt.QMessageBox.Ok,
+            )
+            return False
 
         # Parse the contents of our GUI elements, stripping leading/trailing whitespace
-        label = self.nameField.text.strip()
         search_paths: list[Path] = []
         for i in range(self.searchPathList.count):
             p = Path(self.searchPathList.item(i).text())
@@ -1327,3 +1360,6 @@ class CaseEditorDialog(qt.QDialog):
 
         # Insert it into our cohort
         self._cohort.set_case_paths(label, search_paths)
+
+        # Confirm that the changes went through
+        return True
