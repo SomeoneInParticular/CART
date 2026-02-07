@@ -6,7 +6,8 @@ import qt
 from slicer.i18n import tr as _
 
 from CARTLib.utils import CART_PATH
-from CARTLib.utils.cohort import cohort_from_generator, CohortTableWidget, CohortEditorDialog, NewCohortDialog
+from CARTLib.utils.cohort import cohort_from_generator, CohortTableWidget, CohortEditorDialog, NewCohortDialog, \
+    CohortModel
 from CARTLib.utils.config import JobProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
 
@@ -611,7 +612,9 @@ class _CohortWizardPage(qt.QWizardPage):
             wz: JobSetupWizard = self.wizard()
             data_path = wz.data_path
             reference_task = CART_TASK_REGISTRY[wz.selected_task]
-            dialog = CohortEditorDialog.from_paths(self.cohort_path, data_path, reference_task)
+            dialog = CohortEditorDialog.from_paths(
+                self.cohort_path, data_path, reference_task=reference_task
+            )
             self.mediateCohortEditor(dialog, cohortPreviewWidget)
         editCohortButton.clicked.connect(onEditClick)
         buttonLayout.addWidget(editCohortButton)
@@ -640,7 +643,7 @@ class _CohortWizardPage(qt.QWizardPage):
         layout.addRow(buttonWidget)
 
         # Cohort preview widget; it's a preview, so disable editing
-        cohortPreviewWidget = CohortTableWidget.from_path(None)
+        cohortPreviewWidget = CohortTableWidget.from_path(None, editable=False)
         def onPreviewClick():
             cohortPreviewWidget.backing_csv = self.cohort_path
         previewCohortButton.clicked.connect(onPreviewClick)

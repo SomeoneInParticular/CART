@@ -35,39 +35,59 @@ COHORT_VERSION = "0.1.0"
 
 
 ## Core ##
-class Cohort:
+class CohortModel(CSVBackedTableModel):
+    """
+    More specialized version of the CSV-backed model w/ additional checks
+    and features specific to cohort editing.
+    """
+
+    ## Constructors ##
     def __init__(
         self,
-        csv_path: Path,
-        data_path: Path,
+        # NOTE: These are "optional mandatory" to force devs to consider why they're doing this!
+        csv_path: Optional[Path],
+        data_path: Optional[Path],
+        editable: bool = True,
         reference_task: "type[TaskBaseClass]" = None,
-        use_sidecar: bool = True
+        use_sidecar: bool = True,
+        parent: qt.QObject = None
     ):
-        # Tracker for the model tracking the CSV data
-        self._model: CohortTableModel = CohortTableModel(csv_path)
+        # Disable editing explicitly if no data path is provided
+        if data_path is None:
+            editable = False
 
-        # Whenever the model's contents changes, mark ourselves as having changed too
-        self.has_changed = False
+        super().__init__(csv_path, editable, parent)
 
-        def _onModelChanged():
-            self.has_changed = True
+        # Try to move the UID column to the front of the array
+        if self._csv_path is not None:
+            if not self._move_uid_to_index():
+                raise ValueError("No UID column found, cannot set up Cohort model!")
 
-        self._model.dataChanged.connect(_onModelChanged)
-
-        # Track the data path for later
+        # Track the data path and reference task for later
         self.data_path = data_path
-
-        # Track the reference task for later
         self.reference_task = reference_task
 
-        # JSON sidecar management
+        # Track whenever anything about this model changes!
+        self.dataChanged.connect(self._mark_changed)
+        self.headerDataChanged.connect(self._mark_changed)
+        self.rowsInserted.connect(self._mark_changed)
+        self.rowsMoved.connect(self._mark_changed)
+        self.rowsRemoved.connect(self._mark_changed)
+        self.columnsInserted.connect(self._mark_changed)
+        self.columnsMoved.connect(self._mark_changed)
+        self.columnsRemoved.connect(self._mark_changed)
+
+        # Load (or initialize) our sidecar data
         self.use_sidecar = use_sidecar
         if use_sidecar:
-            self.load_sidecar()
+            self._load_sidecar()
         else:
             # If no sidecar is to be used, generate blank cohort/filter entries
-            self._case_path_map: CaseMap = dict()
-            self._filters: FilterMap = dict()
+            self._case_map: CaseMap = dict()
+            self._feature_map: FilterMap = dict()
+
+        # Set ourselves to "not changed"
+        self.has_changed = False
 
     @classmethod
     def from_case_map(
@@ -75,7 +95,9 @@ class Cohort:
         csv_path: Path,
         data_path: Path,
         case_map: CaseMap,
+        editable: bool = True,
         reference_task: "TaskBaseClass" = None,
+        use_sidecar: bool = True
     ):
         # Exit immediately if the case-map is empty
         if len(case_map) < 1:
@@ -84,45 +106,56 @@ class Cohort:
         row_data = [["uid"], *[[k] for k in case_map.keys()]]
         with open(csv_path, "w") as fp:
             csv.writer(fp).writerows(row_data)
-        # Generate the cohort instance, backed by this new CSV file
-        cohort = cls(csv_path, data_path, reference_task, use_sidecar=True)
+        # Generate a new cohort instance, backed by this new CSV file
+        cohort = cls(csv_path, data_path, editable, reference_task, use_sidecar)
         # Manually update its case map to match
-        cohort._case_path_map = case_map
+        cohort._case_map = case_map
         # Immediately save the sidecar as well, for parity
-        cohort.save_sidecar()
+        cohort._save_sidecar()
 
         return cohort
 
+    ## Setup Utilities ##
+    def _mark_changed(self):
+        self.has_changed = True
+
+    def _move_uid_to_index(self) -> bool:
+        # If the UID is already in the index position, do nothing
+        if self._csv_data[0, 0].lower() == "uid":
+            return True
+        # Otherwise, find and move the UID column to the front
+        for i, c in enumerate(self.header):
+            if c.lower() == "uid":
+                # Model "reset", as this changes more than just one column's pos
+                self.beginResetModel()
+                uid_arr = self._csv_data[:, i]
+                np.delete(self._csv_data, i, axis=1)
+                np.insert(self._csv_data, 0, uid_arr, axis=1)
+                self.endResetModel()
+                return True
+        # If that fails (there's no UID column), return False for handling
+        return False
+
     ## Attributes/Properties ##
-    @property
-    def model(self) -> "CohortTableModel":
-        # Get-only to avoid desync
-        return self._model
-
-    @property
-    def csv_path(self) -> Path:
-        return self._model.csv_path
-
-    @csv_path.setter
-    def csv_path(self, new_path: Path):
-        # Note: the model implicitly reloads itself when a new CSV is specified.
-        self._model.csv_path = new_path
-        # Reset the filter data as well.
-        self.load_sidecar()
-
     @property
     def sidecar_path(self) -> Path:
         # Get-only to avoid desync
         return self.csv_path.with_suffix(".json")
 
     @property
-    def case_path_map(self) -> CaseMap:
-        # Get-only; use the set/remove functions instead, or edit the returned dict directly
-        return self._case_path_map
+    def case_map(self):
+        # Get only; use the set/remove functions instead
+        return self._case_map
 
-    def set_case_paths(self, case_label: str, search_paths: list[Path]):
+    @property
+    def feature_map(self):
+        # Get only; use the set/remove functions instead
+        return self._feature_map
+
+    ## Sidecar Management ##
+    def set_case_data(self, case_label: str, search_paths: list[Path]):
         """
-        Set the search paths for a given case map in the cohort
+        Set the search paths for a given case in the cohort
 
         :param case_label: The label for the case (and its search paths).
             If a case already exists with this label, replaces it; otherwise, a new case is created.
@@ -133,67 +166,60 @@ class Cohort:
         new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
 
         # If this is a new case, create a new column to match
-        if case_label not in self.case_path_map.keys():
-            row_idx = self.model.rowCount()
-            self.model.addRow(row_idx, new_paths)
+        if case_label not in self.case_map.keys():
+            # Create a new row at the end of the dataset
+            row_idx = self.rowCount()
+            self.addRow(row_idx, new_paths)
             # Set the header to this new label
-            self.model.setHeaderData(
+            self.setHeaderData(
                 row_idx, qt.Qt.Vertical, case_label, qt.Qt.EditRole
             )
         # Otherwise, replace the row's values with the newly found paths
         else:
             # Find the column position which matches our feature label
-            row_idx = np.argwhere(self.model.indices == case_label).flatten()[0]
-            # Change the model's contents to our new list of paths
-            self.model.setRow(row_idx, new_paths)
+            row_idx = np.argwhere(self.indices == case_label).flatten()[0]
+            # Change the column's contents to our new list of paths
+            self.setRow(row_idx, new_paths)
 
         # Save the new filter for later
-        self.case_path_map[case_label] = search_paths
-        self.has_changed = True
+        self.case_map[case_label] = search_paths
 
     def rename_case(self, old_name: str, new_name: str):
         # Check if a case map with this name already exists
-        if old_name not in self.case_path_map.keys():
+        if old_name not in self.case_map.keys():
             raise ValueError(f"Cannot rename case '{old_name}'; it doesn't exist!")
         # Update the backing model
-        row_idx = np.argwhere(self.model.indices == old_name).flatten()[0]
-        self.model.setHeaderData(row_idx, qt.Qt.Vertical, new_name, qt.Qt.EditRole)
+        row_idx = np.argwhere(self.indices == old_name).flatten()[0]
+        self.setHeaderData(row_idx, qt.Qt.Vertical, new_name, qt.Qt.EditRole)
         # Update the case map to reflect the change
-        case_map_entry = self.case_path_map.pop(old_name)
-        self.case_path_map[new_name] = case_map_entry
-        self.has_changed = True
+        case_map_entry = self.case_map.pop(old_name)
+        self.case_map[new_name] = case_map_entry
 
     def drop_cases(self, names: list[str]):
         # Check the names before proceeding
         for name in names:
             # Check if a case map with this name exists
-            if name not in self.case_path_map.keys():
+            if name not in self.case_map.keys():
                 raise ValueError(f"Cannot delete case '{name}'; it doesn't exist!")
 
         # Do everything in one go to avoid partial corruption
         for name in names:
             # Update the backing model
-            row_idx = np.argwhere(self.model.indices == name).flatten()[0]
-            self.model.dropRow(row_idx)
+            row_idx = np.argwhere(self.indices == name).flatten()[0]
+            self.dropRow(row_idx)
             # Update the case map
-            self.case_path_map.pop(name)
-        self.has_changed = True
-
-    @property
-    def filters(self) -> FilterMap:
-        # Get-only; use the set/remove functions instead, or edit the returned dict directly
-        return self._filters
+            self.case_map.pop(name)
 
     FILTER_INCLUDE_KEY = "include"
     FILTER_EXCLUDE_KEY = "exclude"
 
-    def set_filter(self, filter_label: str, filter_entry: FilterEntry):
+    def set_feature_data(self, feature_label: str, filter_entry: FilterEntry):
         """
-        Set the filter associated with a given feature label in the cohort
+        Set the filters for a given feature in the cohort.
 
-        :param filter_label: The label of the filter.
+        :param feature_label: The label of the feature to update/create.
             If a filter already exists with this label, replaces it; otherwise, a new filter is created
-        :param filter_entry: The filter entry to associate with the given label.
+        :param filter_entry: The filter entry to associate with the new/updated feature.
         """
         # Validate the new filter entry
         keyset = set(filter_entry.keys())
@@ -207,177 +233,114 @@ class Cohort:
         new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
 
         # If this is a new feature, create a new column to match
-        if filter_label not in self.model.header:
-            col_idx = self.model.columnCount()
-            self.model.addColumn(col_idx, new_paths)
+        if feature_label not in self.header:
+            # Add a new column to the end of the dataset
+            col_idx = self.columnCount()
+            self.addColumn(col_idx, new_paths)
             # Set the header to this new label
-            self.model.setHeaderData(
-                col_idx, qt.Qt.Horizontal, filter_label, qt.Qt.EditRole
+            self.setHeaderData(
+                col_idx, qt.Qt.Horizontal, feature_label, qt.Qt.EditRole
             )
         # Otherwise, replace the column's values with the newly found paths
         else:
             # Find the column position which matches our feature label
-            col_idx = np.argwhere(self.model.header == filter_label).flatten()[0]
+            col_idx = np.argwhere(self.header == feature_label).flatten()[0]
             # Change the model's contents to our new list of paths
-            self.model.setColumn(col_idx, new_paths)
+            self.setColumn(col_idx, new_paths)
 
         # Save the new filter for later
-        self.filters[filter_label] = filter_entry
-        self.has_changed = True
+        self.feature_map[feature_label] = filter_entry
 
     def rename_filter(self, old_name: str, new_name: str):
         # Check that there's actually a filter to rename
-        if old_name not in self.filters.keys():
+        if old_name not in self.feature_map.keys():
             raise ValueError(f"Cannot rename feature '{old_name}'; it doesn't exist!")
         # Update the backing model
-        col_idx = np.argwhere(self.model.header == old_name).flatten()[0]
-        self.model.setHeaderData(col_idx, qt.Qt.Horizontal, new_name, qt.Qt.EditRole)
+        col_idx = np.argwhere(self.header == old_name).flatten()[0]
+        self.setHeaderData(col_idx, qt.Qt.Horizontal, new_name, qt.Qt.EditRole)
         # Update the filter map to reflect the change
-        filter_map = self.filters.pop(old_name)
-        self.filters[new_name] = filter_map
-        self.has_changed = True
+        filter_map = self.feature_map.pop(old_name)
+        self.feature_map[new_name] = filter_map
 
     def drop_filters(self, names: list[str]):
         # Check the names before proceeding
         for name in names:
             # Check if a case map with this name exists
-            if name not in self.filters.keys():
+            if name not in self.feature_map.keys():
                 raise ValueError(f"Cannot delete feature '{name}'; it doesn't exist!")
 
         # Do everything in one go to avoid partial corruption
         for name in names:
             # Update the backing model
-            col_idx = np.argwhere(self.model.header == name).flatten()[0]
-            self.model.dropColumn(col_idx)
+            col_idx = np.argwhere(self.header == name).flatten()[0]
+            self.dropColumn(col_idx)
             # Update the case map
-            self.filters.pop(name)
-            self.has_changed = True
+            self.feature_map.pop(name)
+
+    ## Data Management ##
+    @property
+    def csv_data(self) -> "Optional[npt.NDArray]":
+        if self._csv_data is None:
+            return None
+        # Suppressed because PyCharm went mad for some reason here
+        # noinspection PyTypeChecker
+        return self._csv_data[1:, 1:]
 
     @property
-    def sidecar_data(self) -> dict:
-        # Get only to avoid desync
-        return self._sidecar_data
+    def header(self) -> "npt.NDArray[str]":
+        return self._csv_data[0, 1:]
 
-    ## Methods ##
-    VERSION_KEY = "cohort_version"
-    CASE_PATH_KEY = "case_paths"
-    FILTERS_KEY = "filters"
+    @property
+    def indices(self) -> "npt.NDArray[str]":
+        data = self._csv_data[1:, 0]
+        return data
 
-    def save(self):
-        # Only try and save if something has changed since we last loaded
-        if self.has_changed:
-            self.save_csv()
-            self.save_sidecar()
-            self.has_changed = False
-
-    def save_csv(self):
-        self._model.save()
-
-    def save_sidecar(self):
-        sidecar_data = {
-            self.VERSION_KEY: COHORT_VERSION,
-            self.CASE_PATH_KEY: {
-                k: [str(x) for x in v] for k, v in self.case_path_map.items()
-            },
-            self.FILTERS_KEY: self.filters,
-        }
-
-        with open(self.sidecar_path, "w") as fp:
-            json.dump(sidecar_data, fp, indent=2)
-
-    def load(self):
-        self.load_csv()
-        self.load_sidecar()
-        self.has_changed = False
-
-    def load_csv(self):
-        # Delegate to our backing model
-        self._model.load()
-
-    def load_sidecar(self):
-        # If this is for a not-yet-created cohort...
-        if not self.csv_path:
-            # ... reset everything and end
-            self._case_path_map = {}
-            self._filters = {}
-            self._model._csv_data = None
-            return
-        # If we're just missing the sidecar...
-        elif not self.sidecar_path.exists():
-            # ... just reset the relevant contents instead
-            self._case_path_map = {}
-            self._filters = {}
-            return
-        # Otherwise, use the sidecar's contents to update our values
-        with open(self.sidecar_path, "r") as fp:
-            case_path_data = json.load(fp)
-
-        # Update the case search paths
-        case_data = case_path_data.get(self.CASE_PATH_KEY)
-        if type(case_data) is not dict:
-            raise ValueError(
-                f"Cannot load sidecar, '{self.CASE_PATH_KEY}' was malformed!"
+    def data(self, index: qt.QModelIndex, role=qt.Qt.DisplayRole):
+        # If this is a tooltip role, add the corresponding tooltip
+        if role == qt.Qt.ToolTipRole and self.is_editable():
+            row_name = self.indices[index.row()]
+            col_name = self.header[index.column()]
+            return _(
+                "Double-click to manually set the value of this cell.\n"
+                "Right click to edit the settings for the entire case "
+                f"({row_name}) or feature ({col_name});\n"
+                "This will update ALL cells for that row/column!"
             )
-        self._case_path_map = {k: [Path(x) for x in v] for k, v in case_data.items()}
+        # Otherwise, delegate to the superclass
+        return super().data(index, role)
 
-        # Update the filters
-        filter_data = case_path_data.get(self.FILTERS_KEY, {})
-        if type(filter_data) is not dict:
-            raise ValueError(
-                f"Cannot load sidecar, '{self.FILTERS_KEY}' was malformed!"
-            )
-        self._filters = {k: v for k, v in filter_data.items()}
+    def headerData(self, section: int, orientation: qt.Qt.Orientation, role: int = ...):
+        # Note; "section" -> column for Horizontal, row for Vertical
+        if role == qt.Qt.DisplayRole:
+            if orientation == qt.Qt.Horizontal:
+                return self.header[section]
+            elif orientation == qt.Qt.Vertical:
+                return self.indices[section]
+        return None
 
-    ## GUI Elements ##
-    def editorWidget(self, parent: qt.QObject = None) -> "CohortTableWidget":
-        widget = CohortTableWidget(self.model, parent)
-        if self._model.is_editable():
-            widget.tableView.context_generator = lambda idx: self.newContextMenu(
-                idx, widget
-            )
-        return widget
+    def removeColumns(self, column, count, parent = ...):
+        self.beginRemoveColumns(parent, column, column + count - 1)
+        # Offset by 1 to account for the new UID column
+        idx = [column + i + 1 for i in range(count)]
+        self._csv_data = np.delete(self._csv_data, idx, axis=1)
+        self.endRemoveColumns()
 
-    def newContextMenu(
-        self, idx: qt.QModelIndex, parent: qt.QObject = None
-    ) -> Optional[qt.QMenu]:
-        # Generate a context menu
-        menu = qt.QMenu(parent)
+    def setHeaderData(self, section, orientation, value, role=...):
+        if role == qt.Qt.EditRole:
+            if orientation == qt.Qt.Horizontal:
+                self.header[section] = value
+            elif orientation == qt.Qt.Vertical:
+                self.indices[section] = value
+            self.headerDataChanged(orientation, section, section)
 
-        # Add row-specific actions
-        self.installRowActions(menu, idx)
-        self.installColumnActions(menu, idx)
-
-        # Return the menu
-        return menu
-
-    def installRowActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
-        # Modification action
-        editAction = menu.addAction(_("Modify Case"))
-
-        def _modifyRow():
-            row_id = self.model.indices[idx.row()]
-            dialog = CaseEditorDialog(self, row_id)
-            dialog.exec()
-
-        editAction.triggered.connect(_modifyRow)
-
-    def installColumnActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
-        # Modification action
-        editAction = menu.addAction(_("Modify Feature"))
-
-        def _modifyRow():
-            col_id = self.model.header[idx.column()]
-            dialog = FeatureEditorDialog(self, col_id)
-            dialog.exec()
-
-        editAction.triggered.connect(_modifyRow)
-
+    ## File Searching/Filtering ##
     def find_first_valid_file(
         self, search_paths: list[Path], filters: FilterEntry
     ) -> Optional[Path]:
         # Isolate the filters from one another
         include_values = filters[self.FILTER_INCLUDE_KEY]
         exclude_values = filters[self.FILTER_EXCLUDE_KEY]
+
         # Search every path in turn
         result = None
         for p in search_paths:
@@ -418,18 +381,87 @@ class Cohort:
 
     def find_row_files(self, search_paths: list[Path]) -> list[Optional[Path]]:
         result_map = {}
-        for k, v in self.filters.items():
+        for k, v in self.feature_map.items():
             result_map[k] = self.find_first_valid_file(search_paths, v)
-        sorted_pathlist = [result_map.get(k, None) for k in self.model.header]
+        sorted_pathlist = [result_map.get(k, None) for k in self.header]
         return sorted_pathlist
 
     def find_column_files(self, column_filters: FilterEntry) -> list[Optional[Path]]:
         result_map = {}
-        for k, v in self.case_path_map.items():
+        for k, v in self.case_map.items():
             result_map[k] = self.find_first_valid_file(v, column_filters)
-        sorted_pathlist = [result_map.get(k, None) for k in self.model.indices]
+        sorted_pathlist = [result_map.get(k, None) for k in self.indices]
         return sorted_pathlist
 
+    ## I/O ##
+    VERSION_KEY = "cohort_version"
+    CASE_PATH_KEY = "case_paths"
+    FILTERS_KEY = "filters"
+
+    def save(self):
+        # Only save if we have changed
+        if self.has_changed:
+            # Save the CSV (super-class delegate)
+            super().save()
+            # Save the sidecar as well
+            self._save_sidecar()
+            # Mark ourselves as unchanged
+            self.has_changed = False
+
+    def _save_sidecar(self):
+        # Save the sidecar data on its own.
+        sidecar_data = {
+            self.VERSION_KEY: COHORT_VERSION,
+            self.CASE_PATH_KEY: {
+                k: [str(x) for x in v] for k, v in self.case_map.items()
+            },
+            self.FILTERS_KEY: self.feature_map,
+        }
+
+        with open(self.sidecar_path, "w") as fp:
+            json.dump(sidecar_data, fp, indent=2)
+
+    def load(self):
+        # Load the CSV contents
+        super().load()
+        # Load the sidecar contents as well
+        self._load_sidecar()
+        # Mark ourselves as unchanged
+        self.has_changed = False
+
+    def _load_sidecar(self):
+        # If this is for a not-yet-created cohort...
+        if not self.csv_path:
+            # ... reset everything and end
+            self._case_map = {}
+            self._feature_map = {}
+            self._csv_data = None
+            return
+        # If we're just missing the sidecar...
+        elif not self.sidecar_path.exists():
+            # ... just reset the relevant contents instead
+            self._case_map = {}
+            self._feature_map = {}
+            return
+        # Otherwise, use the sidecar's contents to update ourselves
+        with open(self.sidecar_path, "r") as fp:
+            case_path_data = json.load(fp)
+
+        # Update the case map
+        case_data = case_path_data.get(self.CASE_PATH_KEY)
+        if type(case_data) is not dict:
+            raise ValueError(
+                f"Cannot load sidecar, '{self.CASE_PATH_KEY}' was malformed!"
+            )
+        self._case_map = {k: [Path(x) for x in v] for k, v in case_data.items()}
+
+        # Update the filters
+        filter_data = case_path_data.get(self.FILTERS_KEY, {})
+        if type(filter_data) is not dict:
+            raise ValueError(
+                f"Cannot load sidecar, '{self.FILTERS_KEY}' was malformed!"
+            )
+        self._feature_map = {k: v for k, v in filter_data.items()}
 
 ## Generators ##
 class CaseGenerator(Protocol):
@@ -510,7 +542,7 @@ def register_case_generator(label: str, generator: CaseGenerator):
 
 def cohort_from_generator(
     cohort_name: str, data_path: Path, output_path: Path, generator: CaseGenerator
-) -> Cohort:
+) -> CohortModel:
     """
     Generate a cohort from scratch, using the provided generator and input dataset.
 
@@ -521,100 +553,11 @@ def cohort_from_generator(
     """
     case_map = generator(data_path)
     csv_path = output_path / f"{cohort_name}.csv"
-    cohort = Cohort.from_case_map(csv_path, data_path, case_map)
+    cohort = CohortModel.from_case_map(csv_path, data_path, case_map)
     return cohort
 
 
 ## Related Widgets ##
-class CohortTableModel(CSVBackedTableModel):
-    """
-    More specialized version of the CSV-backed model w/ additional checks
-    and features specific to cohort editing
-    """
-
-    def __init__(
-        self, csv_path: Optional[Path], editable: bool = True, parent: qt.QObject = None
-    ):
-        super().__init__(csv_path, editable, parent)
-
-        # Try to move the UID column to the front of the array
-        if self._csv_path is not None:
-            if not self._move_uid_to_index():
-                raise ValueError("No UID column found, cannot set up Cohort model!")
-
-    def _move_uid_to_index(self) -> bool:
-        # If the UID is already in the index position, do nothing
-        if self._csv_data[0, 0].lower() == "uid":
-            return True
-        # Otherwise, find and move the UID column to the front
-        for i, c in enumerate(self.header):
-            if c.lower() == "uid":
-                # Model "reset", as this changes more than just one column's pos
-                self.beginResetModel()
-                uid_arr = self._csv_data[:, i]
-                np.delete(self._csv_data, i, axis=1)
-                np.insert(self._csv_data, 0, uid_arr, axis=1)
-                self.endResetModel()
-                return True
-        # If that fails (there's no UID column), return False for handling
-        return False
-
-    @property
-    def csv_data(self) -> "Optional[npt.NDArray]":
-        if self._csv_data is None:
-            return None
-        # Suppressed because PyCharm went mad for some reason here
-        # noinspection PyTypeChecker
-        return self._csv_data[1:, 1:]
-
-    @property
-    def header(self) -> "npt.NDArray[str]":
-        return self._csv_data[0, 1:]
-
-    @property
-    def indices(self) -> "npt.NDArray[str]":
-        data = self._csv_data[1:, 0]
-        return data
-
-    def data(self, index: qt.QModelIndex, role=qt.Qt.DisplayRole):
-        # If this is a tooltip role, add the corresponding tooltip
-        if role == qt.Qt.ToolTipRole and self.is_editable():
-            row_name = self.indices[index.row()]
-            col_name = self.header[index.column()]
-            return _(
-                "Double-click to manually set the value of this cell.\n"
-                "Right click to edit the settings for the entire case "
-                f"({row_name}) or feature ({col_name});\n"
-                "This will update ALL cells for that row/column!"
-            )
-        # Otherwise, delegate to the superclass
-        return super().data(index, role)
-
-    def headerData(self, section: int, orientation: qt.Qt.Orientation, role: int = ...):
-        # Note; "section" -> column for Horizontal, row for Vertical
-        if role == qt.Qt.DisplayRole:
-            if orientation == qt.Qt.Horizontal:
-                return self.header[section]
-            elif orientation == qt.Qt.Vertical:
-                return self.indices[section]
-        return None
-
-    def removeColumns(self, column, count, parent = ...):
-        self.beginRemoveColumns(parent, column, column + count - 1)
-        # Offset by 1 to account for the new UID column
-        idx = [column + i + 1 for i in range(count)]
-        self._csv_data = np.delete(self._csv_data, idx, axis=1)
-        self.endRemoveColumns()
-
-    def setHeaderData(self, section, orientation, value, role=...):
-        if role == qt.Qt.EditRole:
-            if orientation == qt.Qt.Horizontal:
-                self.header[section] = value
-            elif orientation == qt.Qt.Vertical:
-                self.indices[section] = value
-            self.headerDataChanged(orientation, section, section)
-
-
 class CohortTableView(qt.QTableView):
     """
     Provides a default context menu for use w/ this class of widgets.
@@ -622,34 +565,54 @@ class CohortTableView(qt.QTableView):
     Generally, however, you should use CohortTableWidget (below) instead.
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent: qt.QObject = None):
+        super().__init__(parent)
 
         # Change the layout to be more sensible
         self.horizontalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
         self.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
         self.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
 
-        # Track a "context generator" function for this view
-        self.context_generator: Callable[[qt.QModelIndex], Optional[qt.QMenu]] = None
-
     def contextMenuEvent(self, event: "qt.QContextMenuEvent"):
-        # If we don't have a context menu generator, do nothing
-        if self.context_generator is None:
+        # If the table we're viewing isn't editable, skip
+        if not self.model().is_editable():
             return
 
-        # Otherwise, use the generator to build the menu and show it
+        # If the corresponding index is invalid, end here
         pos = event.pos()
         idx = self.indexAt(pos)
-
-        # If the corresponding index is invalid, end here
         if not idx.isValid():
             return
 
-        menu = self.context_generator(idx)
+        # Otherwise, build a menu of actions to do
+        menu = qt.QMenu(self)
+        self.installRowActions(menu, idx)
+        self.installColActions(menu, idx)
 
         # Show it to the user
         menu.popup(self.viewport().mapToGlobal(pos))
+
+    def installRowActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
+        # Get the case label for ease-of-use
+        row_id = self.model().indices[idx.row()]
+
+        # Modification action
+        editAction = menu.addAction(_(f"Modify {row_id}"))
+        def _modifyRow():
+            dialog = CaseEditorDialog(self.model(), row_id)
+            dialog.exec()
+        editAction.triggered.connect(_modifyRow)
+
+    def installColActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
+        # Get the case label for ease-of-use
+        col_id = self.model().header[idx.column()]
+
+        # Modification action
+        editAction = menu.addAction(_(f"Modify {col_id}"))
+        def _modifyColumn():
+            dialog = FeatureEditorDialog(self.model(), col_id)
+            dialog.exec()
+        editAction.triggered.connect(_modifyColumn)
 
 
 class CohortTableWidget(CSVBackedTableWidget):
@@ -659,7 +622,7 @@ class CohortTableWidget(CSVBackedTableWidget):
     Shows an error message when the backing CSV cannot be read.
     """
 
-    def __init__(self, model: CohortTableModel, parent: qt.QWidget = None):
+    def __init__(self, model: CohortModel, parent: qt.QWidget = None):
         super().__init__(model, parent)
 
         # Swap to our (contex-menu providing) table view class.
@@ -668,8 +631,16 @@ class CohortTableWidget(CSVBackedTableWidget):
         self.refresh()
 
     @classmethod
-    def from_path(cls, csv_path):
-        model = CohortTableModel(csv_path, editable=False)
+    def from_path(
+            cls,
+            csv_path: Optional[Path] = None,
+            data_path: Optional[Path] = None,
+            editable: bool = True
+    ):
+        # Explicitly disable editing if no data path was provided
+        if data_path is None:
+            editable = False
+        model = CohortModel(csv_path, data_path, editable=editable)
         return cls(model)
 
 
@@ -745,13 +716,13 @@ class CohortEditorDialog(qt.QDialog):
 
     def __init__(
         self,
-        cohort: Cohort,
+        cohort: CohortModel,
         parent: qt.QObject = None,
     ):
         super().__init__(parent)
 
         # If the cohort is not editable, reject attempts to edit it
-        if not cohort.model.is_editable():
+        if not cohort.is_editable():
             raise ValueError("Cannot edit a un-editable Cohort!")
 
         # Backing cohort manager
@@ -763,7 +734,7 @@ class CohortEditorDialog(qt.QDialog):
         layout = qt.QVBoxLayout(self)
 
         # Main table widget
-        cohortWidget = self._cohort.editorWidget()
+        cohortWidget = CohortTableWidget(self._cohort)
         cohortWidget.setFrameShape(qt.QFrame.Panel)
         cohortWidget.setFrameShadow(qt.QFrame.Sunken)
         cohortWidget.setLineWidth(3)
@@ -843,7 +814,7 @@ class CohortEditorDialog(qt.QDialog):
             msg = qt.QMessageBox()
             msg.setWindowTitle("Are you sure?")
             case_names = list({
-                self._cohort.model.indices[idx.row()]
+                self._cohort.indices[idx.row()]
                 for idx in cohortWidget.selectedIndices
             })
             case_points = "\n".join(["  * " + c for c in case_names])
@@ -868,7 +839,7 @@ class CohortEditorDialog(qt.QDialog):
             msg = qt.QMessageBox()
             msg.setWindowTitle("Are you sure?")
             feature_names = list({
-                self._cohort.model.header[idx.column()]
+                self._cohort.header[idx.column()]
                 for idx in cohortWidget.selectedIndices
             })
             feature_points = "\n".join(["  * " + c for c in feature_names])
@@ -913,15 +884,25 @@ class CohortEditorDialog(qt.QDialog):
         return True
 
     @classmethod
-    def from_paths(cls, csv_path: Path, data_path: Path, reference_task: "type[TaskBaseClass]"):
+    def from_paths(
+        cls,
+        csv_path: Path,
+        data_path: Path,
+        editable: bool = True,
+        reference_task: "type[TaskBaseClass]" = None,
+    ):
         # Generate the cohort manager using the provided paths
-        cohort = Cohort(csv_path, data_path, reference_task)
+        cohort = CohortModel(csv_path, data_path, editable, reference_task)
         return cls(cohort)
 
 
 class FeatureEditorDialog(qt.QDialog):
+
     def __init__(
-        self, cohort: Cohort, feature_name: str = None, parent: qt.QObject = None
+        self,
+        cohort: CohortModel,
+        feature_name: str = None,
+        parent: qt.QObject = None,
     ):
         """
         Dialog for editing (or creating) new Features within a cohort.
@@ -934,7 +915,7 @@ class FeatureEditorDialog(qt.QDialog):
         super().__init__(parent)
 
         # If the cohort is not editable, reject attempts to edit it
-        if not cohort.model.is_editable():
+        if not cohort.is_editable():
             raise ValueError("Cannot edit a un-editable Cohort!")
 
         # Backing cohort manager
@@ -975,8 +956,8 @@ class FeatureEditorDialog(qt.QDialog):
         includeLabel = qt.QLabel(_("Include:"))
         includeField = qt.QLineEdit()
         if feature_name:
-            include_vals = self._cohort.filters.get(feature_name, {}).get(
-                Cohort.FILTER_INCLUDE_KEY, []
+            include_vals = self._cohort.feature_map.get(feature_name, {}).get(
+                CohortModel.FILTER_INCLUDE_KEY, []
             )
             includeField.setText(", ".join(include_vals))
         includeField.textChanged.connect(self.mark_changed)
@@ -993,8 +974,8 @@ class FeatureEditorDialog(qt.QDialog):
         excludeLabel = qt.QLabel(_("Exclude:"))
         excludeField = qt.QLineEdit()
         if feature_name:
-            exclude_vals = self._cohort.filters.get(feature_name, {}).get(
-                Cohort.FILTER_EXCLUDE_KEY, []
+            exclude_vals = self._cohort.feature_map.get(feature_name, {}).get(
+                CohortModel.FILTER_EXCLUDE_KEY, []
             )
             excludeField.setText(", ".join(exclude_vals))
         excludeField.textChanged.connect(self.mark_changed)
@@ -1151,7 +1132,7 @@ class FeatureEditorDialog(qt.QDialog):
 
         # Make sure a feature of this name doesn't already exist
         label = self.namePreviewField.text.strip()
-        if self._reference_feature is None and label in self._cohort.filters.keys():
+        if self._reference_feature is None and label in self._cohort.feature_map.keys():
             # If it does, show an error and return "False" (no changes made)
             qt.QMessageBox.critical(
                 None,
@@ -1163,20 +1144,20 @@ class FeatureEditorDialog(qt.QDialog):
 
         # Parse the contents of our GUI elements, stripping leading/trailing whitespace
         filter_entry: FilterEntry = {
-            Cohort.FILTER_INCLUDE_KEY: [
+            CohortModel.FILTER_INCLUDE_KEY: [
                 s.strip() for s in self.includeField.text.split(",")
             ],
-            Cohort.FILTER_EXCLUDE_KEY: [
+            CohortModel.FILTER_EXCLUDE_KEY: [
                 s.strip() for s in self.excludeField.text.split(",")
             ],
         }
 
         # Clean up "blank" filters which may have slipped through
-        filter_entry[Cohort.FILTER_INCLUDE_KEY] = [
-            x for x in filter_entry[Cohort.FILTER_INCLUDE_KEY] if x != ""
+        filter_entry[CohortModel.FILTER_INCLUDE_KEY] = [
+            x for x in filter_entry[CohortModel.FILTER_INCLUDE_KEY] if x != ""
         ]
-        filter_entry[Cohort.FILTER_EXCLUDE_KEY] = [
-            x for x in filter_entry[Cohort.FILTER_EXCLUDE_KEY] if x != ""
+        filter_entry[CohortModel.FILTER_EXCLUDE_KEY] = [
+            x for x in filter_entry[CohortModel.FILTER_EXCLUDE_KEY] if x != ""
         ]
 
         # If this an updated feature, rename the feature to this new name
@@ -1184,14 +1165,14 @@ class FeatureEditorDialog(qt.QDialog):
             self._cohort.rename_filter(self._reference_feature, label)
 
         # Update cohort to use the new filter
-        self._cohort.set_filter(label, filter_entry)
+        self._cohort.set_feature_data(label, filter_entry)
 
         # Signal that everything ran successfully
         return True
 
 
 class CaseEditorDialog(qt.QDialog):
-    def __init__(self, cohort: Cohort, case_id: str = None, parent: qt.QObject = None):
+    def __init__(self, cohort: CohortModel, case_id: str = None, parent: qt.QObject = None):
         """
         Dialog for editing (or creating) new Features within a cohort.
 
@@ -1203,7 +1184,7 @@ class CaseEditorDialog(qt.QDialog):
         super().__init__(parent)
 
         # If the cohort is not editable, reject attempts to edit it
-        if not cohort.model.is_editable():
+        if not cohort.is_editable():
             raise ValueError("Cannot edit a un-editable Cohort!")
 
         # Backing cohort manager
@@ -1240,9 +1221,9 @@ class CaseEditorDialog(qt.QDialog):
 
         # Search path list
         searchPathLabels = qt.QLabel(_("Search Paths: "))
-        searchPathList = qt.QListWidget()
+        searchPathList = qt.QListWidget(None)
         if case_id:
-            path_entries = cohort.case_path_map.get(case_id, [])
+            path_entries = cohort.case_map.get(case_id, [])
             for p in path_entries:
                 if p.is_absolute():
                     searchPathList.addItem(str(p))
@@ -1335,7 +1316,7 @@ class CaseEditorDialog(qt.QDialog):
 
         # Make sure a case with this name doesn't already exist
         label = self.nameField.text.strip()
-        if self._reference_case is None and label in self._cohort.case_path_map.keys():
+        if self._reference_case is None and label in self._cohort.case_map.keys():
             # If it does, show an error and return "False" (no changes made)
             qt.QMessageBox.critical(
                 None,
@@ -1359,7 +1340,7 @@ class CaseEditorDialog(qt.QDialog):
             self._cohort.rename_case(self._reference_case, label)
 
         # Insert it into our cohort
-        self._cohort.set_case_paths(label, search_paths)
+        self._cohort.set_case_data(label, search_paths)
 
         # Confirm that the changes went through
         return True
