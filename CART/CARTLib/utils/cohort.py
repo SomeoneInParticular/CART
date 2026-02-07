@@ -1194,12 +1194,6 @@ class CaseEditorDialog(qt.QDialog):
         # Reference feature name
         self._reference_case = case_id
 
-        # Track whether changes have been made since this dialog was opened
-        self.has_changed = False
-
-        def mark_changed():
-            self.has_changed = True
-
         # Initial setup
         self.setWindowTitle(_("Add New Case"))
         self.setMinimumSize(500, self.minimumHeight)
@@ -1211,7 +1205,7 @@ class CaseEditorDialog(qt.QDialog):
         if case_id:
             nameField.setText(case_id)
         nameField.setPlaceholderText(_("e.g. sub-001, sub001_ses002"))
-        nameField.textChanged.connect(mark_changed)
+        nameField.textChanged.connect(self.mark_changed)
         nameTooltip = _(
             "An identifier for this case. Should be unique to the cohort; ideally, it should also "
             "implicitly reference the data it will refer to as well "
@@ -1232,8 +1226,8 @@ class CaseEditorDialog(qt.QDialog):
                     searchPathList.addItem(str(p))
                 else:
                     searchPathList.addItem(str(cohort.data_path / p))
-        searchPathList.model().rowsInserted.connect(mark_changed)
-        searchPathList.model().rowsRemoved.connect(mark_changed)
+        searchPathList.model().rowsInserted.connect(self.mark_changed)
+        searchPathList.model().rowsRemoved.connect(self.mark_changed)
         layout.addRow(searchPathLabels)
         layout.addRow(searchPathList)
         self.searchPathList = searchPathList
@@ -1292,6 +1286,11 @@ class CaseEditorDialog(qt.QDialog):
 
         buttonBox.clicked.connect(onButtonClicked)
         layout.addWidget(buttonBox)
+
+        self.has_changed = False
+
+    def mark_changed(self):
+        self.has_changed = True
 
     def onCancel(self):
         # If we have changed anything, confirm we want to exit first
