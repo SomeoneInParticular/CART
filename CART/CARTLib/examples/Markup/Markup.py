@@ -8,7 +8,7 @@ import qt
 from slicer.i18n import tr as _
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory, D
-from CARTLib.utils.config import ProfileConfig, DictBackedConfig
+from CARTLib.utils.config import JobProfileConfig, DictBackedConfig, MasterProfileConfig
 from CARTLib.utils.data import (
     CARTStandardUnit,
     save_markups_to_nifti,
@@ -28,8 +28,8 @@ VERSION = "0.0.2"
 @cart_task("Markup")
 class MarkupTask(TaskBaseClass[CARTStandardUnit]):
 
-    def __init__(self, profile: ProfileConfig):
-        super().__init__(profile)
+    def __init__(self, master_profile: MasterProfileConfig, job_profile: JobProfileConfig):
+        super().__init__(master_profile, job_profile)
 
         # GUI and data unit
         self.gui: Optional[MarkupGUI] = None
@@ -41,21 +41,12 @@ class MarkupTask(TaskBaseClass[CARTStandardUnit]):
 
         # Output logging
         self._output_manager: MarkupOutput = MarkupOutput()
+        self._output_manager.output_dir = self.job_profile.output_path
 
         # Config management
-        self.config: MarkupConfig = MarkupConfig(parent_config=self.profile)
+        self.config: MarkupConfig = MarkupConfig(parent_config=self.job_profile)
 
     def setup(self, container: qt.QWidget):
-        # Request an output directory
-        outputDialog = qt.QFileDialog()
-        outputDialog.setWindowTitle(_("Select Output Directory"))
-        outputDialog.setFileMode(qt.QFileDialog.Directory)
-        if outputDialog.exec():
-            output_dir = Path(outputDialog.selectedFiles()[0])
-            self._output_manager.output_dir = output_dir
-        else:
-            raise ValueError("Invalid output directory!")
-
         # Initialize the GUI
         self.gui = MarkupGUI(self)
         container.setLayout(self.gui.setup())
@@ -73,10 +64,10 @@ class MarkupTask(TaskBaseClass[CARTStandardUnit]):
             self.gui.sync()
 
     def save(self) -> Optional[str]:
-        self._output_manager.save_unit(self.data_unit, self.profile)
+        self._output_manager.save_unit(self.data_unit, self.master_profile)
 
     def isTaskComplete(self, case_data: dict[str, str]) -> bool:
-        author = self.profile.label
+        author = self.master_profile.author
         uid = case_data['uid']
         return self._output_manager.is_unit_complete(author, uid)
 
@@ -85,6 +76,30 @@ class MarkupTask(TaskBaseClass[CARTStandardUnit]):
         return {
             "Default": CARTStandardUnit
         }
+
+    @classmethod
+    def feature_types(cls, data_factory_label: str) -> dict[str, str]:
+        # Defer to the data unit itself
+        duf = cls.getDataUnitFactories().get(data_factory_label, None)
+        if duf == CARTStandardUnit:
+            return CARTStandardUnit.feature_types()
+        return {}
+
+    @classmethod
+    def format_feature_label_for_type(
+        cls, initial_label: str, data_unit_factory_type: str, feature_type: str
+    ):
+        # Apply default comma processing
+        initial_label = super().format_feature_label_for_type(
+            initial_label, data_unit_factory_type, feature_type
+        )
+        # Defer to the data unit itself for further processing
+        duf = cls.getDataUnitFactories().get(data_unit_factory_type, None)
+        if duf is CARTStandardUnit:
+            return CARTStandardUnit.feature_label_for(
+                initial_label, feature_type
+            )
+        return initial_label
 
 
 class MarkupGUI:
@@ -187,7 +202,7 @@ class MarkupOutput:
 
         return log_data
 
-    def save_unit(self, data_unit: CARTStandardUnit, profile: ProfileConfig):
+    def save_unit(self, data_unit: CARTStandardUnit, profile: MasterProfileConfig):
         # Define (and, if need be, create) an output folder for this unit's case ID
         case_output = self.output_dir / data_unit.uid
         case_output.mkdir(parents=True, exist_ok=True)
@@ -237,10 +252,10 @@ class MarkupOutput:
             save_json_sidecar(current_sidecar, sidecar_data)
 
         # Update our log file to match
-        log_entry_key = (profile.label, data_unit.uid)
+        log_entry_key = (profile.author, data_unit.uid)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.log[log_entry_key] = {
-            self.AUTHOR_KEY: profile.label,
+            self.AUTHOR_KEY: profile.author,
             self.UID_KEY: data_unit.uid,
             self.TIMESTAMP_KEY: timestamp,
             self.OUTPUT_KEY: str(case_output.resolve()),

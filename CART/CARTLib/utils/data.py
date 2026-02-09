@@ -11,7 +11,7 @@ import slicer
 import vtk
 
 from CARTLib.core.DataUnitBase import DataUnitBase
-from CARTLib.utils.config import MasterProfileConfig
+from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
 from CARTLib.core.LayoutManagement import Orientation, LayoutHandler
 
 
@@ -486,7 +486,7 @@ GENERATED_BY_KEY = "GeneratedBy"
 @singledispatch
 def add_generated_by_entry(
         sidecar_data: Any,
-        profile: Optional[ProfileConfig] = None
+        profile: Optional[MasterProfileConfig] = None
 ):
     """
     Adds a new "GeneratedBy" entry to the specified sidecar, IN-PLACE!
@@ -511,7 +511,7 @@ def add_generated_by_entry(
 @add_generated_by_entry.register
 def _add_gb_entry_to_file(
         json_file: Path,
-        profile: Optional[ProfileConfig] = None
+        profile: Optional[MasterProfileConfig] = None
 ):
     """
     Adds a new "GeneratedBy" entry to the specified sidecar path, IN-PLACE!
@@ -541,7 +541,7 @@ def _add_gb_entry_to_file(
 @add_generated_by_entry.register
 def _add_gb_entry_to_dict(
         json_data: dict,
-        profile: Optional[ProfileConfig]
+        profile: Optional[MasterProfileConfig]
 ):
     """
     Adds a new "GeneratedBy" entry to the specified sidecar path.
@@ -556,8 +556,8 @@ def _add_gb_entry_to_dict(
         generated_by_entries.append(
             {
                 "Name": "CART",
-                "Author": profile.label,
-                "Role": profile.role,
+                "Author": profile.author,
+                "Position": profile.position,
                 "Date": creation_time,
             }
         )
