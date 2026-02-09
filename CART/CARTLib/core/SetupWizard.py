@@ -472,7 +472,6 @@ class _TaskWizardPage(qt.QWizardPage):
         taskSelectionWidget.placeholderText = _("[None Selected]")
         taskSelectionWidget.setCurrentIndex(-1)
         taskSelectionLabel.setBuddy(taskSelectionWidget)
-        self.registerField(SELECTED_TASK_FIELD + "*", taskSelectionWidget)
         layout.addRow(taskSelectionLabel, taskSelectionWidget)
 
         # Task description
@@ -506,8 +505,8 @@ class _TaskWizardPage(qt.QWizardPage):
                 taskDescriptionWidget.setText(error_text)
             else:
                 taskDescriptionWidget.setMarkdown(task.description())
-
         taskSelectionWidget.currentTextChanged.connect(onSelectedTaskChanged)
+
         self.taskSelectionWidget = taskSelectionWidget
         # Add it to the layout
         layout.addRow(taskDescriptionWidget)
@@ -515,23 +514,24 @@ class _TaskWizardPage(qt.QWizardPage):
     @property
     def selected_task(self) -> Optional[str]:
         # Helper method to parse
-        selected_idx = self.field(SELECTED_TASK_FIELD)
-        task_name = self.taskSelectionWidget.itemText(selected_idx)
+        # noinspection PyTypeChecker
+        task_name: str = self.taskSelectionWidget.currentText
+        if task_name is None:
+            return None
         # Confirm this is a valid task before returning the result
         task_class = CART_TASK_REGISTRY.get(task_name, None)
         if task_class is None:
             return None
-        else:
-            return task_name
+        return task_name
 
     @selected_task.setter
     def selected_task(self, new_task: str):
         task_class = CART_TASK_REGISTRY.get(new_task, None)
         if task_class is None:
-            self.setField(SELECTED_TASK_FIELD, -1)
+            self.taskSelectionWidget.setCurrentIndex(-1)
         else:
             idx = self.taskSelectionWidget.findText(new_task)
-            self.setField(SELECTED_TASK_FIELD, idx)
+            self.taskSelectionWidget.setCurrentIndex(idx)
 
     def isComplete(self):
         return self.selected_task is not None
