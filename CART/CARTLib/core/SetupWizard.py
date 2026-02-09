@@ -317,7 +317,6 @@ class _DataWizardPage(qt.QWizardPage):
         self.setTitle(_("Data Specification"))
         layout = qt.QFormLayout(None)
         self.setLayout(layout)
-        print(taken_names)
         self._taken_names = taken_names
 
         # Instruction text
