@@ -183,8 +183,10 @@ class JobSetupWizard(qt.QWizard):
 
     def _initFields(self):
         self.job_name = self.config.name
-        self.data_path = self.config.data_path
-        self.output_path = self.config.output_path
+        data_path = self.config.data_path
+        self.data_path = data_path if data_path else ""
+        output_path = self.config.output_path
+        self.output_path = output_path if output_path else ""
         self.selected_task = self.config.task
         self.cohort_path = self.config.cohort_path
 

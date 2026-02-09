@@ -469,7 +469,7 @@ class JobProfileConfig(DictBackedConfig):
 
     @property
     def data_path(self) -> Optional[Path]:
-        path_str = self.backing_dict.get(self.DATA_PATH_KEY, None)
+        path_str = self.get_or_default(self.DATA_PATH_KEY, None)
         if path_str is None:
             return None
         return Path(path_str)
@@ -484,7 +484,7 @@ class JobProfileConfig(DictBackedConfig):
 
     @property
     def output_path(self) -> Optional[Path]:
-        path_str = self.backing_dict.get(self.OUTPUT_PATH_KEY, None)
+        path_str = self.get_or_default(self.OUTPUT_PATH_KEY, None)
         if path_str is None:
             return None
         return Path(path_str)
