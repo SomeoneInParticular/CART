@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Iterable
 
 import ctk
 import qt
@@ -143,7 +143,7 @@ class CARTSetupWizard(qt.QWizard):
 
 
 class JobSetupWizard(qt.QWizard):
-    def __init__(self, parent, config: JobProfileConfig = None):
+    def __init__(self, parent, taken_names: Iterable[str] = None, config: JobProfileConfig = None):
         """
         Wizard for setting up a Job for use within CART.
 
@@ -160,8 +160,18 @@ class JobSetupWizard(qt.QWizard):
             CART_LOGO_PIXMAP
         )
 
+        # Generate our backing configuration, tracking the original name for later
+        self._prior_name = None
+        if config is None:
+            self.config = JobProfileConfig()
+        else:
+            if config.name is not None:
+                self._prior_name = config.name
+            taken_names = [n for n in taken_names if n != config.name]
+            self.config = config
+
         # Workarounds for fields not playing nicely w/ CTK widgets
-        self._dataPage = _DataWizardPage(self)
+        self._dataPage = _DataWizardPage(self, taken_names=taken_names)
         self._taskPage = _TaskWizardPage(self)
         self._cohortPage = _CohortWizardPage(self)
 
@@ -174,14 +184,8 @@ class JobSetupWizard(qt.QWizard):
         self.addPage(self._cohortPage)
         self.addPage(self.conclusionPage())
 
-        # Generate our backing configuration, tracking the original name for later
-        self._prior_name = None
-        if config is None:
-            self.config = JobProfileConfig()
-        else:
-            if config.name is not None:
-                self._prior_name = config.name
-            self.config = config
+        # If we had a starting config, initialize our fields to match it
+        if config is not None:
             self._initFields()
 
     def _initFields(self):
@@ -306,13 +310,15 @@ class JobSetupWizard(qt.QWizard):
 
 ## Wizard Pages ##
 class _DataWizardPage(qt.QWizardPage):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, taken_names=Iterable[str]):
         super().__init__(parent)
 
         # Basic Attributes
         self.setTitle(_("Data Specification"))
-        layout = qt.QFormLayout()
+        layout = qt.QFormLayout(None)
         self.setLayout(layout)
+        print(taken_names)
+        self._taken_names = taken_names
 
         # Instruction text
         instructionLabel = qt.QLabel(_(
@@ -418,7 +424,9 @@ class _DataWizardPage(qt.QWizardPage):
         # If we don't have a job name yet, return false immediately
         if self.job_name == "":
             return False
-        # TODO: Check if the job name is already taken
+        # Check if the name is already taken
+        if self.job_name in self._taken_names:
+            return False
         # Confirm a data path has been specified, and is a directory
         if not self.data_path or not self.data_path.is_dir():
             return False

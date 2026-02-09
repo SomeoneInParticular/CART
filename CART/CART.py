@@ -501,7 +501,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         :return: The name of the new job; None if the setup was terminated
         """
 
-        jobSetupWizard = JobSetupWizard(None)
+        jobSetupWizard = JobSetupWizard(None, taken_names=self.logic.registered_jobs.keys())
         result = jobSetupWizard.exec()
 
         # If we got an "accept" signal, create the job config and initialize it
@@ -520,7 +520,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         :return: If the edit was successful or not.
         """
 
-        jobSetupWizard = JobSetupWizard(None, config)
+        jobSetupWizard = JobSetupWizard(
+            None, taken_names=self.logic.registered_jobs.keys(), config=config
+        )
         result = jobSetupWizard.exec()
 
         # If we got an "accept" signal, create the job config and exit
