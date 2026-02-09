@@ -2,7 +2,7 @@ import csv
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import qt
 from slicer.i18n import tr as _
@@ -20,6 +20,12 @@ from CARTLib.utils.data import (
 )
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import CARTMarkupEditorWidget
+
+
+if TYPE_CHECKING:
+    # Provide some type references for QT, even if they're not
+    #  perfectly useful.
+    import PyQt5.Qt as qt
 
 
 VERSION = "0.0.2"
@@ -64,7 +70,9 @@ class MarkupTask(TaskBaseClass[CARTStandardUnit]):
             self.gui.sync()
 
     def save(self) -> Optional[str]:
-        self._output_manager.save_unit(self.data_unit, self.master_profile)
+        msg = self._output_manager.save_unit(self.data_unit, self.master_profile)
+        if self.gui and msg is not None:
+            self.gui.saveSuccessPrompt(msg)
 
     def isTaskComplete(self, case_data: dict[str, str]) -> bool:
         author = self.master_profile.author
@@ -125,6 +133,14 @@ class MarkupGUI:
     @property
     def data_unit(self) -> CARTStandardUnit:
         return self.bound_task.data_unit
+
+    def saveSuccessPrompt(self, msg_text: str):
+        msg = qt.QMessageBox()
+        msg.setWindowTitle("Saved Markups!")
+        msg.setText(msg_text)
+        msg.setTextFormat(3)  # 3 -> Markdown enum value
+        msg.setStandardButtons(qt.QMessageBox.Ok)
+        return msg.exec()
 
 
 class MarkupOutput:
@@ -202,7 +218,7 @@ class MarkupOutput:
 
         return log_data
 
-    def save_unit(self, data_unit: CARTStandardUnit, profile: MasterProfileConfig):
+    def save_unit(self, data_unit: CARTStandardUnit, profile: MasterProfileConfig) -> str:
         # Define (and, if need be, create) an output folder for this unit's case ID
         case_output = self.output_dir / data_unit.uid
         case_output.mkdir(parents=True, exist_ok=True)
@@ -210,6 +226,8 @@ class MarkupOutput:
         # Save each markup node (with any modifications) into it
         unknown_idx = 0
         # TODO: Add user naming support for "custom" markups
+        saved_files = []
+        failed_files = []
         for key, node in data_unit.markup_nodes.items():
             # Determine how the file should be named
             input_path = data_unit.markup_paths.get(key, None)
@@ -233,17 +251,16 @@ class MarkupOutput:
                     reference_volume=data_unit.primary_volume_node,
                     path=output_file
                 )
+                saved_files.append(output_file)
             elif ".mrk" in output_file.suffixes:
                 # Save the node to Slicer's native mrk.json format.
                 save_markups_to_json(
                     markups_node=node,
                     path=output_file
                 )
+                saved_files.append(output_file)
             else:
-                raise NotImplementedError(
-                    f"Unknown file type '{''.join(output_file.suffixes)}'!"
-                    f"Currently supported file types are '.nii' and '.mrk.json'."
-                )
+                failed_files.append(output_file)
 
             # Save the corresponding sidecar, extended w/ a new "GeneratedBy" entry
             current_sidecar = find_json_sidecar_path(output_file)
@@ -267,6 +284,21 @@ class MarkupOutput:
             writer = csv.DictWriter(fp, fieldnames=self.LOG_HEADERS)
             writer.writeheader()
             writer.writerows(self.log.values())
+
+        # Build the result message
+        result_msg = ""
+        if len(saved_files) > 0:
+            result_msg += _("Saved the following files:\n")
+            for f in saved_files:
+                result_msg += f"  * {str(f)}\n"
+            result_msg += "\n"
+        if len(failed_files):
+            result_msg += _("Failed to save the following files:\n")
+            for f in failed_files:
+                result_msg += f"  * {str(f)}\n"
+            result_msg += "\n"
+
+        return result_msg
 
     def is_unit_complete(self, author: str, uid: CARTStandardUnit):
         return (author, uid) in self.log.keys()
