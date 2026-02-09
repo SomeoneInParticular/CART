@@ -4,7 +4,7 @@ from enum import Enum
 from functools import cached_property
 from pathlib import Path
 
-from CARTLib.utils.config import ProfileConfig
+from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.data import (
     save_markups_to_json,
     save_markups_to_nifti,
@@ -47,6 +47,7 @@ class RapidMarkupOutputManager:
     def __init__(
         self,
         config: "RapidMarkupConfig",
+        master_config: "MasterProfileConfig",
         output_dir: Path
     ):
         """
@@ -61,11 +62,12 @@ class RapidMarkupOutputManager:
 
         # Core attributes
         self.config = config
+        self.master_config = master_config
         self.output_dir = output_dir
 
     ## PROPERTIES ##
     @property
-    def profile_config(self) -> ProfileConfig:
+    def profile_config(self) -> JobProfileConfig:
         """
         Wrapper for accessing the parent (profile) config; allows us to
         suppress the "incorrect type" warning once, rather than everywhere
@@ -77,7 +79,7 @@ class RapidMarkupOutputManager:
     @property
     def profile_label(self) -> str:
         # Simple alias to sidestep a common argument chain
-        return self.profile_config.label
+        return self.profile_config.name
 
     @property
     def output_dir(self) -> Path:
@@ -170,7 +172,8 @@ class RapidMarkupOutputManager:
             save_markups_to_nifti(
                 markup_node=markup_node,
                 reference_volume=data_unit.primary_volume_node,
-                path=markup_output_file
+                path=markup_output_file,
+                master_profile=self.master_config
             )
         # If the user asked to save to an invalid output format,
         # yell at them for it and end.
