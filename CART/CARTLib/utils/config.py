@@ -1,7 +1,8 @@
 import json
 from abc import ABC, abstractmethod, ABCMeta
 from pathlib import Path
-from typing import Generic, Optional, TypeVar, Union, Callable
+import re
+from typing import Generic, Optional, TypeVar, Callable
 
 import qt
 
@@ -462,6 +463,8 @@ class JobProfileConfig(DictBackedConfig):
 
     @name.setter
     def name(self, new_name: str):
+        # Flip backslashes to prevent horrific bugs
+        new_name = new_name.replace("\\", "/")
         self.backing_dict[self.NAME_KEY] = new_name
         self.has_changed = True
 
@@ -532,14 +535,33 @@ class JobProfileConfig(DictBackedConfig):
     ## File I/O ##
     @property
     def file(self) -> Path:
+        """
+        The file this configuration will be saved to.
+
+        Get-only to encourage the file name to be the similar to
+        the
+        """
         if self._file_path:
             return self._file_path
         else:
-            # Format the job name to create our corresponding filename
-            default_filename = self.name.replace(" ", "_") + ".json"
-            new_file = JOB_PROFILE_DIR / default_filename
-            self._file_path = new_file
-            return new_file
+            # This is to keep Windows from having a stroke + backslashes begone
+            cleaned_name = re.sub('[<>:"/|?*\\\\]', '-', self.name)
+            # Replace spaces with underscores for cleanliness’s sake
+            cleaned_name = cleaned_name.replace(" ", "_")
+            # Keep adding underscores until file collision is resolved:
+            # KO: This is very quick-and-dirty, but given the small number of
+            #  collisions likely to occur, this is more than enough.
+            suffix = ""
+            while True:
+                # Format the job name to create a potential filename
+                new_file = JOB_PROFILE_DIR / f"{cleaned_name}{suffix}.json"
+                # If this file already exists, continue to the next loop
+                if new_file.exists():
+                    suffix += "_"
+                    continue
+                # Otherwise, track this file and return
+                self._file_path = new_file
+                return new_file
 
     def reload(self):
         """
