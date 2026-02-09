@@ -168,6 +168,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         layout = qt.QVBoxLayout(mainWidget)
 
         # Job selection dropdown
+        jobSelectorComboBoxLabel = qt.QLabel(_("Please Select or Create a Job:"))
         jobSelectorComboBox = qt.QComboBox(None)
         def updateJobSelector():
             jobSelectorComboBox.clear()
@@ -179,6 +180,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 jobSelectorComboBox.setEnabled(False)
         self.onJobListChanged.append(updateJobSelector)
 
+        layout.addWidget(jobSelectorComboBoxLabel)
         layout.addWidget(jobSelectorComboBox)
 
         # Button panel for Job editing operations
