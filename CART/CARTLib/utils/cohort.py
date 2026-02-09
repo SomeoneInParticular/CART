@@ -2,6 +2,7 @@ import csv
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Optional, Protocol, TYPE_CHECKING, Callable
 
@@ -552,7 +553,14 @@ def cohort_from_generator(
     :param generator: The generator to user.
     """
     case_map = generator(data_path)
-    csv_path = output_path / f"{cohort_name}.csv"
+    # Keep Windows from having a stroke + backslashes begone
+    cleaned_name = re.sub('[<>:"/|?*\\\\]', "-", cohort_name)
+    # Keep adding underscores until a valid file path is found
+    suffix = ""
+    csv_path = output_path / f"{cleaned_name}.csv"
+    while csv_path.exists():
+        suffix += "_"
+        csv_path = output_path / f"{cleaned_name}{suffix}.csv"
     cohort = CohortModel.from_case_map(csv_path, data_path, case_map)
     return cohort
 
@@ -698,7 +706,9 @@ class NewCohortDialog(qt.QDialog):
 
     @property
     def cohort_name(self):
-        return self.cohortNameEdit.text
+        # Flip back-slashes to prevent horrific bugs
+        name = self.cohortNameEdit.text.replace("\\", "/")
+        return name
 
     @property
     def current_generator(self) -> CaseGenerator:
