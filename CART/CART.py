@@ -191,9 +191,18 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # "New" button
         newButton = qt.QPushButton(_("New"))
         newButton.setToolTip(_("Create a new Job"))
-        newButton.clicked.connect(
-            lambda: self.runNewJobSetup()
-        )
+        def newButtonClicked():
+            # Ask the user to run initial setup
+            if not self.logic.has_run_before():
+                # If they don't, end here
+                if self._cartNotRunBeforePrompt() != qt.QMessageBox.Yes:
+                    return
+                self.runInitialSetup()
+            # Otherwise, skip to job creation
+            else:
+                self.runNewJobSetup()
+
+        newButton.clicked.connect(newButtonClicked)
         buttonPanelLayout.addWidget(newButton)
 
         # "Edit" button
@@ -202,14 +211,19 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         def onJobEdit():
             currentJob: str = jobSelectorComboBox.currentText
             jobPath = self.logic.registered_jobs.get(currentJob, None)
+            # If the specified job's config is missing, ask if they want to re-create it!
             if jobPath is None:
-                # TODO: add a notification that the config file doesn't exist,
-                #  and ask the user if they want to re-do it.
+                # If they don't, end here
+                if self._jobMissingPrompt() != qt.QMessageBox.Yes:
+                    return
+                # Create a new config w/ the same name
                 jobConfig = JobProfileConfig()
                 jobConfig.name = currentJob
+            # Otherwise, load the previous job's configuration
             else:
                 jobConfig = JobProfileConfig(file_path=Path(jobPath))
                 jobConfig.reload()
+            # Have the user edit the job
             self.runJobEdit(jobConfig)
         editButton.clicked.connect(onJobEdit)
         buttonPanelLayout.addWidget(editButton)
@@ -356,18 +370,25 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         return layoutPanel
 
     ## Connections ##
-    def start(self, job_name= None):
-        # If this is the first time CART has been run, ask if they want to initialize
+    def start(self, job_name=None):
+        # If this is the first time CART has been run, ask to initialize firest
         if not self.logic.has_run_before():
-            self.initialSetupPrompt()
-        # If they haven't run a job before, ask if they want to do so
+            if self._cartNotRunBeforePrompt() != qt.QMessageBox.Yes:
+                return
+            self.runInitialSetup()
+        # If no job was specified, ask if they want to create one.
         elif job_name is None:
-            self.jobSetupPrompt()
+            if self._createFirstJobPrompt() != qt.QMessageBox.Yes:
+                return
+            self.runNewJobSetup()
         # If the job is corrupted (somehow), have them re-build it
         elif self.logic.registered_jobs[job_name] is None:
-            # TODO: Make a custom prompt for this
-            self.jobSetupPrompt()
-        # Otherwise, ask if they want to resume their last job
+            if self._jobMissingPrompt() != qt.QMessageBox.Yes:
+                return
+            config = JobProfileConfig()
+            config.name = job_name
+            self.runJobEdit(config)
+        # Otherwise, just initialize the job
         else:
             self.initJob(job_name)
 
@@ -416,36 +437,40 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic.refresh_layout()
 
     ## User Prompts ##
-    def initialSetupPrompt(self):
-        # Ask the user if they want to begin initial setup
-        # noinspection PyTypeChecker
-        response = qt.QMessageBox.question(
+    @staticmethod
+    def _cartNotRunBeforePrompt():
+        return qt.QMessageBox.question(
             None,
             _("Initialize CART?"),
             _("CART has not been run before. Would you like to run setup now?"),
             qt.QMessageBox.Yes | qt.QMessageBox.No,
-            qt.QMessageBox.Yes
+            qt.QMessageBox.Yes,
         )
 
-        # Initiate CART setup if they do
-        if response == qt.QMessageBox.Yes:
-            self.runInitialSetup()
-
-    def jobSetupPrompt(self):
-        # Ask the user if they want to begin job setup
-        # noinspection PyTypeChecker
-        response = qt.QMessageBox.question(
+    @staticmethod
+    def _createFirstJobPrompt():
+        return qt.QMessageBox.question(
             None,
             _("Create Job?"),
             _("You have not run a CART job before. Would you like to set up a job now?"),
             qt.QMessageBox.Yes | qt.QMessageBox.No,
-            qt.QMessageBox.Yes
+            qt.QMessageBox.Yes,
         )
 
-        # Initiate Job setup if they do
-        if response == qt.QMessageBox.Yes:
-            self.runNewJobSetup()
+    @staticmethod
+    def _jobMissingPrompt():
+        return qt.QMessageBox.question(
+            None,
+            _("Job Cannot be Found"),
+            _(
+                "It seems the requested job's configuration was deleted or is unavailable; "
+                "would you like to create a new job instead?"
+            ),
+            qt.QMessageBox.Yes | qt.QMessageBox.No,
+            qt.QMessageBox.Yes,
+        )
 
+    ## Setup Workflows ##
     def runInitialSetup(self):
         initSetupWizard = CARTSetupWizard(None)
         result = initSetupWizard.exec()
