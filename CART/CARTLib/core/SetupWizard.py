@@ -174,10 +174,13 @@ class JobSetupWizard(qt.QWizard):
         self.addPage(self._cohortPage)
         self.addPage(self.conclusionPage())
 
-        # Generate our backing configuration
+        # Generate our backing configuration, tracking the original name for later
+        self._prior_name = None
         if config is None:
             self.config = JobProfileConfig()
         else:
+            if config.name is not None:
+                self._prior_name = config.name
             self.config = config
             self._initFields()
 
@@ -288,6 +291,12 @@ class JobSetupWizard(qt.QWizard):
         self.config.output_path = self.output_path
         self.config.task = self.selected_task
         self.config.cohort_path = self.cohort_path
+
+        # If the job's name has changed, purge the prior config entry
+        if self._prior_name != self.config.name:
+            logic.delete_job_config(self._prior_name)
+
+        # Save the new config to file
         self.config.save()
 
         # Register the new job
