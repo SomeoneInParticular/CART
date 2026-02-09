@@ -375,22 +375,27 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if not self.logic.has_run_before():
             if self._cartNotRunBeforePrompt() != qt.QMessageBox.Yes:
                 return
-            self.runInitialSetup()
+            if not self.runInitialSetup():
+                return
         # If no job was specified, ask if they want to create one.
-        elif job_name is None:
+        if job_name is None:
             if self._createFirstJobPrompt() != qt.QMessageBox.Yes:
                 return
-            self.runNewJobSetup()
-        # If the job is corrupted (somehow), have them re-build it
+            job_name = self.runNewJobSetup()
+            if job_name is None:
+                return
+        # or, if the job is corrupted (somehow), ask to re-build it
         elif self.logic.registered_jobs[job_name] is None:
             if self._jobMissingPrompt() != qt.QMessageBox.Yes:
                 return
             config = JobProfileConfig()
             config.name = job_name
-            self.runJobEdit(config)
-        # Otherwise, just initialize the job
-        else:
-            self.initJob(job_name)
+            job_name = self.runJobEdit(config)
+            if not job_name:
+                return
+            job_name = config.name
+        # Finally, initialize the job
+        self.initJob(job_name)
 
     def nextCasePressed(self):
         # Request the logic switch to the next case
@@ -471,34 +476,59 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         )
 
     ## Setup Workflows ##
-    def runInitialSetup(self):
+    def runInitialSetup(self) -> bool:
+        """
+        Run initial CART setup, prompting the user for their name and role.
+
+        :return: If the setup was successful or not.
+        """
         initSetupWizard = CARTSetupWizard(None)
         result = initSetupWizard.exec()
 
         # If we got an "accept" signal, update our logic and begin job setup
         if result == qt.QDialog.Accepted:
             initSetupWizard.update_logic(self.logic)
-            self.runNewJobSetup()
+            return True
+        return False
 
-    def runNewJobSetup(self):
+    def runNewJobSetup(self) -> Optional[str]:
+        """
+        Run CART job creation, prompting the user to provide the following:
+            * The data they want to use, and where to save the results
+            * The task they want to run
+            * How they want to iterate through the data (the "cohort")
+
+        :return: The name of the new job; None if the setup was terminated
+        """
+
         jobSetupWizard = JobSetupWizard(None)
         result = jobSetupWizard.exec()
 
         # If we got an "accept" signal, create the job config and initialize it
         if result == qt.QDialog.Accepted:
             new_config = jobSetupWizard.save_config(self.logic)
-            self.initJob(new_config.name)
             self.jobListChanged()
+            return new_config.name
+        return None
 
-    def runJobEdit(self, config: JobProfileConfig = None):
+    def runJobEdit(self, config: JobProfileConfig = None) -> bool:
+        """
+        Edits an existing job in-place. Re-uses the job creation wizard,
+        skipping the introduction page and filling every field with
+        the previous job's values (if present).
+
+        :return: If the edit was successful or not.
+        """
+
         jobSetupWizard = JobSetupWizard(None, config)
         result = jobSetupWizard.exec()
 
-        # If we got an "accept" signal, create the job config and initialize it
+        # If we got an "accept" signal, create the job config and exit
         if result == qt.QDialog.Accepted:
             new_config = jobSetupWizard.save_config(self.logic)
-            self.initJob(new_config.name)
             self.jobListChanged()
+            return True
+        return False
 
     ## Job Management ##
     def initJob(self, job_name: str):
