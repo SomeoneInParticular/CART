@@ -228,18 +228,23 @@ class JobSetupWizard(qt.QWizard):
 
     @staticmethod
     def conclusionPage():
-        # TODO: Replace this with seamless task carry-over
+        # TODO: Replace this with seamless task-config carry-over
         # Basic Attributes
-        page = qt.QWizardPage()
-        page.setTitle(_("Almost There!"))
+        page = qt.QWizardPage(None)
+        page.setTitle(_("Done!"))
         layout = qt.QVBoxLayout()
         page.setLayout(layout)
 
         # Introduction text
         label = qt.QLabel(_(
-            "You're nearly done! "
-            "Please follow the task-specific instructions that will be presented next; "
-            "the job will initiate once you are finished."
+            "Click 'Finish' below to save the Job configuration; this will "
+            "register your job (with any changes you made) to CART."
+            "\n\n"
+            "If the job does not start automatically, you can select the "
+            "job's name from the drop-down and click 'Start' to start it "
+            "instead."
+            "\n\n"
+            "Thank you for choosing CART as your imaging analysis tool!"
         ))
         label.setWordWrap(True)
         layout.addWidget(label)
