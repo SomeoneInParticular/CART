@@ -69,15 +69,15 @@ class SegmentationReviewTask(
         container.setLayout(formLayout)
 
         # Segmentation editor
-        self.segmentEditorWidget = CARTSegmentationEditorWidget()
-        formLayout.addRow(self.segmentEditorWidget)
+        segmentEditorWidget = CARTSegmentationEditorWidget()
+        formLayout.addRow(segmentEditorWidget)
 
         # TMP: Add Button
         addButton = qt.QPushButton("[TMP] ADD!")
         def addCustomSeg():
             if self.data_unit:
                 self.data_unit.add_custom_segmentation("Test!")
-            self.segmentEditorWidget.refresh()
+            segmentEditorWidget.refresh()
         addButton.clicked.connect(addCustomSeg)
         formLayout.addRow(addButton)
 
