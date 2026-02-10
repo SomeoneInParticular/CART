@@ -34,6 +34,22 @@ VERSION = "0.0.2"
 @cart_task("Markup")
 class MarkupTask(TaskBaseClass[CARTStandardUnit]):
 
+    README_PATH = Path(__file__).parent / "README.md"
+
+    @classmethod
+    def description(cls):
+        #
+        with open(cls.README_PATH, "r") as fp:
+            txt = fp.read()
+
+        # Remove the image, which cannot render in QT
+        cleaned = []
+        for l in txt.split('\n'):
+            if "![" in l:
+                continue
+            cleaned.append(l)
+        return "\n".join(cleaned)
+
     def __init__(self, master_profile: MasterProfileConfig, job_profile: JobProfileConfig):
         super().__init__(master_profile, job_profile)
 
