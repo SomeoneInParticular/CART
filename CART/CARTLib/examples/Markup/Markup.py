@@ -38,7 +38,6 @@ class MarkupTask(TaskBaseClass[CARTStandardUnit]):
 
     @classmethod
     def description(cls):
-        #
         with open(cls.README_PATH, "r") as fp:
             txt = fp.read()
 
