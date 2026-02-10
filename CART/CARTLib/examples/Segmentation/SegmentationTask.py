@@ -46,9 +46,12 @@ class SegmentationReviewTask(
         return initial_label
 
     def __init__(
-        self, master_profile: MasterProfileConfig, job_profile: JobProfileConfig
+        self,
+        master_profile: MasterProfileConfig,
+        job_profile: JobProfileConfig,
+        cohort_features: list[str],
     ):
-        super().__init__(master_profile, job_profile)
+        super().__init__(master_profile, job_profile, cohort_features)
 
         # Local Attributes
         self.gui = None
