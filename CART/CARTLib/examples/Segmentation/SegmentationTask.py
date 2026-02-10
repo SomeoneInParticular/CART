@@ -1,9 +1,11 @@
 from typing import Optional, TYPE_CHECKING
 
 import qt
+from slicer.i18n import tr as _
+
+from CARTLib.examples.Segmentation.SegmentationConfig import SegmentationConfig
 from CARTLib.examples.Segmentation.SegmentationUnit import SegmentationUnit
 from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
-
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import CARTSegmentationEditorWidget
@@ -51,7 +53,9 @@ class SegmentationReviewTask(
         # Local Attributes
         self.gui = None
         self._data_unit: Optional[SegmentationUnit] = None
-        self.segments_to_save: set[str] = set()
+
+        # Config init
+        self._config = SegmentationConfig(job_profile)
 
     @property
     def data_unit(self) -> SegmentationUnit:
@@ -72,6 +76,22 @@ class SegmentationReviewTask(
         segmentEditorWidget = CARTSegmentationEditorWidget()
         formLayout.addRow(segmentEditorWidget)
 
+        # Interpolation toggle
+        interpToggle = qt.QCheckBox()
+        interpLabel = qt.QLabel(_("Interpolate Volumes:"))
+        interpToolTip = _(
+            "Whether volumes should be visualized with interpolation (smoothing)."
+        )
+        interpLabel.setToolTip(interpToolTip)
+        interpToggle.setToolTip(interpToolTip)
+        def setInterp():
+            self.should_interpolate = interpToggle.isChecked()
+            self.apply_interp()
+            self._config.save()
+        interpToggle.setChecked(self.should_interpolate)
+        interpToggle.toggled.connect(setInterp)
+        formLayout.addRow(interpLabel, interpToggle)
+
         # TMP: Add Button
         addButton = qt.QPushButton("[TMP] ADD!")
         def addCustomSeg():
@@ -86,7 +106,9 @@ class SegmentationReviewTask(
 
     def receive(self, data_unit: SegmentationUnit):
         self._data_unit = data_unit
-        data_unit.layout_handler.apply_layout()
+
+        # Change the interpolation settings to match current setting
+        self.apply_interp()
 
     def save(self) -> Optional[str]:
         pass
@@ -96,3 +118,20 @@ class SegmentationReviewTask(
         return {
             "Default": SegmentationUnit
         }
+
+    ## Configurable Settings ##
+    @property
+    def should_interpolate(self):
+        return self._config.should_interpolate
+
+    @should_interpolate.setter
+    def should_interpolate(self, new_val: bool):
+        self._config.should_interpolate = new_val
+
+    def apply_interp(self):
+        # Apply interpolation settings to the volume
+        if not self.data_unit:
+            return
+        for n in self.data_unit.volume_nodes.values():
+            display_node = n.GetDisplayNode()
+            display_node.SetInterpolate(self.should_interpolate)
