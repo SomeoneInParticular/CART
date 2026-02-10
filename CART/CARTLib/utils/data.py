@@ -1020,7 +1020,7 @@ class CARTStandardUnit(DataUnitBase):
                 continue
             # Attempt to load the volume and track it
             node = load_volume(path)
-            node.SetName(f"{self.uid}_{key}")
+            node.SetName(f"{key} ({self.uid})")
             self.volume_nodes[key] = node
             self.resources[key] = node
 
@@ -1051,7 +1051,7 @@ class CARTStandardUnit(DataUnitBase):
                 continue
 
             # Set the name of the node, and align it to our primary volume
-            node.SetName(f"{self.uid}_{key}")
+            node.SetName(f"{key} ({self.uid})")
             node.SetReferenceImageGeometryParameterFromVolumeNode(
                 self.primary_volume_node
             )
@@ -1091,13 +1091,13 @@ class CARTStandardUnit(DataUnitBase):
                     )
                 # Determine how the node should be keyed
                 if should_iter:
-                    ikey = f"{key}_{i}"
+                    name = f"{key} ({self.uid}) [{i}]"
                 else:
-                    ikey = key
+                    name = f"{key} ({self.uid})"
                 # Update the node's properties and track it
-                node.SetName(f"{self.uid}_{ikey}")
-                self.markup_nodes[ikey] = node
-                self.resources[ikey] = node
+                node.SetName(name)
+                self.markup_nodes[name] = node
+                self.resources[name] = node
 
     def _set_subject_shown(self, new_state: bool) -> None:
         """
