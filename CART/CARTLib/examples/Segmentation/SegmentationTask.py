@@ -1,14 +1,14 @@
 from typing import Optional, TYPE_CHECKING
 
 import qt
-from slicer.i18n import tr as _
 
-from CARTLib.examples.Segmentation.SegmentationConfig import SegmentationConfig
-from CARTLib.examples.Segmentation.SegmentationUnit import SegmentationUnit
-from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
 from CARTLib.utils.task import cart_task
-from CARTLib.utils.widgets import CARTSegmentationEditorWidget
+
+from SegmentationConfig import SegmentationConfig
+from SegmentationGUI import SegmentationGUI
+from SegmentationUnit import SegmentationUnit
 
 
 if TYPE_CHECKING:
@@ -72,40 +72,10 @@ class SegmentationTask(
         self.logger.info("Setting up Segmentation Task!")
 
         # Initialize the layout we'll insert everything into
-        formLayout = qt.QFormLayout(None)
-        container.setLayout(formLayout)
-
-        # Segmentation editor
-        segmentEditorWidget = CARTSegmentationEditorWidget()
-        formLayout.addRow(segmentEditorWidget)
-
-        # Interpolation toggle
-        interpToggle = qt.QCheckBox()
-        interpLabel = qt.QLabel(_("Interpolate Volumes:"))
-        interpToolTip = _(
-            "Whether volumes should be visualized with interpolation (smoothing)."
-        )
-        interpLabel.setToolTip(interpToolTip)
-        interpToggle.setToolTip(interpToolTip)
-        def setInterp():
-            self.should_interpolate = interpToggle.isChecked()
-            self.apply_interp()
-            self._config.save()
-        interpToggle.setChecked(self.should_interpolate)
-        interpToggle.toggled.connect(setInterp)
-        formLayout.addRow(interpLabel, interpToggle)
-
-        # TMP: Add Button
-        addButton = qt.QPushButton("[TMP] ADD!")
-        def addCustomSeg():
-            if self.data_unit:
-                self.data_unit.add_custom_segmentation("Test!")
-            segmentEditorWidget.refresh()
-        addButton.clicked.connect(addCustomSeg)
-        formLayout.addRow(addButton)
+        self.gui = SegmentationGUI(self)
+        container.setLayout(self.gui.setup())
 
         self.logger.info("Segmentation Task set up successfully!")
-        return formLayout
 
     def receive(self, data_unit: SegmentationUnit):
         self._data_unit = data_unit
