@@ -1,10 +1,10 @@
 from typing import Optional, TYPE_CHECKING
 
 import qt
+from CARTLib.examples.Segmentation.SegmentationUnit import SegmentationUnit
 from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-from CARTLib.utils.data import CARTStandardUnit
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import CARTSegmentationEditorWidget
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 @cart_task("Segmentation")
 class SegmentationReviewTask(
-    TaskBaseClass[CARTStandardUnit]
+    TaskBaseClass[SegmentationUnit]
 ):
 
     @classmethod
@@ -27,7 +27,7 @@ class SegmentationReviewTask(
     @classmethod
     def feature_types(cls, data_factory_label: str) -> dict[str, str]:
         # Delegate to the data unit's defaults
-        return CARTStandardUnit.feature_types()
+        return SegmentationUnit.feature_types()
 
     @classmethod
     def format_feature_label_for_type(
@@ -39,8 +39,8 @@ class SegmentationReviewTask(
         )
         # Defer to the data unit itself for further processing
         duf = cls.getDataUnitFactories().get(data_unit_factory_type, None)
-        if duf is CARTStandardUnit:
-            return CARTStandardUnit.feature_label_for(initial_label, feature_type)
+        if duf is SegmentationUnit:
+            return SegmentationUnit.feature_label_for(initial_label, feature_type)
         return initial_label
 
     def __init__(
@@ -50,11 +50,11 @@ class SegmentationReviewTask(
 
         # Local Attributes
         self.gui = None
-        self._data_unit: Optional[CARTStandardUnit] = None
+        self._data_unit: Optional[SegmentationUnit] = None
         self.segments_to_save: set[str] = set()
 
     @property
-    def data_unit(self) -> CARTStandardUnit:
+    def data_unit(self) -> SegmentationUnit:
         # Get-only; use "receive" instead
         return self._data_unit
 
@@ -72,10 +72,19 @@ class SegmentationReviewTask(
         self.segmentEditorWidget = CARTSegmentationEditorWidget()
         formLayout.addRow(self.segmentEditorWidget)
 
+        # TMP: Add Button
+        addButton = qt.QPushButton("[TMP] ADD!")
+        def addCustomSeg():
+            if self.data_unit:
+                self.data_unit.add_custom_segmentation("Test!")
+            self.segmentEditorWidget.refresh()
+        addButton.clicked.connect(addCustomSeg)
+        formLayout.addRow(addButton)
+
         self.logger.info("Segmentation Task set up successfully!")
         return formLayout
 
-    def receive(self, data_unit: CARTStandardUnit):
+    def receive(self, data_unit: SegmentationUnit):
         self._data_unit = data_unit
         data_unit.layout_handler.apply_layout()
 
@@ -85,5 +94,5 @@ class SegmentationReviewTask(
     @classmethod
     def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
         return {
-            "Default": CARTStandardUnit
+            "Default": SegmentationUnit
         }
