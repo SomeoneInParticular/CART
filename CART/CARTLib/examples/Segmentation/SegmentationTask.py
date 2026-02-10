@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 @cart_task("Segmentation")
-class SegmentationReviewTask(
+class SegmentationTask(
     TaskBaseClass[SegmentationUnit]
 ):
 
