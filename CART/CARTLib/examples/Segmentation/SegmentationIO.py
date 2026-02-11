@@ -228,9 +228,3 @@ class SegmentationIO:
             }
             json_path = output_path.parent / (output_path.name + ".json")
             save_json_sidecar(json_path, sidecar_data)
-
-    def _build_sidecar(
-        self,
-        reference_file: Optional[Path] = None
-    ):
-        pass
