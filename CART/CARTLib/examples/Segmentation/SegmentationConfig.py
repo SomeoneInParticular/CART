@@ -28,6 +28,7 @@ class SegmentationConfig(DictBackedConfig):
     @should_interpolate.setter
     def should_interpolate(self, new_val: bool):
         self.backing_dict[self.SHOULD_INTERPOLATE_KEY] = new_val
+        self._has_changed = True
 
     CUSTOM_SEGMENTATIONS = "custom_segmentations"
 
@@ -38,3 +39,7 @@ class SegmentationConfig(DictBackedConfig):
     @custom_segmentations.setter
     def custom_segmentations(self, new_vals: list[str]):
         self.backing_dict[self.CUSTOM_SEGMENTATIONS] = new_vals
+
+    def add_custom_segmentation(self, new_name):
+        self.custom_segmentations.append(new_name)
+        self._has_changed = True

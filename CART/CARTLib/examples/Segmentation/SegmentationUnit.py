@@ -30,7 +30,9 @@ class SegmentationUnit(CARTStandardUnit):
         """
         Create a new "custom" segmentation for this data unit;
         these segmentations allow users to "add" new elements
-        to the dataset
+        to the dataset.
+
+        :return: The newly created segmentation node.
         """
         formatted_name = f"{name} ({self.uid})"
         if formatted_name in self._custom_segmentations.keys():
@@ -55,6 +57,7 @@ class SegmentationUnit(CARTStandardUnit):
             # Track it for later reference
             self.custom_segmentations[formatted_name] = new_node
             self.segmentation_nodes[formatted_name] = new_node
+            return new_node
         except Exception as e:
             # If this fails at any point, clean up the unit from the scene
             if new_node:

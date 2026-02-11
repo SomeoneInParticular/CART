@@ -60,7 +60,7 @@ class SegmentationTask(
         self._data_unit: Optional[SegmentationUnit] = None
 
         # Config init
-        self._config = SegmentationConfig(job_profile)
+        self.local_config = SegmentationConfig(job_profile)
 
     @property
     def data_unit(self) -> SegmentationUnit:
@@ -105,11 +105,11 @@ class SegmentationTask(
     ## Configurable Settings ##
     @property
     def should_interpolate(self):
-        return self._config.should_interpolate
+        return self.local_config.should_interpolate
 
     @should_interpolate.setter
     def should_interpolate(self, new_val: bool):
-        self._config.should_interpolate = new_val
+        self.local_config.should_interpolate = new_val
 
     def apply_interp(self):
         # Apply interpolation settings to the volume
@@ -121,7 +121,7 @@ class SegmentationTask(
 
     @property
     def custom_segmentations(self) -> list[str]:
-        return self._config.custom_segmentations
+        return self.local_config.custom_segmentations
 
     def new_custom_segmentation(self, new_name: str):
         """
@@ -129,24 +129,25 @@ class SegmentationTask(
         with the corresponding name to the current data unit as well.
         """
         # Add it to our configuration and save
-        self.custom_segmentations.append(new_name)
-        self._config.save()
+        self.local_config.add_custom_segmentation(new_name)
 
         # If this is a new custom segmentation for the data unit, add it as well
         if self.data_unit and new_name not in self.data_unit.custom_segmentations.keys():
             try:
-                self.data_unit.add_custom_segmentation(new_name)
+                # Generate the new node
+                new_node = self.data_unit.add_custom_segmentation(new_name)
+
+                # If we have a GUI, update it
                 if self.gui:
                     self.gui.refresh()
+                    self.gui.selectSegmentationNode(new_node)
+
+                # Save the configuration
+                self.local_config.save()
             except Exception as e:
                 self.logger.error(traceback.format_exc())
                 if self.gui:
                     showErrorPrompt(str(e), None)
-                return
-
-        # If we have a GUI, refresh it
-        if self.gui:
-            self.gui.refresh()
 
     ## Segmentation Management ##
     def _init_custom_segmentations(self):
