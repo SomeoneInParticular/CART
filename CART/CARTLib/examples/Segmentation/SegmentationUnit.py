@@ -26,7 +26,7 @@ class SegmentationUnit(CARTStandardUnit):
         # Get only to avoid unintentional de-sync
         return self._custom_segmentations
 
-    def add_custom_segmentation(self, name: str):
+    def add_custom_segmentation(self, name: str, color_hex: str):
         """
         Create a new "custom" segmentation for this data unit;
         these segmentations allow users to "add" new elements
@@ -52,7 +52,14 @@ class SegmentationUnit(CARTStandardUnit):
             )
 
             # Add a new (blank) segment within the node for the user to edit
-            new_node.GetSegmentation().AddEmptySegment(name, "1")
+            segmentation_node = new_node.GetSegmentation()
+            segment_id = segmentation_node.AddEmptySegment(name, "1")
+            segment = segmentation_node.GetSegment(segment_id)
+
+            # Set its color to match the one provided
+            rgb_string = color_hex.lstrip("#")
+            rgb = (int(rgb_string[i:i + 2], 16)/255 for i in (0, 2, 4))
+            segment.SetColor(*rgb)
 
             # Track it for later reference
             self.custom_segmentations[formatted_name] = new_node

@@ -120,30 +120,33 @@ class SegmentationTask(
             display_node.SetInterpolate(self.should_interpolate)
 
     @property
-    def custom_segmentations(self) -> list[str]:
+    def custom_segmentations(self) -> dict[str, dict]:
         return self.local_config.custom_segmentations
 
-    def new_custom_segmentation(self, new_name: str):
+    def new_custom_segmentation(self, new_name: str, output_str: str, color_hex: str):
         """
         Register a new custom segmentation. Adds a (blank) segmentation
         with the corresponding name to the current data unit as well.
+
+        :param new_name: The name the segmentation should have
+        :param output_str: The output path, pre-contextual formatting
+        :param color_hex: The color the segmentation should be, in hex format
         """
-        # Add it to our configuration and save
-        self.local_config.add_custom_segmentation(new_name)
+
+        # Add it to our configuration
+        self.local_config.add_custom_segmentation(new_name, output_str, color_hex)
+        self.local_config.save()
 
         # If this is a new custom segmentation for the data unit, add it as well
         if self.data_unit and new_name not in self.data_unit.custom_segmentations.keys():
             try:
                 # Generate the new node
-                new_node = self.data_unit.add_custom_segmentation(new_name)
+                new_node = self.data_unit.add_custom_segmentation(new_name, color_hex)
 
                 # If we have a GUI, update it
                 if self.gui:
                     self.gui.refresh()
                     self.gui.selectSegmentationNode(new_node)
-
-                # Save the configuration
-                self.local_config.save()
             except Exception as e:
                 self.logger.error(traceback.format_exc())
                 if self.gui:
@@ -162,9 +165,10 @@ class SegmentationTask(
                 showErrorPrompt(msg, None)
 
         # Add each custom segmentation in turn
-        for name in self.custom_segmentations:
+        for name, sub_vals in self.custom_segmentations.items():
             try:
-                self.data_unit.add_custom_segmentation(name)
+                color_hex = sub_vals.get(self.local_config.CUSTOM_SEG_COLOR_KEY)
+                self.data_unit.add_custom_segmentation(name, color_hex)
                 if self.gui:
                     self.gui.refresh()
             # Skip duplicate key errors in this case

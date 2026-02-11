@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import ctk
 import qt
 from slicer.i18n import tr as _
 
@@ -65,8 +66,7 @@ class SegmentationGUI:
             # If the user confirms the changes, add the custom seg.
             if prompt.exec():
                 # Register the new custom segmentation
-                self.bound_task.new_custom_segmentation(prompt.name)
-
+                self.bound_task.new_custom_segmentation(prompt.name, prompt.save_path, prompt.color_hex)
         addButton.clicked.connect(addCustomSeg)
         formLayout.addRow(addButton)
 
@@ -90,6 +90,9 @@ class CustomSegmentationDialog(qt.QDialog):
     Prompt the user to created/edit a custom segmentation.
     """
 
+    # Default to a gold-ish color
+    DEFAULT_COLOR = "#fadd00"
+
     def __init__(
         self,
         output_path: Path,
@@ -107,9 +110,15 @@ class CustomSegmentationDialog(qt.QDialog):
         # Initial setup
         self.setWindowTitle(_("Custom Segmentation"))
         layout = qt.QFormLayout(self)
+        self.setMinimumSize(400, self.minimumHeight)
+
+        # Make all labels bold
+        labelFont = qt.QFont()
+        labelFont.setBold(True)
 
         # Name to give the new segmentation
         nameLabel = qt.QLabel(_("Name: "))
+        nameLabel.setFont(labelFont)
         nameEdit = qt.QLineEdit()
         nameToolTip = _("The name this segmentation should be labelled with.")
         nameLabel.setToolTip(nameToolTip)
@@ -117,34 +126,60 @@ class CustomSegmentationDialog(qt.QDialog):
         layout.addRow(nameLabel, nameEdit)
         self._nameEdit = nameEdit
 
-        # # Where it should be saved
-        # outputLabel = qt.QLabel(_("Output: "))
-        # outputEdit = qt.QLineEdit()
-        # outputToolTip = _("Where the segmentation should be saved.")
-        # outputLabel.setToolTip(outputToolTip)
-        # outputEdit.setToolTip(outputToolTip)
-        # layout.addRow(outputLabel, outputEdit)
-        # self.outputEdit = outputEdit
-        #
-        # # Preview of the full output path
-        # previewLabel = qt.QLabel(_("Preview: "))
-        # previewOutput = qt.QLabel("[N/A]")
-        # previewFont = qt.QFont()
-        # previewFont.setBold(True)
-        # previewOutput.setFont(previewFont)
-        # previewToolTip = _(
-        #     "A preview of the full output after processing will appear here."
-        # )
-        # previewLabel.setToolTip(previewToolTip)
-        # previewOutput.setToolTip(previewToolTip)
-        #
-        # # Preview updating functions
-        # nameEdit.textChanged.connect(
-        #     lambda __: previewLabel.setText(self._update_preview())
-        # )
-        # outputEdit.textChanged.connect(
-        #     lambda __: previewLabel.setText(self._update_preview())
-        # )
+        # Where it should be saved
+        savePathLabel = qt.QLabel(_("Output: "))
+        savePathLabel.setFont(labelFont)
+        savePathEdit = qt.QLineEdit()
+        savePathToolTip = _("Where the segmentation should be saved.")
+        savePathLabel.setToolTip(savePathToolTip)
+        savePathEdit.setToolTip(savePathToolTip)
+        layout.addRow(savePathLabel, savePathEdit)
+        self.savePath = savePathEdit
+
+        # Color picker
+        colorLabel = qt.QLabel(_("Color: "))
+        colorLabel.setFont(labelFont)
+        colorPicker = ctk.ctkColorPickerButton()
+        colorPicker.setColor(qt.QColor(self.DEFAULT_COLOR))
+        colorToolTip = _(
+            "The color the segmentation will display as in the editor."
+        )
+        colorLabel.setToolTip(colorToolTip)
+        colorPicker.setToolTip(colorToolTip)
+        layout.addRow(colorLabel, colorPicker)
+        self.colorPicker = colorPicker
+
+        colorPicker.colorChanged.connect(
+            lambda c: print(c.name())
+        )
+
+        # Preview of the full output path
+        previewLabel = qt.QLabel(_("Preview: "))
+        previewLabel.setFont(labelFont)
+        previewOutput = qt.QLabel()
+        previewToolTip = _(
+            "A preview of the full output after processing will appear here."
+        )
+        previewLabel.setToolTip(previewToolTip)
+        previewOutput.setToolTip(previewToolTip)
+        previewOutput.setWordWrap(True)
+        layout.addRow(previewLabel, previewOutput)
+
+        # "Pseudo-Stretch" to push the buttons to the bottom
+        stretch = qt.QWidget(None)
+        policy = stretch.sizePolicy
+        policy.setVerticalStretch(1)
+        stretch.setSizePolicy(policy)
+        layout.addRow(stretch)
+
+        # Preview updating functions
+        nameEdit.textChanged.connect(
+            lambda __: previewOutput.setText(self._update_preview())
+        )
+        savePathEdit.textChanged.connect(
+            lambda __: previewOutput.setText(self._update_preview())
+        )
+        previewOutput.setText(self._update_preview())
 
         # Ok/Cancel Buttons
         buttonBox = qt.QDialogButtonBox()
@@ -172,22 +207,31 @@ class CustomSegmentationDialog(qt.QDialog):
     def name(self) -> str:
         return self._nameEdit.text
 
-    # @property
-    # def output(self) -> str:
-    #     return self.outputEdit.text
+    @property
+    def save_path(self) -> str:
+        return self.savePath.text
 
-    # def _update_preview(self) -> str:
-    #     replacement_map = {
-    #         "%u": self.reference_uid,
-    #         "%n": self.name
-    #     }
-    #
-    #     formatted_text = self.output
-    #     for k, v in replacement_map:
-    #         formatted_text.replace(k, v)
-    #
-    #     result_path = Path(formatted_text)
-    #     if result_path.is_absolute():
-    #         return str(result_path)
-    #     else:
-    #         return str(self.output_path / result_path)
+    @property
+    def color_hex(self):
+        return self.colorPicker.color.name()
+
+    def _update_preview(self) -> str:
+        replacement_map = {
+            "%u": self.reference_uid,
+            "%n": self.name
+        }
+
+        formatted_text = self.save_path
+        for k, v in replacement_map.items():
+            formatted_text = formatted_text.replace(k, v)
+
+        if len(formatted_text) == 0 or (formatted_text[-1] in {"/", "\\"}):
+            return "[INVALID]"
+        else:
+            formatted_text += ".nii.gz"
+
+        result_path = Path(formatted_text)
+        if result_path.is_absolute():
+            return str(result_path)
+        else:
+            return str(self.output_path / result_path)

@@ -30,16 +30,23 @@ class SegmentationConfig(DictBackedConfig):
         self.backing_dict[self.SHOULD_INTERPOLATE_KEY] = new_val
         self._has_changed = True
 
-    CUSTOM_SEGMENTATIONS = "custom_segmentations"
+    CUSTOM_SEGMENTATIONS_KEY = "custom_segmentations"
+    CUSTOM_SEG_PATH_KEY = "path_string"
+    CUSTOM_SEG_COLOR_KEY = "color"
 
     @property
-    def custom_segmentations(self) -> list[str]:
-        return self.get_or_default(self.CUSTOM_SEGMENTATIONS, list())
+    def custom_segmentations(self) -> dict[str, dict]:
+        return self.get_or_default(self.CUSTOM_SEGMENTATIONS_KEY, dict())
 
     @custom_segmentations.setter
-    def custom_segmentations(self, new_vals: list[str]):
-        self.backing_dict[self.CUSTOM_SEGMENTATIONS] = new_vals
+    def custom_segmentations(self, new_vals: dict[str, dict]):
+        self.backing_dict[self.CUSTOM_SEGMENTATIONS_KEY] = new_vals
+        self.has_changed = True
 
-    def add_custom_segmentation(self, new_name):
-        self.custom_segmentations.append(new_name)
-        self._has_changed = True
+    def add_custom_segmentation(self, new_name: str, output_str: str, color_hex: str):
+        sub_dict = {
+            self.CUSTOM_SEG_PATH_KEY: output_str,
+            self.CUSTOM_SEG_COLOR_KEY: color_hex
+        }
+        self.custom_segmentations[new_name] = sub_dict
+        self.has_changed = True
