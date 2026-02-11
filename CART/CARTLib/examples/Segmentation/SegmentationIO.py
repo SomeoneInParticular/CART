@@ -168,7 +168,6 @@ class SegmentationIO:
         saved_customs = dict()  # Name: Destination Path
         error_customs = dict()  # Name: Reason
         for seg_id, seg_node in unit.custom_segmentations.items():
-            print(type(seg_node))
             try:
                 result = self._save_custom_segmentation(seg_node, unit, seg_id)
                 saved_customs[seg_id] = str(result)
