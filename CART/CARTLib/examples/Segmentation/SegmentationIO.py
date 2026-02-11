@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
+import slicer.util
 from CARTLib.utils.data import (
     save_segmentation_to_nifti,
     save_json_sidecar,
@@ -177,6 +178,19 @@ class SegmentationIO:
                     color_hex = v.get("color", None)
                     seg_name = k
                     break
+
+            # Skip blank segmentations
+            # TODO: Make this configurable
+            _skip = False
+            for sid in seg_node.GetSegmentation().GetSegmentIDs():
+                if not slicer.util.arrayFromSegmentBinaryLabelmap(seg_node, sid).max() > 0:
+                    _skip = True
+                    break
+            if _skip:
+                error_customs.append(seg_name)
+                logging.info(f"Skipped '{seg_name}'; segmentation was blank!")
+                continue
+            del _skip
 
             # If that search failed, log and end
             if output_str is None or color_hex is None:
