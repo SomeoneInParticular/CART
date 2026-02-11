@@ -32,7 +32,8 @@ class SegmentationUnit(CARTStandardUnit):
         these segmentations allow users to "add" new elements
         to the dataset
         """
-        if name in self._custom_segmentations.keys():
+        formatted_name = f"{name} ({self.uid})"
+        if formatted_name in self._custom_segmentations.keys():
             raise ValueError(
                 f"Cannot create custom segmentation '{name}'; "
                 "a segmentation with that name already exists!"
@@ -43,7 +44,7 @@ class SegmentationUnit(CARTStandardUnit):
         try:
             # Create the new node
             new_node = create_empty_segmentation_node(
-                name,
+                formatted_name,
                 reference_volume=self.primary_volume_node,
                 scene=self.scene,
             )
@@ -52,8 +53,8 @@ class SegmentationUnit(CARTStandardUnit):
             new_node.GetSegmentation().AddEmptySegment(name, "1")
 
             # Track it for later reference
-            self.custom_segmentations[name] = new_node
-            self.segmentation_nodes[name] = new_node
+            self.custom_segmentations[formatted_name] = new_node
+            self.segmentation_nodes[formatted_name] = new_node
         except Exception as e:
             # If this fails at any point, clean up the unit from the scene
             if new_node:
