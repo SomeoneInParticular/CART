@@ -7,7 +7,6 @@ from typing import Optional, TYPE_CHECKING
 from CARTLib.utils.data import (
     save_segmentation_to_nifti,
     save_json_sidecar,
-    find_json_sidecar_path,
 )
 from slicer.i18n import tr as _
 
@@ -188,7 +187,6 @@ class SegmentationIO:
                 continue
 
             # Generate the output path string
-            print(self.build_placeholder_map(unit.uid, seg_name, self.job_config.name),)
             output_str = self.format_output_str(
                 output_str,
                 self.build_placeholder_map(unit.uid, seg_name, self.job_config.name),
