@@ -199,3 +199,7 @@ class SegmentationTask(
     def exit(self):
         if self.gui:
             self.gui.exit()
+
+    def cleanup(self):
+        # Break the cycling link
+        self.gui = None
