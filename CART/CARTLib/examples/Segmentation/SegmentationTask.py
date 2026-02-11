@@ -10,6 +10,7 @@ from CARTLib.utils.widgets import showErrorPrompt
 
 from SegmentationConfig import SegmentationConfig
 from SegmentationGUI import SegmentationGUI
+from SegmentationIO import SegmentationIO
 from SegmentationUnit import SegmentationUnit
 
 
@@ -62,6 +63,9 @@ class SegmentationTask(
         # Config init
         self.local_config = SegmentationConfig(job_profile)
 
+        # I/O Manager
+        self.io = SegmentationIO(master_profile, job_profile, self.local_config)
+
     @property
     def data_unit(self) -> SegmentationUnit:
         # Get-only; use "receive" instead
@@ -94,7 +98,9 @@ class SegmentationTask(
             self.gui.refresh()
 
     def save(self) -> Optional[str]:
-        pass
+        if not self.data_unit:
+            self.logger.error("Could not save, no data unit has been loaded!")
+        self.io.save_unit(self.data_unit)
 
     @classmethod
     def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:

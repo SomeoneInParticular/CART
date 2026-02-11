@@ -3,11 +3,13 @@ from typing import TYPE_CHECKING
 
 import ctk
 import qt
+from CARTLib.utils.config import JobProfileConfig
 from slicer.i18n import tr as _
 
 from CARTLib.utils.widgets import CARTSegmentationEditorWidget
 
 from SegmentationConfig import SegmentationConfig
+from SegmentationIO import SegmentationIO
 
 if TYPE_CHECKING:
     # Provide some type references for QT, even if they're not
@@ -59,8 +61,8 @@ class SegmentationGUI:
                 else self.bound_task.data_unit.uid
             )
             prompt = CustomSegmentationDialog(
-                self.bound_task.job_profile.output_path,
                 self.bound_task.local_config,
+                self.bound_task.job_profile,
                 ref_uid
             )
             # If the user confirms the changes, add the custom seg.
@@ -95,16 +97,17 @@ class CustomSegmentationDialog(qt.QDialog):
 
     def __init__(
         self,
-        output_path: Path,
-        config: SegmentationConfig,
+        task_config: SegmentationConfig,
+        job_config: JobProfileConfig,
         reference_uid: str = "sub-abc123",
         parent: qt.QObject = None,
     ):
         super().__init__(parent)
 
         # Track the parameters for later
-        self.output_path: Path = output_path
-        self.config: SegmentationConfig = config
+        self.output_path: Path = job_config.output_path
+        self.task_config: SegmentationConfig = task_config
+        self.job_config: JobProfileConfig = job_config
         self.reference_uid: str = reference_uid
 
         # Initial setup
@@ -153,6 +156,27 @@ class CustomSegmentationDialog(qt.QDialog):
             lambda c: print(c.name())
         )
 
+        # Collapsible descriptions of the placeholder characters
+        placeholderGroupBox = ctk.ctkCollapsibleGroupBox()
+        placeholderGroupBox.setTitle(_("Placeholder Characters"))
+        placeholderLayout = qt.QFormLayout(placeholderGroupBox)
+        monoFont = qt.QFont("Monospace")
+        monoFont.setBold(True)
+        monoFont.setStyleHint(qt.QFont.TypeWriter)
+        for k, v in SegmentationIO.REPLACEMENT_MAP_DESCRIPTIONS.items():
+            characterLabel = qt.QLabel(k)
+            characterLabel.setFont(monoFont)
+            descriptionLabel = qt.QLabel(_(v))
+            descriptionLabel.setWordWrap(True)
+            placeholderLayout.addRow(characterLabel, descriptionLabel)
+        for v in sorted(dir(placeholderGroupBox)):
+            if callable(getattr(placeholderGroupBox, v)):
+                print(f"{v}()")
+            else:
+                print(v)
+        placeholderGroupBox.collapsed = True
+        layout.addRow(placeholderGroupBox)
+
         # Preview of the full output path
         previewLabel = qt.QLabel(_("Preview: "))
         previewLabel.setFont(labelFont)
@@ -200,7 +224,7 @@ class CustomSegmentationDialog(qt.QDialog):
         # Ensure the user can only confirm if the name is valid
         applyButton: qt.QPushButton = buttonBox.button(qt.QDialogButtonBox.Apply)
         def validateName(name: str):
-            applyButton.setEnabled(name not in self.config.custom_segmentations)
+            applyButton.setEnabled(name not in self.task_config.custom_segmentations)
         nameEdit.textChanged.connect(validateName)
 
     @property
@@ -216,22 +240,18 @@ class CustomSegmentationDialog(qt.QDialog):
         return self.colorPicker.color.name()
 
     def _update_preview(self) -> str:
-        replacement_map = {
-            "%u": self.reference_uid,
-            "%n": self.name
-        }
+        formatted_text = SegmentationIO.format_output_str(
+            self.save_path,
+            SegmentationIO.build_placeholder_map(
+                uid=self.reference_uid,
+                segmentation_name=self.name,
+                job_name=self.job_config.name
+            ),
+            self.job_config.output_path
+        )
 
-        formatted_text = self.save_path
-        for k, v in replacement_map.items():
-            formatted_text = formatted_text.replace(k, v)
-
-        if len(formatted_text) == 0 or (formatted_text[-1] in {"/", "\\"}):
+        # If formatting failed, mark this as invalid
+        if formatted_text is None:
             return "[INVALID]"
-        else:
-            formatted_text += ".nii.gz"
-
-        result_path = Path(formatted_text)
-        if result_path.is_absolute():
-            return str(result_path)
-        else:
-            return str(self.output_path / result_path)
+        # Otherwise, return the string as-is
+        return formatted_text
