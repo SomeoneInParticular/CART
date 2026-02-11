@@ -173,6 +173,7 @@ class SegmentationIO:
                 saved_customs[seg_id] = str(result)
             except Exception as e:
                 error_customs[seg_id] = str(e)
+        return saved_customs, error_customs
 
     def _save_custom_segmentation(
         self,

@@ -100,7 +100,10 @@ class SegmentationTask(
     def save(self) -> Optional[str]:
         if not self.data_unit:
             self.logger.error("Could not save, no data unit has been loaded!")
-        self.io.save_unit(self.data_unit)
+        saved_customs, error_customs = self.io.save_unit(self.data_unit)
+        # If we have an active GUI, re
+        if self.gui:
+            self.gui.onSavePrompt(saved_customs, error_customs)
 
     @classmethod
     def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:

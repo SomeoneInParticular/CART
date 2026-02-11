@@ -77,6 +77,44 @@ class SegmentationGUI:
     def selectSegmentationNode(self, node):
         self._segmentEditorWidget.setSegmentationNode(node)
 
+    def onSavePrompt(
+        self, saved_customs: dict[str, str], error_customs: dict[str, str]
+    ):
+        """
+        Show the user a prompt notifying them that the data unit was saved.
+
+        Provide (hidden by default) details if the user requests it.
+        """
+        msgBox = qt.QMessageBox()
+        msgBox.setWindowTitle(_("Saved!"))
+        successes = len(saved_customs)
+        failures = len(error_customs)
+        msg = f"Saved data unit {self.bound_task.data_unit.uid}! {successes} segmentations were saved"
+        if failures > 0:
+            msg += f", {failures} segmentations were not"
+        msg += "."
+        msgBox.setText(_(msg))
+        msgBox.setStandardButtons(qt.QMessageBox.Ok)
+        bullet_txt = "\n  ○ "
+        detailed_text_cmps = []
+        if len(saved_customs) > 0:
+            saved_custom_txt = f"Saved the following custom segmentations:"
+            saved_custom_txt = bullet_txt.join([
+                saved_custom_txt, *[f"{k}: {v}" for k, v in saved_customs.items()]
+            ])
+            detailed_text_cmps.append(saved_custom_txt)
+        if len(error_customs) > 0:
+            saved_custom_txt = f"Failed to save the following custom segmentations:"
+            saved_custom_txt = bullet_txt.join([
+                saved_custom_txt, *[f"{k}: {v}" for k, v in error_customs.items()]
+            ])
+            detailed_text_cmps.append(saved_custom_txt)
+        separator = "\n" + "=" * 40 + "\n"
+        detailed_text = separator.join(detailed_text_cmps)
+        msgBox.setDetailedText(detailed_text)
+
+        msgBox.exec()
+
     def enter(self):
         self._segmentEditorWidget.enter()
 
