@@ -2,7 +2,11 @@ from pathlib import Path
 
 import slicer
 
-from CARTLib.utils.data import CARTStandardUnit, create_empty_segmentation_node
+from CARTLib.utils.data import (
+    CARTStandardUnit,
+    create_empty_segmentation_node,
+    load_segmentation,
+)
 
 class SegmentationUnit(CARTStandardUnit):
     """
@@ -70,3 +74,58 @@ class SegmentationUnit(CARTStandardUnit):
             if new_node:
                 slicer.mrmlScene.RemoveNode(new_node)
             raise e
+
+    def _init_segmentation_nodes(self) -> None:
+        """
+        Modified version of the super-class, which "fills in" missing
+        segmentations with blanks ones instead
+        """
+        # If we don't have a primary volume yet, this method was called too early
+        if not self.primary_volume_node:
+            raise ValueError(
+                "Cannot initialize segmentation nodes prior to volume nodes!"
+            )
+
+        # Prepare to set the color of each segment
+        color_table = slicer.util.getNode("GenericColors").GetLookupTable()
+        c_idx = 2  # Start at 2, so newly created segments can have a unique color
+        for key in self.segmentation_keys:
+            seg_path = self.segmentation_paths.get(key, None)
+            # Try to read from file
+            if seg_path is not None:
+                if seg_path.exists():
+                    # Try to load the segmentation first
+                    node = load_segmentation(seg_path)
+                else:
+                    continue
+            # If no file exists, create a segmentation from scratch
+            else:
+                node = create_empty_segmentation_node(
+                    "",
+                    reference_volume=self.primary_volume_node,
+                    scene=self.scene,
+                )
+
+                # Add a new (blank) segment within the node for the user to edit
+                segmentation_node = node.GetSegmentation()
+                segmentation_node.AddEmptySegment("", "1")
+
+            # Set the name of the node, and align it to our primary volume
+            node.SetName(f"{key} ({self.uid})")
+            node.SetReferenceImageGeometryParameterFromVolumeNode(
+                self.primary_volume_node
+            )
+
+            # Apply a unique color to all segments within the segmentation
+            for segment_id in node.GetSegmentation().GetSegmentIDs():
+                print(f"Setting color for segment '{segment_id}' in '{key}'.")
+                segment = node.GetSegmentation().GetSegment(segment_id)
+
+                # Get the corresponding color, w/ Alpha stripped from it
+                segmentation_color = color_table.GetTableValue(c_idx)[:-1]
+                segment.SetColor(*segmentation_color)
+
+                # Increment the color index
+                c_idx += 1
+            self.segmentation_nodes[key] = node
+            self.resources[key] = node
