@@ -166,7 +166,7 @@ class SegmentationGUI:
         # Build the "main" user message
         no_saved_edited = len(saved_edited)
         no_saved_customs = len(saved_customs)
-        no_error_edited = len(saved_customs)
+        no_error_edited = len(error_edited)
         no_error_customs = len(error_customs)
         successes = no_saved_edited + no_saved_customs
         failures = no_error_edited + no_error_customs
@@ -284,10 +284,6 @@ class CustomSegmentationDialog(qt.QDialog):
         layout.addRow(colorLabel, colorPicker)
         self.colorPicker = colorPicker
 
-        colorPicker.colorChanged.connect(
-            lambda c: print(c.name())
-        )
-
         # Collapsible descriptions of the placeholder characters
         placeholderGroupBox = ctk.ctkCollapsibleGroupBox()
         placeholderGroupBox.setTitle(_("Placeholder Characters"))
@@ -301,11 +297,6 @@ class CustomSegmentationDialog(qt.QDialog):
             descriptionLabel = qt.QLabel(_(v))
             descriptionLabel.setWordWrap(True)
             placeholderLayout.addRow(characterLabel, descriptionLabel)
-        for v in sorted(dir(placeholderGroupBox)):
-            if callable(getattr(placeholderGroupBox, v)):
-                print(f"{v}()")
-            else:
-                print(v)
         placeholderGroupBox.collapsed = True
         layout.addRow(placeholderGroupBox)
 

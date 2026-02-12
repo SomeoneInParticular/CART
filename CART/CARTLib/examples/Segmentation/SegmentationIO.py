@@ -1,6 +1,7 @@
 import csv
 import json
 import logging
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
@@ -169,6 +170,9 @@ class SegmentationIO:
         saved_edited = dict()
         error_edited = dict()
         for seg_id, seg_node in unit.segmentation_nodes.items():
+            # Don't save custom segmentations twice
+            if seg_id in unit.custom_segmentations.keys():
+                continue
             seg_path = unit.segmentation_paths.get(seg_id, None)
             try:
                 result = self._save_edited_segmentation(seg_node, unit, seg_id, seg_path)
@@ -194,7 +198,7 @@ class SegmentationIO:
         seg_node: "slicer.vtkMRMLSegmentationNode",
         unit: SegmentationUnit,
         seg_id: str,
-        source_path: Path,
+        source_path: Path = None,
     ):
         """
         Save edits made to the specified segmentation node, referencing the given data
@@ -211,7 +215,6 @@ class SegmentationIO:
         # Find the corresponding segmentation name
         seg_name = None
         for k in self.task_config.segmentations_to_save:
-            print(k, seg_id)
             if k in seg_id:
                 seg_name = k
                 break
@@ -233,17 +236,24 @@ class SegmentationIO:
 
         # Generate the output path string
         output_str = self.task_config.edit_output_path
+        if source_path is None:
+            ph_map = self.build_placeholder_map(
+                unit.uid, seg_name, self.job_config.name
+            )
+        else:
+            ph_map = self.build_placeholder_map(
+                unit.uid, seg_name, self.job_config.name, source_path.name
+            )
+
         output_str = self.format_output_str(
             output_str,
-            self.build_placeholder_map(
-                unit.uid, seg_name, self.job_config.name, source_path.name
-            ),
+            ph_map,
             self.job_config.output_path,
         )
 
         # If the output string is none (invalid), log an error and end this loop
         if output_str is None:
-            msg = f"Could not save unit '{unit.uid}', no associated configuration entry exists."
+            msg = f"Could not save '{seg_name}', output path string was invalid"
             logging.error(msg)
             raise ValueError(msg)
 
