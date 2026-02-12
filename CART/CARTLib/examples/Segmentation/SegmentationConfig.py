@@ -50,3 +50,25 @@ class SegmentationConfig(DictBackedConfig):
         }
         self.custom_segmentations[new_name] = sub_dict
         self.has_changed = True
+
+    SEGMENTATIONS_TO_SAVE_KEY = "segmentations_to_save"
+
+    @property
+    def segmentations_to_save(self) -> list[str]:
+        return self.get_or_default(self.SEGMENTATIONS_TO_SAVE_KEY, list())
+
+    @segmentations_to_save.setter
+    def segmentations_to_save(self, new_segs: list[str]):
+        self._backing_dict[self.SEGMENTATIONS_TO_SAVE_KEY] = new_segs
+        self.has_changed = True
+
+    EDIT_OUTPUT_PATH_KEY = "edit_output_path"
+
+    @property
+    def edit_output_path(self) -> str:
+        return self.get_or_default(self.EDIT_OUTPUT_PATH_KEY, "")
+
+    @edit_output_path.setter
+    def edit_output_path(self, new_val: str):
+        self.backing_dict[self.EDIT_OUTPUT_PATH_KEY] = new_val
+        self.has_changed = True

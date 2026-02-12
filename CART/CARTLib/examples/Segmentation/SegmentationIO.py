@@ -1,18 +1,19 @@
 import csv
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 import slicer.util
-from CARTLib.utils.data import (
-    save_segmentation_to_nifti,
-    save_json_sidecar,
-)
-from slicer.i18n import tr as _
 
 from CARTLib.examples.Segmentation.SegmentationUnit import SegmentationUnit
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
+from CARTLib.utils.data import (
+    save_segmentation_to_nifti,
+    save_json_sidecar,
+    find_json_sidecar_path,
+)
 
 if TYPE_CHECKING:
     # Avoid a cyclic reference
@@ -80,7 +81,7 @@ class SegmentationIO:
             cls.JOBNAME_PLACEHOLDER: job_name,
         }
         if file_name is not None:
-            placeholder_map[cls.FILENAME_PLACEHOLDER] = file_name
+            placeholder_map[cls.FILENAME_PLACEHOLDER] = file_name.split('.')[0]
         return placeholder_map
 
     @classmethod
@@ -164,6 +165,19 @@ class SegmentationIO:
         return log_data
 
     def save_unit(self, unit: SegmentationUnit):
+        # Save each edited segmentation if they were requested by the user
+        saved_edited = dict()
+        error_edited = dict()
+        for seg_id, seg_node in unit.segmentation_nodes.items():
+            seg_path = unit.segmentation_paths.get(seg_id, None)
+            try:
+                result = self._save_edited_segmentation(seg_node, unit, seg_id, seg_path)
+                if result is None:
+                    continue
+                saved_edited[seg_id] = str(result)
+            except Exception as e:
+                error_edited[seg_id] = str(e)
+
         # Save each custom segmentation
         saved_customs = dict()  # Name: Destination Path
         error_customs = dict()  # Name: Reason
@@ -173,7 +187,102 @@ class SegmentationIO:
                 saved_customs[seg_id] = str(result)
             except Exception as e:
                 error_customs[seg_id] = str(e)
-        return saved_customs, error_customs
+        return saved_edited, saved_customs, error_edited, error_customs
+
+    def _save_edited_segmentation(
+        self,
+        seg_node: "slicer.vtkMRMLSegmentationNode",
+        unit: SegmentationUnit,
+        seg_id: str,
+        source_path: Path,
+    ):
+        """
+        Save edits made to the specified segmentation node, referencing the given data
+        unit and segmentation ID to fill in the resulting files w/ additional
+        details.
+
+        :param seg_node: The segmentation node that should be saved
+        :param unit: The data unit the segmentation node is part of
+        :param seg_id: The identifier used by the segmentation within the data unit
+        :param source_path: The path the original segmentation was loaded from
+        :return: The output path of the MAIN (.nii.gz) saved file
+        :raises ValueError: If the values provided would result in a corrupted save file.
+        """
+        # Find the corresponding segmentation name
+        seg_name = None
+        for k in self.task_config.segmentations_to_save:
+            print(k, seg_id)
+            if k in seg_id:
+                seg_name = k
+                break
+
+        # If none was found, skip over it
+        if seg_name is None:
+            return None
+
+        # Skip blank segmentations
+        # TODO: Make this configurable
+        for sid in seg_node.GetSegmentation().GetSegmentIDs():
+            if (
+                not slicer.util.arrayFromSegmentBinaryLabelmap(seg_node, sid).max()
+                > 0
+            ):
+                msg = f"Skipped '{seg_name}'; segmentation was blank!"
+                logging.info(msg)
+                raise ValueError(msg)
+
+        # Generate the output path string
+        output_str = self.task_config.edit_output_path
+        output_str = self.format_output_str(
+            output_str,
+            self.build_placeholder_map(
+                unit.uid, seg_name, self.job_config.name, source_path.name
+            ),
+            self.job_config.output_path,
+        )
+
+        # If the output string is none (invalid), log an error and end this loop
+        if output_str is None:
+            msg = f"Could not save unit '{unit.uid}', no associated configuration entry exists."
+            logging.error(msg)
+            raise ValueError(msg)
+
+        # Set up for file saving
+        stem_path = Path(output_str)
+
+        # TODO: Allow user-customizable file format
+        output_path = stem_path.parent / (stem_path.name + ".nii.gz")
+
+        # See if there's sidecar data we can copy + update
+        sidecar_data = None
+        if source_path:
+            sidecar_path = find_json_sidecar_path(source_path)
+            if sidecar_path.exists():
+                with open(sidecar_path, 'r') as fp:
+                    sidecar_data = json.load(fp)
+        # If not, start from scratch
+        if sidecar_data is None:
+            sidecar_data = {
+                "SpatialReference": "orig",
+                "GeneratedBy": [],
+            }
+        # Add our new generated by entry
+        generated_by = sidecar_data["GeneratedBy"]
+        generated_by.append(
+            {
+                "Name": f"CART Segmentation Task [{self.job_config.name}]",
+                "Version": VERSION,
+                "Author": self.master_config.author,
+                "Position": self.master_config.position,
+                "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
+        json_path = stem_path.parent / (stem_path.name + ".json")
+
+        # Save everything and return
+        save_segmentation_to_nifti(seg_node, unit.primary_volume_node, output_path)
+        save_json_sidecar(json_path, sidecar_data)
+        return output_path.resolve()
 
     def _save_custom_segmentation(
         self,
@@ -182,7 +291,7 @@ class SegmentationIO:
         seg_id: str,
     ) -> Path:
         """
-        Save the specified segmentation node, referencing the given data
+        Save the specified (custom) segmentation node, referencing the given data
         unit and segmentation ID to fill in the resulting files w/ additional
         details.
 
@@ -203,24 +312,19 @@ class SegmentationIO:
                 seg_name = k
                 break
 
-        # Skip blank segmentations
-        # TODO: Make this configurable
-        _skip = False
-        for sid in seg_node.GetSegmentation().GetSegmentIDs():
-            if not slicer.util.arrayFromSegmentBinaryLabelmap(seg_node, sid).max() > 0:
-                _skip = True
-                break
-        if _skip:
-            msg = f"Skipped '{seg_name}'; segmentation was blank!"
-            logging.info(msg)
-            raise ValueError(msg)
-        del _skip
-
         # If that search failed, log and end
-        if output_str is None or color_hex is None:
-            msg = f"Could not save unit '{unit.uid}', no associated configuration entry exists."
+        if seg_name is None:
+            msg = f"Could not save '{seg_name}', no valid configuration entry exists for it."
             logging.error(msg)
             raise ValueError(msg)
+
+        # Skip blank segmentations
+        # TODO: Make this configurable
+        for sid in seg_node.GetSegmentation().GetSegmentIDs():
+            if not slicer.util.arrayFromSegmentBinaryLabelmap(seg_node, sid).max() > 0:
+                msg = f"Skipped '{seg_name}'; segmentation was blank!"
+                logging.info(msg)
+                raise ValueError(msg)
 
         # Generate the output path string
         output_str = self.format_output_str(
@@ -231,14 +335,15 @@ class SegmentationIO:
 
         # If the output string is none (invalid), log an error and end this loop
         if output_str is None:
-            msg = f"Could not save unit '{unit.uid}', output path string was invalid"
+            msg = f"Could not save '{seg_name}', output path string was invalid"
             logging.error(msg)
             raise ValueError(msg)
 
-        output_path = Path(output_str)
+        # Set up for file saving
+        stem_path = Path(output_str)
 
-        # TODO: Allow user-customizable formatting
-        output_path = output_path.parent / (output_path.name + ".nii.gz")
+        # TODO: Allow user-customizable file format
+        output_path = stem_path.parent / (stem_path.name + ".nii.gz")
 
         # Build the corresponding sidecar
         # TODO: Only create this if outputting to BIDS-like format
@@ -254,7 +359,7 @@ class SegmentationIO:
                 }
             ],
         }
-        json_path = output_path.parent / (output_path.name + ".json")
+        json_path = stem_path.parent / (stem_path.name + ".json")
 
         # Save everything and report
         save_segmentation_to_nifti(seg_node, unit.primary_volume_node, output_path)

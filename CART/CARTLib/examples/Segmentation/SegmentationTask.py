@@ -60,6 +60,11 @@ class SegmentationTask(
         self.gui: Optional[SegmentationGUI] = None
         self._data_unit: Optional[SegmentationUnit] = None
 
+        # "Segmentation" features
+        self.segmentation_features = [
+            f for f in self.cohort_features if "segmentation" in f.lower()
+        ]
+
         # Config init
         self.local_config = SegmentationConfig(job_profile)
 
@@ -100,10 +105,10 @@ class SegmentationTask(
     def save(self) -> Optional[str]:
         if not self.data_unit:
             self.logger.error("Could not save, no data unit has been loaded!")
-        saved_customs, error_customs = self.io.save_unit(self.data_unit)
-        # If we have an active GUI, re
+        result_packet = self.io.save_unit(self.data_unit)
+        # If we have an active GUI, prompt the user with the details
         if self.gui:
-            self.gui.onSavePrompt(saved_customs, error_customs)
+            self.gui.onSavePrompt(*result_packet)
 
     @classmethod
     def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
@@ -160,6 +165,24 @@ class SegmentationTask(
                 self.logger.error(traceback.format_exc())
                 if self.gui:
                     showErrorPrompt(str(e), None)
+
+    @property
+    def segmentations_to_save(self) -> list[str]:
+        return self.local_config.segmentations_to_save
+
+    @segmentations_to_save.setter
+    def segmentations_to_save(self, new_segs: list[str]):
+        self.local_config.segmentations_to_save = new_segs
+        self.local_config.save()
+
+    @property
+    def edit_output_path(self) -> str:
+        return self.local_config.edit_output_path
+
+    @edit_output_path.setter
+    def edit_output_path(self, new_val: str):
+        self.local_config.edit_output_path = new_val
+        self.local_config.save()
 
     ## Segmentation Management ##
     def _init_custom_segmentations(self):
