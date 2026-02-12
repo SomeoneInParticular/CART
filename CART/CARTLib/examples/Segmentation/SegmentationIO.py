@@ -52,7 +52,7 @@ class SegmentationIO:
     NAME_PLACEHOLDER = "%n"
     FULLNAME_PLACEHOLDER = "%N"
     JOBNAME_PLACEHOLDER = "%j"
-    FILENAME_PLACEHOLDER = "%j"
+    FILENAME_PLACEHOLDER = "%f"
 
     REPLACEMENT_MAP_DESCRIPTIONS = {
         UID_PLACEHOLDER: "The UID of the case, as specified in the Cohort file.",
