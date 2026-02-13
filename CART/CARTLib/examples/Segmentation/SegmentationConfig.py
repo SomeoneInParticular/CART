@@ -72,3 +72,14 @@ class SegmentationConfig(DictBackedConfig):
     def edit_output_path(self, new_val: str):
         self.backing_dict[self.EDIT_OUTPUT_PATH_KEY] = new_val
         self.has_changed = True
+
+    DEFAULT_CUSTOM_OUTPUT_PATH_KEY = "default_custom_output_path"
+
+    @property
+    def default_custom_output_path(self) -> str:
+        return self.get_or_default(self.DEFAULT_CUSTOM_OUTPUT_PATH_KEY, "")
+
+    @default_custom_output_path.setter
+    def default_custom_output_path(self, new_val: str):
+        self.backing_dict[self.DEFAULT_CUSTOM_OUTPUT_PATH_KEY] = new_val
+        self.has_changed = True

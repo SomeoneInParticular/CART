@@ -235,14 +235,18 @@ class SegmentationIO:
                 logging.info(msg)
                 raise ValueError(msg)
 
-        # Generate the output path string
+        # Determine the short name for this segmentation
         short_name = seg_name
         if short_name.lower().startswith("segmentation_"):
             short_name = short_name[len("segmentation_") :]
+
+        # Change the file-name
         if source_path is None:
             file_name = f"{unit.uid}_{short_name}"
+            output_str = self.task_config.default_custom_output_path
         else:
             file_name = source_path.name.split(".")[0]
+            output_str = self.task_config.edit_output_path
         placeholder_map = FilePathFormatter.build_default_placeholder_map(
             uid=unit.uid,
             short_name=short_name,
@@ -256,7 +260,9 @@ class SegmentationIO:
             placeholder_map=placeholder_map,
             extension=".nii.gz",
         )
-        output_str = formatter.format_string(self.task_config.edit_output_path)
+
+        # If this is a new (previously missing) segmentation, use the default custom path
+        output_str = formatter.format_string(output_str)
 
         # If the output string is none (invalid), log an error and end this loop
         if output_str is None:

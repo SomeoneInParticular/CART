@@ -184,6 +184,15 @@ class SegmentationTask(
         self.local_config.edit_output_path = new_val
         self.local_config.save()
 
+    @property
+    def default_custom_output_path(self) -> str:
+        return self.local_config.default_custom_output_path
+
+    @default_custom_output_path.setter
+    def default_custom_output_path(self, new_val: str):
+        self.local_config.default_custom_output_path = new_val
+        self.local_config.save()
+
     ## Segmentation Management ##
     def _init_custom_segmentations(self):
         """

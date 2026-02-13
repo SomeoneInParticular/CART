@@ -21,12 +21,29 @@ class SegmentationGUI:
     def __init__(self, bound_task: "SegmentationTask"):
         self.bound_task = bound_task
 
-        # Output file formatter; tracked to it can be updated dynamically
-        self.editFileFormatter: FilePathFormatter = FilePathFormatter()
         # TODO: Make this configurable
-        self.editFileFormatter.extension = ".nii.gz"
+        extension = ".nii.gz"
+
+        # Output file formatters; tracked so they can be dynamically updated
+        self.editFileFormatter: FilePathFormatter = FilePathFormatter()
+        self.editFileFormatter.extension = extension
         self.editFileFormatter.update_placeholder(
             FilePathFormatter.DEFAULT_UID_PLACEHOLDER, bound_task.data_unit.uid
+        )
+        self.customFileFormatter: FilePathFormatter = FilePathFormatter()
+        self.customFileFormatter.extension = extension
+        self.customFileFormatter.update_placeholder(
+            FilePathFormatter.DEFAULT_UID_PLACEHOLDER, bound_task.data_unit.uid
+        )
+        self.customFileFormatter.update_placeholder(
+            FilePathFormatter.DEFAULT_SHORT_NAME_PLACEHOLDER, "custom"
+        )
+        self.customFileFormatter.update_placeholder(
+            FilePathFormatter.DEFAULT_LONG_NAME_PLACEHOLDER, "segmentation_custom"
+        )
+        self.customFileFormatter.update_placeholder(
+            FilePathFormatter.DEFAULT_FILENAME_PLACEHOLDER,
+            f"{bound_task.data_unit.uid}_custom",
         )
 
         # Segment editor; tracked so it can be refreshed
@@ -67,10 +84,13 @@ class SegmentationGUI:
         # Add them to the layout
         formLayout.addRow(editsToSaveLabel, editsToSaveSelector)
 
-        # Output path specifier
-        editPathFormatWidget = FilePathEditorWidget(
-            self.editFileFormatter, showPlaceholderList=True
-        )
+        # Save timer; prevents spam-saving to disk every time the text is edited
+        saveDelayTimer = qt.QTimer(None)
+        saveDelayTimer.setSingleShot(True)
+        saveDelayTimer.setInterval(1000)  # 1 second
+
+        # Edited file output format
+        editPathFormatWidget = FilePathEditorWidget(self.editFileFormatter)
         editPathFormatWidget.pathFormatLabel.setText("Edited Files: ")
         editPathToolTip = _(
             "The destination specified here determines where edited segmentations will be saved."
@@ -78,21 +98,44 @@ class SegmentationGUI:
         editPathFormatWidget.pathFormatLabel.setToolTip(editPathToolTip)
         editPathFormatWidget.pathFormatEditor.setToolTip(editPathToolTip)
         formLayout.addRow(editPathFormatWidget)
-        # Save timer; prevents spam-saving to disk every time the text is edited
-        saveDelayTimer = qt.QTimer(None)
-        saveDelayTimer.setSingleShot(True)
-        saveDelayTimer.setInterval(1000)  # 1 second
-        # Save the changes (after 1 second) when text is edited
-        def saveNewPathFormat():
+        # Initialize the widget and hook everything together
+        editPathFormatWidget.pathFormat = self.bound_task.edit_output_path
+        editPathFormatWidget.pathFormatChanged.connect(lambda __: saveDelayTimer.start())
+
+        # Custom file output format (default)
+        customPathFormatWidget = FilePathEditorWidget(
+            self.customFileFormatter, showPlaceholderList=True
+        )
+        customPathFormatWidget.pathFormatLabel.setText("Custom Files: ")
+        customPathToolTip = _(
+            "The destination specified here determines where custom (from-scratch) "
+            "segmentation will be saved by default. This includes missing segmentations!"
+        )
+        customPathFormatWidget.pathFormatLabel.setToolTip(customPathToolTip)
+        customPathFormatWidget.pathFormatEditor.setToolTip(customPathToolTip)
+        formLayout.addRow(customPathFormatWidget)
+        # Initialize the widget and hook everything together
+        customPathFormatWidget.pathFormat = self.bound_task.default_custom_output_path
+        customPathFormatWidget.pathFormatChanged.connect(
+            lambda __: saveDelayTimer.start()
+        )
+
+        # Save the changes to the output path strings at-most once per second
+        def saveNewPathFormats():
+            # Update the edited file path
             new_str = editPathFormatWidget.pathFormat
             result_str = self.editFileFormatter.format_string(new_str)
             if result_str is None:
                 new_str = ""
             self.bound_task.edit_output_path = new_str
-        # Initialize the widget and hook everything together
-        editPathFormatWidget.pathFormat = self.bound_task.edit_output_path
-        saveDelayTimer.timeout.connect(saveNewPathFormat)
-        editPathFormatWidget.pathFormatChanged.connect(lambda __: saveDelayTimer.start())
+
+            # Update the default custom file path
+            new_str = customPathFormatWidget.pathFormat
+            result_str = self.customFileFormatter.format_string(new_str)
+            if result_str is None:
+                new_str = ""
+            self.bound_task.default_custom_output_path = new_str
+        saveDelayTimer.timeout.connect(saveNewPathFormats)
 
         # Segmentation editor
         segmentEditorWidget = CARTSegmentationEditorWidget()
@@ -101,22 +144,36 @@ class SegmentationGUI:
 
         # When the selected segmentation changes, update the formatter
         def onSelectedSegmentationChanged(__: int = None):
+            # Update the file editor
             current_seg_name = segmentEditorWidget.proxySegNodeComboBox.currentText
-            new_seg_name = "_".join(current_seg_name.split(' ')[:1])
-            new_short_name = new_seg_name
-            if new_seg_name.lower().startswith("segmentation_"):
-                new_short_name = new_short_name[len("segmentation_") :]
+            long_name = "_".join(current_seg_name.split(" ")[:1])
+            short_name = long_name
+            if long_name.lower().startswith("segmentation_"):
+                short_name = short_name[len("segmentation_") :]
             self.editFileFormatter.update_placeholder(
-                FilePathFormatter.DEFAULT_SHORT_NAME_PLACEHOLDER, new_short_name
+                FilePathFormatter.DEFAULT_SHORT_NAME_PLACEHOLDER, short_name
             )
             self.editFileFormatter.update_placeholder(
-                FilePathFormatter.DEFAULT_LONG_NAME_PLACEHOLDER, new_seg_name
+                FilePathFormatter.DEFAULT_LONG_NAME_PLACEHOLDER, long_name
             )
-            f_val = f"{self.bound_task.data_unit.uid}_{new_short_name}"
+            file_path = self.bound_task.data_unit.segmentation_paths.get(long_name)
+            if file_path is None:
+                file_name = f"{self.bound_task.data_unit.uid}_{short_name}"
+            else:
+                file_name = file_path.name.split(".")[0]
             self.editFileFormatter.update_placeholder(
-                FilePathFormatter.DEFAULT_FILENAME_PLACEHOLDER, f_val
+                FilePathFormatter.DEFAULT_FILENAME_PLACEHOLDER, file_name
             )
+
+            # Update the custom path editor
+            self.customFileFormatter.update_placeholder(
+                FilePathFormatter.DEFAULT_FILENAME_PLACEHOLDER,
+                f"{self.bound_task.data_unit.uid}_custom",
+            )
+
+            # Refresh both
             editPathFormatWidget.refresh()
+            customPathFormatWidget.refresh()
         segmentEditorWidget.proxySegNodeComboBox.currentIndexChanged.connect(
             onSelectedSegmentationChanged
         )
@@ -159,7 +216,8 @@ class SegmentationGUI:
                 placeholder_map=placeholderMap,
                 task_config=self.bound_task.local_config,
                 root_path=self.bound_task.job_profile.output_path,
-                extension=".nii.gz"
+                extension=".nii.gz",
+                initial_path_str=self.bound_task.default_custom_output_path
             )
             # If the user confirms the changes, add the custom seg.
             if prompt.exec():
@@ -263,6 +321,7 @@ class CustomSegmentationDialog(qt.QDialog):
         task_config: SegmentationConfig,
         root_path: Path = Path('...'),
         extension: str = ".abc",
+        initial_path_str: str = "",
         parent=None
     ):
         super().__init__(parent)
@@ -301,9 +360,21 @@ class CustomSegmentationDialog(qt.QDialog):
 
         # Output path specifier
         fileFormatter = FilePathFormatter(root_path, placeholder_map, extension)
+        uid_packet = fileFormatter.placeholder_map.get(
+            fileFormatter.DEFAULT_UID_PLACEHOLDER
+        )
+        if uid_packet is None:
+            raise ValueError(
+                f"{type(self).__name__} was initialized without a UID entry somehow."
+            )
+        uid = uid_packet[0]
+        fileFormatter.update_placeholder(
+            FilePathFormatter.DEFAULT_FILENAME_PLACEHOLDER, f"{uid}_custom"
+        )
         pathEditorWidget = FilePathEditorWidget(
             fileFormatter, showPlaceholderList=True
         )
+        pathEditorWidget.pathFormat = initial_path_str
         layout.addRow(pathEditorWidget)
         self.editPathFormatWidget = pathEditorWidget
 
@@ -323,10 +394,11 @@ class CustomSegmentationDialog(qt.QDialog):
                 raise ValueError(f"{type(self).__name__} was initialized without a UID entry somehow.")
             uid = uid_packet[0]
             fileFormatter.update_placeholder(
-                fileFormatter.DEFAULT_FILENAME_PLACEHOLDER, f"{short_name}_{uid}"
+                fileFormatter.DEFAULT_FILENAME_PLACEHOLDER, f"{uid}_{short_name}"
             )
             pathEditorWidget.refresh()
         nameEdit.textChanged.connect(nameTextChanged)
+        nameTextChanged("")
 
         # "Pseudo-Stretch" to push the buttons to the bottom
         stretch = qt.QWidget(None)
@@ -354,8 +426,11 @@ class CustomSegmentationDialog(qt.QDialog):
         # Ensure the user can only confirm if the name is valid
         applyButton: qt.QPushButton = buttonBox.button(qt.QDialogButtonBox.Apply)
         def validatePath(*__):
-            # It's immediately invalid if the name is already taken
-            if nameEdit.text in task_config.custom_segmentations:
+            # It's immediately invalid if the name is blank or already taken
+            if (
+                nameEdit.text.strip() == ""
+                or nameEdit.text in task_config.custom_segmentations
+            ):
                 applyButton.setEnabled(False)
                 return
             # Confirm the updated, formatted name is valid as well
@@ -363,6 +438,7 @@ class CustomSegmentationDialog(qt.QDialog):
             applyButton.setEnabled(formatted_str is not None)
         nameEdit.textChanged.connect(validatePath)
         pathEditorWidget.pathFormatChanged.connect(validatePath)
+        validatePath()
 
     @property
     def name(self) -> str:
