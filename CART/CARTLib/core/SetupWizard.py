@@ -617,7 +617,7 @@ class _CohortWizardPage(qt.QWizardPage):
         def onCreateClick():
             # Create and show the creator dialog
             data_path = self.wizard().data_path
-            output_path = self.wizard().root_path
+            output_path = self.wizard().output_path
             dialog = NewCohortDialog(data_path)
             self.mediateCohortCreation(
                 dialog, data_path, output_path, cohortFileSelector, cohortPreviewWidget
