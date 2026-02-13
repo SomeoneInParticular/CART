@@ -71,6 +71,12 @@ class SegmentationGUI:
         editPathFormatWidget = FilePathEditorWidget(
             self.editFileFormatter, showPlaceholderList=True
         )
+        editPathFormatWidget.pathFormatLabel.setText("Edited Files: ")
+        editPathToolTip = _(
+            "The destination specified here determines where edited segmentations will be saved."
+        )
+        editPathFormatWidget.pathFormatLabel.setToolTip(editPathToolTip)
+        editPathFormatWidget.pathFormatEditor.setToolTip(editPathToolTip)
         formLayout.addRow(editPathFormatWidget)
         # Save timer; prevents spam-saving to disk every time the text is edited
         saveDelayTimer = qt.QTimer(None)

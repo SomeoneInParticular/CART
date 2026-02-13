@@ -218,7 +218,7 @@ class FilePathEditorWidget(qt.QWidget):
         DO NOT USE THIS OUTSIDE THE CONSTRUCTOR!!!
         """
         # The "path formatting" widget
-        pathFormatLabel = qt.QLabel(_("Path Format: "))
+        pathFormatLabel = qt.QLabel(_("File Format: "))
         pathFormatLabel.setFont(self._labelFont)
         pathFormatEditor = qt.QLineEdit()
         savePathToolTip = _("The formatting string to use for the path.")
@@ -227,7 +227,7 @@ class FilePathEditorWidget(qt.QWidget):
         layout.addRow(pathFormatLabel, pathFormatEditor)
 
         # Preview of the full output path
-        previewLabel = qt.QLabel(_("Path Preview: "))
+        previewLabel = qt.QLabel(_("Preview: "))
         previewLabel.setFont(self._labelFont)
         previewOutput = qt.QLabel()
         # Keep track of the "original" valid font for later
@@ -237,7 +237,6 @@ class FilePathEditorWidget(qt.QWidget):
         previewToolTip = _(
             "A preview of the full output after processing will appear here."
         )
-        previewLabel.setToolTip(previewToolTip)
         previewOutput.setToolTip(previewToolTip)
         previewOutput.setWordWrap(True)
         layout.addRow(previewLabel, previewOutput)
