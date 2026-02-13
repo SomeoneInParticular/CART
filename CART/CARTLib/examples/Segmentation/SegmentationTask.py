@@ -1,4 +1,5 @@
 import traceback
+from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 import qt
@@ -25,9 +26,14 @@ class SegmentationTask(
     TaskBaseClass[SegmentationUnit]
 ):
 
+    README_PATH = Path(__file__).parent / "README.md"
+
     @classmethod
     def description(cls) -> str:
-        return "WIP!"
+        with open(cls.README_PATH, "r") as fp:
+            return fp.read()
+
+        # TODO: Remove un-usable images
 
     @classmethod
     def feature_types(cls, data_factory_label: str) -> dict[str, str]:
