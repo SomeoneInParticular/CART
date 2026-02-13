@@ -179,21 +179,6 @@ class SegmentationGUI:
         )
         onSelectedSegmentationChanged()
 
-        # Interpolation toggle
-        interpToggle = qt.QCheckBox()
-        interpLabel = qt.QLabel(_("Interpolate Volumes:"))
-        interpToolTip = _(
-            "Whether volumes should be visualized with interpolation (smoothing)."
-        )
-        interpLabel.setToolTip(interpToolTip)
-        interpToggle.setToolTip(interpToolTip)
-        def setInterp():
-            self.bound_task.should_interpolate = interpToggle.isChecked()
-            self.bound_task.apply_interp()
-        interpToggle.setChecked(self.bound_task.should_interpolate)
-        interpToggle.toggled.connect(setInterp)
-        formLayout.addRow(interpLabel, interpToggle)
-
         # Add Custom Button
         # TODO: Move this to an on-init prompt instead
         addButton = qt.QPushButton("Add Custom Segmentation")
@@ -226,7 +211,35 @@ class SegmentationGUI:
         addButton.clicked.connect(addCustomSeg)
         formLayout.addRow(addButton)
 
+        # Options panel
+        optionsPanel = self._buildOptionsPanel()
+        formLayout.addRow(optionsPanel)
+
         return formLayout
+
+    def _buildOptionsPanel(self) -> ctk.ctkCollapsibleGroupBox:
+        # Group box to store everything in
+        groupBox = ctk.ctkCollapsibleGroupBox()
+        groupBox.setTitle(_("Options"))
+        groupBoxLayout = qt.QFormLayout(None)
+        groupBox.setLayout(groupBoxLayout)
+
+        # Interpolation toggle
+        interpToggle = qt.QCheckBox()
+        interpLabel = qt.QLabel(_("Interpolate Volumes"))
+        interpToolTip = _(
+            "Whether volumes should be visualized with interpolation (smoothing)."
+        )
+        interpLabel.setToolTip(interpToolTip)
+        interpToggle.setToolTip(interpToolTip)
+        def setInterp():
+            self.bound_task.should_interpolate = interpToggle.isChecked()
+            self.bound_task.apply_interp()
+        interpToggle.setChecked(self.bound_task.should_interpolate)
+        interpToggle.toggled.connect(setInterp)
+        groupBoxLayout.addRow(interpToggle, interpLabel)
+
+        return groupBox
 
     def selectSegmentationNode(self, node):
         self._segmentEditorWidget.setSegmentationNode(node)
