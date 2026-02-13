@@ -239,6 +239,21 @@ class SegmentationGUI:
         interpToggle.toggled.connect(setInterp)
         groupBoxLayout.addRow(interpToggle, interpLabel)
 
+        # Hide-on-start toggle
+        hideOnStartToggle = qt.QCheckBox()
+        hideOnStartLabel = qt.QLabel(_("Hide Editable Segments On Load"))
+        hideOnStartToolTip = _(
+            "Whether segments you intend to correct/review should be hidden when "
+            "a new case is first loaded."
+        )
+        hideOnStartLabel.setToolTip(hideOnStartToolTip)
+        hideOnStartToggle.setToolTip(hideOnStartToolTip)
+        def setHideOnStart():
+            self.bound_task.hide_editable_on_start = hideOnStartToggle.isChecked()
+        hideOnStartToggle.setChecked(self.bound_task.hide_editable_on_start)
+        hideOnStartToggle.toggled.connect(setHideOnStart)
+        groupBoxLayout.addRow(hideOnStartToggle, hideOnStartLabel)
+
         return groupBox
 
     def selectSegmentationNode(self, node):

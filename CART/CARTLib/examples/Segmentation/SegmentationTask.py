@@ -95,6 +95,13 @@ class SegmentationTask(
         # Change the interpolation settings to match current setting
         self.apply_interp()
 
+        # Ensure all segments are visible
+        self.show_all_segments()
+
+        # Hide "to-be-edited" segments, if requested
+        if self.hide_editable_on_start:
+            self.hide_editable_segments()
+
         # Add any custom segmentations configured by the user to the unit
         self._init_custom_segmentations()
 
@@ -124,6 +131,7 @@ class SegmentationTask(
     @should_interpolate.setter
     def should_interpolate(self, new_val: bool):
         self.local_config.should_interpolate = new_val
+        self.local_config.save()
 
     def apply_interp(self):
         # Apply interpolation settings to the volume
@@ -132,6 +140,33 @@ class SegmentationTask(
         for n in self.data_unit.volume_nodes.values():
             display_node = n.GetDisplayNode()
             display_node.SetInterpolate(self.should_interpolate)
+
+    @property
+    def hide_editable_on_start(self) -> bool:
+        return self.local_config.hide_editable_on_start
+
+    @hide_editable_on_start.setter
+    def hide_editable_on_start(self, new_val: bool):
+        self.local_config.hide_editable_on_start = new_val
+        self.local_config.save()
+
+    def show_all_segments(self):
+        if not self.data_unit:
+            return
+        for segment_node in self.data_unit.segmentation_nodes.values():
+            display_node = segment_node.GetDisplayNode()
+            display_node.SetAllSegmentsVisibility(True)
+
+    def hide_editable_segments(self):
+        if not self.data_unit:
+            return
+        for k in self.segmentations_to_save:
+            segment_node = self.data_unit.segmentation_nodes.get(k)
+            if not segment_node:
+                print(f"No segment node for {k}")
+                continue
+            display_node = segment_node.GetDisplayNode()
+            display_node.SetAllSegmentsVisibility(False)
 
     @property
     def custom_segmentations(self) -> dict[str, dict]:

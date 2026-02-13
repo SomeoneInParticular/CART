@@ -28,7 +28,18 @@ class SegmentationConfig(DictBackedConfig):
     @should_interpolate.setter
     def should_interpolate(self, new_val: bool):
         self.backing_dict[self.SHOULD_INTERPOLATE_KEY] = new_val
-        self._has_changed = True
+        self.has_changed = True
+
+    HIDE_EDITABLE_ON_START_KEY = "hide_editable_on_start"
+
+    @property
+    def hide_editable_on_start(self) -> bool:
+        return self.get_or_default(self.HIDE_EDITABLE_ON_START_KEY, False)
+
+    @hide_editable_on_start.setter
+    def hide_editable_on_start(self, new_val: bool):
+        self.backing_dict[self.HIDE_EDITABLE_ON_START_KEY] = new_val
+        self.has_changed = True
 
     CUSTOM_SEGMENTATIONS_KEY = "custom_segmentations"
     CUSTOM_SEG_PATH_KEY = "path_string"
