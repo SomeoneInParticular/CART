@@ -15,6 +15,7 @@ from CARTLib.utils.data import (
     save_json_sidecar,
     find_json_sidecar_path,
 )
+from CARTLib.utils.formatting import FilePathFormatter
 
 if TYPE_CHECKING:
     # Avoid a cyclic reference
@@ -235,21 +236,27 @@ class SegmentationIO:
                 raise ValueError(msg)
 
         # Generate the output path string
-        output_str = self.task_config.edit_output_path
+        short_name = seg_name
+        if short_name.lower().startswith("segmentation_"):
+            short_name = short_name[len("segmentation_") :]
         if source_path is None:
-            ph_map = self.build_placeholder_map(
-                unit.uid, seg_name, self.job_config.name
-            )
+            file_name = f"{unit.uid}_{short_name}"
         else:
-            ph_map = self.build_placeholder_map(
-                unit.uid, seg_name, self.job_config.name, source_path.name
-            )
-
-        output_str = self.format_output_str(
-            output_str,
-            ph_map,
-            self.job_config.output_path,
+            file_name = source_path.name.split(".")[0]
+        placeholder_map = FilePathFormatter.build_default_placeholder_map(
+            uid=unit.uid,
+            short_name=short_name,
+            long_name=seg_name,
+            job_name=self.job_config.name,
+            file_name=file_name,
         )
+        # TODO: Make the extension configurable
+        formatter = FilePathFormatter(
+            root_path=self.job_config.output_path,
+            placeholder_map=placeholder_map,
+            extension=".nii.gz",
+        )
+        output_str = formatter.format_string(self.task_config.edit_output_path)
 
         # If the output string is none (invalid), log an error and end this loop
         if output_str is None:
@@ -258,10 +265,7 @@ class SegmentationIO:
             raise ValueError(msg)
 
         # Set up for file saving
-        stem_path = Path(output_str)
-
-        # TODO: Allow user-customizable file format
-        output_path = stem_path.parent / (stem_path.name + ".nii.gz")
+        seg_path = Path(output_str)
 
         # See if there's sidecar data we can copy + update
         sidecar_data = None
@@ -287,12 +291,12 @@ class SegmentationIO:
                 "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
         )
-        json_path = stem_path.parent / (stem_path.name + ".json")
+        json_path = seg_path.parent / (seg_path.name.split('.')[0] + ".json")
 
         # Save everything and return
-        save_segmentation_to_nifti(seg_node, unit.primary_volume_node, output_path)
+        save_segmentation_to_nifti(seg_node, unit.primary_volume_node, seg_path)
         save_json_sidecar(json_path, sidecar_data)
-        return output_path.resolve()
+        return seg_path.resolve()
 
     def _save_custom_segmentation(
         self,
