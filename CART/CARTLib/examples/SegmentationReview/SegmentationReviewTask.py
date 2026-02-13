@@ -23,8 +23,13 @@ class SegmentationReviewTask(
 ):
     README_PATH = Path(__file__).parent / "README.md"
 
-    def __init__(self, master_profile: MasterProfileConfig, job_profile: JobProfileConfig):
-        super().__init__(master_profile, job_profile)
+    def __init__(
+        self,
+        master_profile: MasterProfileConfig,
+        job_profile: JobProfileConfig,
+        cohort_features: list[str],
+    ):
+        super().__init__(master_profile, job_profile, cohort_features)
 
         # Local Attributes
         self.gui: Optional[SegmentationReviewGUI] = None
