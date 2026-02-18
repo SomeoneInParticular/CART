@@ -113,9 +113,6 @@ class CohortModel(CSVBackedTableModel):
         reference_task: "TaskBaseClass" = None,
         use_sidecar: bool = True
     ):
-        # Exit immediately if the case-map is empty
-        if len(case_map) < 1:
-            raise ValueError("Cannot create a cohort from an empty case map!")
         # Generate the backing CSV immediately using the case map's contents
         row_data = [["uid"], *[[k] for k in case_map.keys()]]
         with open(csv_path, "w") as fp:
@@ -1178,6 +1175,7 @@ class FeatureEditorDialog(qt.QDialog):
         # Make sure a feature of this name doesn't already exist
         label = self.namePreviewField.text.strip()
         if self._reference_feature is None and label in self._cohort.feature_map.keys():
+
             # If it does, show an error and return "False" (no changes made)
             qt.QMessageBox.critical(
                 None,
