@@ -197,7 +197,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 # If they don't, end here
                 if self._cartNotRunBeforePrompt() != qt.QMessageBox.Yes:
                     return
-                self.runInitialSetup()
+                if self.runInitialSetup():
+                    self.runNewJobSetup()
             # Otherwise, skip to job creation
             else:
                 self.runNewJobSetup()
