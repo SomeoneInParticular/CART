@@ -225,9 +225,8 @@ class SegmentationIO:
             return None
 
         # Skip blank segmentations
-        # TODO: Make this configurable
         for sid in seg_node.GetSegmentation().GetSegmentIDs():
-            if (
+            if not self.task_config.save_blank_segmentations and (
                 not slicer.util.arrayFromSegmentBinaryLabelmap(seg_node, sid).max()
                 > 0
             ):
@@ -339,9 +338,12 @@ class SegmentationIO:
             raise ValueError(msg)
 
         # Skip blank segmentations
-        # TODO: Make this configurable
         for sid in seg_node.GetSegmentation().GetSegmentIDs():
-            if not slicer.util.arrayFromSegmentBinaryLabelmap(seg_node, sid).max() > 0:
+            if (
+                not self.task_config.save_blank_segmentations
+                and not slicer.util.arrayFromSegmentBinaryLabelmap(seg_node, sid).max()
+                > 0
+            ):
                 msg = f"Skipped '{seg_name}'; segmentation was blank!"
                 logging.info(msg)
                 raise ValueError(msg)

@@ -175,6 +175,15 @@ class SegmentationTask(
             display_node.SetAllSegmentsVisibility(False)
 
     @property
+    def save_blank_segments(self) -> bool:
+        return self.local_config.save_blank_segmentations
+
+    @save_blank_segments.setter
+    def save_blank_segments(self, new_val: bool):
+        self.local_config.save_blank_segmentations = new_val
+        self.local_config.save()
+
+    @property
     def custom_segmentations(self) -> dict[str, dict]:
         return self.local_config.custom_segmentations
 

@@ -41,6 +41,17 @@ class SegmentationConfig(DictBackedConfig):
         self.backing_dict[self.HIDE_EDITABLE_ON_START_KEY] = new_val
         self.has_changed = True
 
+    SAVE_BLANK_SEGMENTATIONS_KEY = "save_blanks"
+
+    @property
+    def save_blank_segmentations(self) -> bool:
+        return self.get_or_default(self.SAVE_BLANK_SEGMENTATIONS_KEY, True)
+
+    @save_blank_segmentations.setter
+    def save_blank_segmentations(self, new_val: bool):
+        self.backing_dict[self.SAVE_BLANK_SEGMENTATIONS_KEY] = new_val
+        self.has_changed = True
+
     CUSTOM_SEGMENTATIONS_KEY = "custom_segmentations"
     CUSTOM_SEG_PATH_KEY = "path_string"
     CUSTOM_SEG_COLOR_KEY = "color"

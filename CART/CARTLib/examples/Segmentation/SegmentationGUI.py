@@ -239,6 +239,20 @@ class SegmentationGUI:
         interpToggle.toggled.connect(setInterp)
         groupBoxLayout.addRow(interpToggle, interpLabel)
 
+        # Save blank segmentations toggle
+        blankSavedToggle = qt.QCheckBox()
+        blankSavedLabel = qt.QLabel(_("Save Blank Segmentations"))
+        blankSavedToolTip = _(
+            'Whether to create a "blank" file when a case is save with no segments.'
+        )
+        blankSavedLabel.setToolTip(blankSavedToolTip)
+        blankSavedToggle.setToolTip(blankSavedToolTip)
+        def setBlankSaved():
+            self.bound_task.save_blank_segments = blankSavedToggle.isChecked()
+        blankSavedToggle.setChecked(self.bound_task.save_blank_segments)
+        blankSavedToggle.toggled.connect(setBlankSaved)
+        groupBoxLayout.addRow(blankSavedToggle, blankSavedLabel)
+
         # Hide-on-start toggle
         hideOnStartToggle = qt.QCheckBox()
         hideOnStartLabel = qt.QLabel(_("Hide Editable Segments On Load"))
