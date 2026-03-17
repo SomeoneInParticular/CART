@@ -153,6 +153,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         mainWidget = qt.QWidget(self.parent)
         layout = qt.QVBoxLayout(mainWidget)
 
+        # Profile configuration elements
+        profileWidget = self._profileManagementPanel()
+        layout.addWidget(profileWidget)
+
         # Button panel for creating, editing, or deleting jobs
         jobManagementPanel = self._jobManagementPanel()
         layout.addWidget(jobManagementPanel)
@@ -160,6 +164,52 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Add a stretch to push everything to the top
         layout.addStretch()
 
+        return mainWidget
+
+    def _profileManagementPanel(self) -> qt.QWidget:
+        # Setup
+        mainWidget = qt.QWidget(self.parent)
+        layout = qt.QVBoxLayout(mainWidget)
+
+        # Current user label + text box
+        userLabel = qt.QLabel(_("Current User:"))
+        userText = qt.QLineEdit()
+        userText.setPlaceholderText(_(
+            "The current username + role will appear here; you need to initialize a profile first!"
+        ))
+        userText.setReadOnly(True)
+        layout.addWidget(userLabel)
+        layout.addWidget(userText)
+
+        # Edit profile button
+        editProfileButton = qt.QPushButton()
+        editProfileButton.setText(_(
+            "Edit Profile"
+        ))
+        editProfileButton.setToolTip(_(
+            "Edit (or create) a user profile."
+        ))
+        layout.addWidget(editProfileButton)
+
+        # Connections
+        def profileChanged():
+            # Update the text in the profile to match the current config settings
+            if (author := self.logic.master_profile_config.author) is not None:
+                position = self.logic.master_profile_config.position
+                if position is None:
+                    new_text = author
+                else:
+                    new_text = f"{author} ({position})"
+                userText.setText(new_text)
+            else:
+                userText.clear()
+        def editProfilePressed():
+            if self.runInitialSetup():
+                profileChanged()
+        editProfileButton.pressed.connect(editProfilePressed)
+
+        # Setup and return
+        profileChanged()
         return mainWidget
 
     def _jobManagementPanel(self) -> qt.QWidget:
