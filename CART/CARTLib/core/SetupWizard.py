@@ -54,7 +54,9 @@ class CARTSetupWizard(qt.QWizard):
         # Add pages
         if prior_config is None:
             self.addPage(self.createIntroPage())
-        self.addPage(self.createProfileCreationPage(prior_config))
+        profilePage = _ProfileWizardPage(None, prior_config)
+        self.addPage(profilePage)
+        self.profilePage = profilePage
         if prior_config is None:
             self.addPage(self.createConclusionPage())
 
@@ -76,47 +78,6 @@ class CARTSetupWizard(qt.QWizard):
 
         return page
 
-    def createProfileCreationPage(self, prior_config: MasterProfileConfig = None):
-        # Basic Attributes
-        page = qt.QWizardPage(None)
-        page.setTitle(_("Profile Creation"))
-        layout = qt.QFormLayout(page)
-
-        # Instruction text
-        instructionLabel = qt.QLabel(_(
-            "Please fill out the following fields:"
-        ))
-        instructionLabel.setWordWrap(True)
-        layout.addRow(instructionLabel)
-
-        # Author name
-        authorLabel = qt.QLabel(_("Author:"))
-        authorLineEdit = qt.QLineEdit()
-        authorLineEdit.setPlaceholderText(_("How you want to be identified."))
-        authorLabel.setBuddy(authorLineEdit)
-        layout.addRow(authorLabel, authorLineEdit)
-        # The asterisk marks this field as "mandatory"
-        page.registerField(self.AUTHOR_KEY + "*", authorLineEdit)
-
-        # Position
-        positionLabel = qt.QLabel(_("Position"))
-        positionLineEdit = qt.QLineEdit()
-        positionLineEdit.setPlaceholderText(_(
-            "Clinician, Research Associate, Student etc."
-        ))
-        positionLabel.setBuddy(positionLineEdit)
-        layout.addRow(positionLabel, positionLineEdit)
-        page.registerField(self.POSITION_KEY, positionLineEdit)
-
-        # Load the previous configuration values if they were provided
-        if prior_config is not None:
-            if (author := prior_config.author) is not None:
-                authorLineEdit.setText(author)
-            if (position := prior_config.position) is not None:
-                positionLineEdit.setText(position)
-
-        return page
-
     @staticmethod
     def createConclusionPage():
         # Basic Attributes
@@ -134,20 +95,20 @@ class CARTSetupWizard(qt.QWizard):
 
         return page
 
-    ## Fields/Properties ##
+    ## Properties ##
     @property
     def author(self) -> str:
-        return self.field(self.AUTHOR_KEY)
+        return self.profilePage.author
 
     @property
     def position(self) -> str:
-        return self.field(self.POSITION_KEY)
+        return self.profilePage.position
 
     ## Utils ##
     def update_logic(self, logic: "CARTLogic"):
         # Update the logic's attributes
         logic.author = self.author
-        logic.position = self.position
+        logic.position = self.position if self.position != "" else None
 
         # Have the logic save its config immediately
         logic.save_master_config()
@@ -326,6 +287,65 @@ class JobSetupWizard(qt.QWizard):
 
 
 ## Wizard Pages ##
+class _ProfileWizardPage(qt.QWizardPage):
+
+    AUTHOR_KEY = "author"
+    POSITION_KEY = "position"
+
+    def __init__(self, parent=None, prior_config: MasterProfileConfig = None):
+        super().__init__(parent)
+
+        # Basic Attributes
+        self.setTitle(_("Profile Creation"))
+        layout = qt.QFormLayout(self)
+
+        # Instruction text
+        instructionLabel = qt.QLabel(_("Please fill out the following fields:"))
+        instructionLabel.setWordWrap(True)
+        layout.addRow(instructionLabel)
+
+        # Author name
+        authorLabel = qt.QLabel(_("Author:"))
+        authorLineEdit = qt.QLineEdit()
+        authorLineEdit.setPlaceholderText(_("How you want to be identified."))
+        authorLabel.setBuddy(authorLineEdit)
+        layout.addRow(authorLabel, authorLineEdit)
+        # The asterisk marks this field as "mandatory"
+        self.registerField(self.AUTHOR_KEY + "*", authorLineEdit)
+        authorLineEdit.textChanged.connect(
+            lambda: self.completeChanged()
+        )
+
+        # Position
+        positionLabel = qt.QLabel(_("Position"))
+        positionLineEdit = qt.QLineEdit()
+        positionLineEdit.setPlaceholderText(
+            _("Clinician, Research Associate, Student etc.")
+        )
+        positionLabel.setBuddy(positionLineEdit)
+        layout.addRow(positionLabel, positionLineEdit)
+        self.registerField(self.POSITION_KEY, positionLineEdit)
+
+        # Load the previous configuration values if they were provided
+        if prior_config is not None:
+            if (author := prior_config.author) is not None:
+                authorLineEdit.setText(author)
+            if (position := prior_config.position) is not None:
+                positionLineEdit.setText(position)
+
+    ## Fields/Properties ##
+    @property
+    def author(self) -> str:
+        return self.field(self.AUTHOR_KEY)
+
+    @property
+    def position(self) -> str:
+        return self.field(self.POSITION_KEY)
+
+    def isComplete(self):
+        return self.author != ""
+
+
 class _DataWizardPage(qt.QWizardPage):
     def __init__(self, parent=None, taken_names=Iterable[str]):
         super().__init__(parent)
