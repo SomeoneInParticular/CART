@@ -105,6 +105,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.configWidgetIndex = -1
         self.jobWidgetIndex = -1
 
+        # Widget which holds the current profile label
+        self.userText: qt.QWidget = None
+
         # Widget which holds the task-specific GUI elements
         self.taskSubWidget: qt.QWidget = None
 
@@ -192,24 +195,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         layout.addWidget(editProfileButton)
 
         # Connections
-        def profileChanged():
-            # Update the text in the profile to match the current config settings
-            if (author := self.logic.master_profile_config.author) is not None:
-                position = self.logic.master_profile_config.position
-                if position is None:
-                    new_text = author
-                else:
-                    new_text = f"{author} ({position})"
-                userText.setText(new_text)
-            else:
-                userText.clear()
         def editProfilePressed():
-            if self.runInitialSetup():
-                profileChanged()
+            self.runProfileEdit()
         editProfileButton.pressed.connect(editProfilePressed)
 
         # Setup and return
-        profileChanged()
+        self.userText = userText
+        self.profileChanged()
         return mainWidget
 
     def _jobManagementPanel(self) -> qt.QWidget:
@@ -242,16 +234,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         newButton = qt.QPushButton(_("New"))
         newButton.setToolTip(_("Create a new Job"))
         def newButtonClicked():
-            # Ask the user to run initial setup
-            if not self.logic.has_run_before():
-                # If they don't, end here
-                if self._cartNotRunBeforePrompt() != qt.QMessageBox.Yes:
-                    return
-                if self.runInitialSetup():
-                    self.runNewJobSetup()
-            # Otherwise, skip to job creation
-            else:
-                self.runNewJobSetup()
+            # Run the new job creation wizard.
+            self.runNewJobSetup()
 
         newButton.clicked.connect(newButtonClicked)
         buttonPanelLayout.addWidget(newButton)
@@ -424,7 +408,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def start(self, job_name=None):
         # If this is the first time CART has been run, ask to initialize firest
         if not self.logic.has_run_before():
-            if self._cartNotRunBeforePrompt() != qt.QMessageBox.Yes:
+            if self._noProfileFoundPrompt() != qt.QMessageBox.Yes:
                 return
             if not self.runInitialSetup():
                 return
@@ -447,6 +431,18 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             job_name = config.name
         # Finally, initialize the job
         self.initJob(job_name)
+
+    def profileChanged(self):
+        # Update the text in the profile to match the current config settings
+        if (author := self.logic.master_profile_config.author) is not None:
+            position = self.logic.master_profile_config.position
+            if position is None:
+                new_text = author
+            else:
+                new_text = f"{author} ({position})"
+            self.userText.setText(new_text)
+        else:
+            self.userText.clear()
 
     def nextCasePressed(self):
         # Request the logic switch to the next case
@@ -494,11 +490,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     ## User Prompts ##
     @staticmethod
-    def _cartNotRunBeforePrompt():
+    def _noProfileFoundPrompt():
         return qt.QMessageBox.question(
             None,
-            _("Initialize CART?"),
-            _("CART has not been run before. Would you like to run setup now?"),
+            _("Initialize Profile?"),
+            _("You have not set up your user profile yet. Would you like to do so now?"),
             qt.QMessageBox.Yes | qt.QMessageBox.No,
             qt.QMessageBox.Yes,
         )
@@ -536,11 +532,17 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         initSetupWizard = CARTSetupWizard(None)
         result = initSetupWizard.exec()
 
-        # If we got an "accept" signal, update our logic and begin job setup
+        # If we got an "accept" signal, update ourselves and begin job setup
         if result == qt.QDialog.Accepted:
             initSetupWizard.update_logic(self.logic)
+            self.profileChanged()
             return True
         return False
+
+    def runProfileEdit(self) -> bool:
+        profileWizard = CARTSetupWizard(None, self.logic.master_profile_config)
+        result = profileWizard.exec()
+        return result == qt.QDialog.Accepted
 
     def runNewJobSetup(self) -> Optional[str]:
         """

@@ -6,10 +6,10 @@ import qt
 from slicer.i18n import tr as _
 
 from CARTLib.utils import CART_PATH
-from CARTLib.utils.cohort import cohort_from_generator, CohortTableWidget, CohortEditorDialog, NewCohortDialog, \
-    CohortModel
-from CARTLib.utils.config import JobProfileConfig
+from CARTLib.utils.cohort import cohort_from_generator, CohortTableWidget, CohortEditorDialog, NewCohortDialog
+from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
+
 
 if TYPE_CHECKING:
     # Avoid a cyclical import
@@ -38,8 +38,11 @@ class CARTSetupWizard(qt.QWizard):
     AUTHOR_KEY = "author"
     POSITION_KEY = "position"
 
-    def __init__(self, parent):
+    def __init__(self, parent, prior_config: MasterProfileConfig = None):
         super().__init__(parent)
+
+        # The to-be-tracked prior config (if any)
+        self.prior_config = prior_config
 
         # Standard elements
         self.setWindowTitle("CART " + _("Setup"))
@@ -49,9 +52,11 @@ class CARTSetupWizard(qt.QWizard):
         )
 
         # Add pages
-        self.addPage(self.createIntroPage())
-        self.addPage(self.createProfileCreationPage())
-        self.addPage(self.createConclusionPage())
+        if prior_config is None:
+            self.addPage(self.createIntroPage())
+        self.addPage(self.createProfileCreationPage(prior_config))
+        if prior_config is None:
+            self.addPage(self.createConclusionPage())
 
     ## Pages ##
     @staticmethod
@@ -71,12 +76,11 @@ class CARTSetupWizard(qt.QWizard):
 
         return page
 
-    def createProfileCreationPage(self):
+    def createProfileCreationPage(self, prior_config: MasterProfileConfig = None):
         # Basic Attributes
-        page = qt.QWizardPage()
+        page = qt.QWizardPage(None)
         page.setTitle(_("Profile Creation"))
-        layout = qt.QFormLayout()
-        page.setLayout(layout)
+        layout = qt.QFormLayout(page)
 
         # Instruction text
         instructionLabel = qt.QLabel(_(
@@ -103,6 +107,13 @@ class CARTSetupWizard(qt.QWizard):
         positionLabel.setBuddy(positionLineEdit)
         layout.addRow(positionLabel, positionLineEdit)
         page.registerField(self.POSITION_KEY, positionLineEdit)
+
+        # Load the previous configuration values if they were provided
+        if prior_config is not None:
+            if (author := prior_config.author) is not None:
+                authorLineEdit.setText(author)
+            if (position := prior_config.position) is not None:
+                positionLineEdit.setText(position)
 
         return page
 
@@ -312,6 +323,7 @@ class JobSetupWizard(qt.QWizard):
         logic.register_job_config(self.config)
 
         return self.config
+
 
 ## Wizard Pages ##
 class _DataWizardPage(qt.QWizardPage):
