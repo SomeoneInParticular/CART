@@ -542,7 +542,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def runProfileEdit(self) -> bool:
         profileWizard = CARTSetupWizard(None, self.logic.master_profile_config)
         result = profileWizard.exec()
-        return result == qt.QDialog.Accepted
+        if result == qt.QDialog.Accepted:
+            profileWizard.update_logic(self.logic)
+            self.profileChanged()
+            return True
+        return False
 
     def runNewJobSetup(self) -> Optional[str]:
         """
