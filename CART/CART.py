@@ -4,17 +4,16 @@ import sys
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING, Tuple, Callable
 
-import vtk
-
 import qt
 import slicer.util
-from CARTLib.core.LayoutManagement import OrientationButtonArrayWidget
+import vtk
 from slicer import vtkMRMLScalarVolumeNode
 from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
 
 from CARTLib.core.DataManager import DataManager
+from CARTLib.core.LayoutManagement import OrientationButtonArrayWidget
 from CARTLib.core.TaskBaseClass import TaskBaseClass
 from CARTLib.core.SetupWizard import CARTSetupWizard, JobSetupWizard
 from CARTLib.utils import CART_PATH, CART_VERSION
@@ -46,8 +45,7 @@ class CART(ScriptedLoadableModule):
             "Kuan Yi (Montréal Polytechnique)",
             "Ivan Johnson-Eversoll (University of Iowa)",
         ]
-        self.parent.helpText = _(
-            """
+        self.parent.helpText = _("""
                 CART (Case Annotation and Review Tool) provides a set
                 of abstract base classes for creating streamlined annotation
                 workflows in 3D Slicer. The framework enables efficient
@@ -56,11 +54,9 @@ class CART(ScriptedLoadableModule):
 
                 See more information on the
                 <a href="https://github.com/SomeoneInParticular/CART/tree/main">GitHub repository</a>.
-            """
-        )
+            """)
         # TODO: replace with organization, grant and thanks
-        self.parent.acknowledgementText = _(
-            """
+        self.parent.acknowledgementText = _("""
                 Originally created during Slicer Project Week #43.
 
                 Special thanks the many members of the Slicer community who
@@ -71,8 +67,7 @@ class CART(ScriptedLoadableModule):
                 <a href="https://github.com/SlicerUltrasound/SlicerUltrasound">SlicerUltrasound/AnnotateUltrasound</a> (basis for our UI design),
                 and the many other projects discussed during the breakout session (notes
                 <a href="https://docs.google.com/document/d/12XuYPVuRgy4RTuIabSIjy_sRrYSliewKhcbB1zJgXVI/">here.</a>)
-            """
-        )
+            """)
 
         # Initialize our working environment
         self.init_env()
@@ -177,26 +172,25 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Current user label + text box
         userLabel = qt.QLabel(_("Current User:"))
         userText = qt.QLineEdit()
-        userText.setPlaceholderText(_(
-            "The current username + role will appear here; you need to initialize a profile first!"
-        ))
+        userText.setPlaceholderText(
+            _(
+                "The current username + role will appear here; you need to initialize a profile first!"
+            )
+        )
         userText.setReadOnly(True)
         layout.addWidget(userLabel)
         layout.addWidget(userText)
 
         # Edit profile button
         editProfileButton = qt.QPushButton()
-        editProfileButton.setText(_(
-            "Edit Profile"
-        ))
-        editProfileButton.setToolTip(_(
-            "Edit (or create) a user profile."
-        ))
+        editProfileButton.setText(_("Edit Profile"))
+        editProfileButton.setToolTip(_("Edit (or create) a user profile."))
         layout.addWidget(editProfileButton)
 
         # Connections
         def editProfilePressed():
             self.runProfileEdit()
+
         editProfileButton.pressed.connect(editProfilePressed)
 
         # Setup and return
@@ -212,6 +206,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Job selection dropdown
         jobSelectorComboBoxLabel = qt.QLabel(_("Please Select or Create a Job:"))
         jobSelectorComboBox = qt.QComboBox(None)
+
         def updateJobSelector():
             jobSelectorComboBox.clear()
             jobSelectorComboBox.addItems(self.logic.registered_jobs_names)
@@ -220,6 +215,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 jobSelectorComboBox.setCurrentIndex(0)
             else:
                 jobSelectorComboBox.setEnabled(False)
+
         self.onJobListChanged.append(updateJobSelector)
 
         layout.addWidget(jobSelectorComboBoxLabel)
@@ -233,6 +229,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # "New" button
         newButton = qt.QPushButton(_("New"))
         newButton.setToolTip(_("Create a new Job"))
+
         def newButtonClicked():
             # Run the new job creation wizard.
             self.runNewJobSetup()
@@ -243,6 +240,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # "Edit" button
         editButton = qt.QPushButton(_("Edit"))
         editButton.setToolTip(_("Edit the Job's configuration"))
+
         def onJobEdit():
             currentJob: str = jobSelectorComboBox.currentText
             jobPath = self.logic.registered_jobs.get(currentJob, None)
@@ -260,6 +258,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 jobConfig.reload()
             # Have the user edit the job
             self.runJobEdit(jobConfig)
+
         editButton.clicked.connect(onJobEdit)
         buttonPanelLayout.addWidget(editButton)
         self.onJobListChanged.append(
@@ -269,9 +268,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # "Delete" button
         deleteButton = qt.QPushButton(_("Delete"))
         deleteButton.setToolTip(_("Delete the Job configuration"))
+
         def onJobDelete():
             self.logic.delete_job_config(jobSelectorComboBox.currentText)
             self.jobListChanged()
+
         deleteButton.clicked.connect(onJobDelete)
         buttonPanelLayout.addWidget(deleteButton)
         self.onJobListChanged.append(
@@ -281,11 +282,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Start button; initializes the job, or walks the user through job setup if there isn't one
         startButton = qt.QPushButton("Start")
         startButton.setToolTip(_("Start CART!"))
+
         def onStartClicked():
             if jobSelectorComboBox.isEnabled():
                 self.start(jobSelectorComboBox.currentText)
             else:
                 self.start()
+
         startButton.clicked.connect(onStartClicked)
         layout.addWidget(startButton)
 
@@ -331,7 +334,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         previousIncompleteButton.setToolTip(_("Jump to the Previous Incomplete Case"))
         previousIncompleteButton.clicked.connect(self.previousIncompleteCasePressed)
         self.onCaseChanged.append(
-            lambda __: previousIncompleteButton.setEnabled(self.logic.has_previous_case())
+            lambda __: previousIncompleteButton.setEnabled(
+                self.logic.has_previous_case()
+            )
         )
 
         previousButton = qt.QToolButton(None)
@@ -360,16 +365,20 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Define a selector/viewer for the current case
         caseSelector = qt.QComboBox(None)
+
         def updateCaseOptions(__):
             caseSelector.blockSignals(True)
             caseSelector.clear()
             caseSelector.addItems(self.logic.data_manager.valid_uids)
             caseSelector.blockSignals(False)
+
         self.onJobChanged.append(updateCaseOptions)
+
         def syncCaseSelector(idx: int):
             caseSelector.blockSignals(True)
             caseSelector.setCurrentIndex(idx)
             caseSelector.blockSignals(False)
+
         self.onCaseChanged.append(syncCaseSelector)
         caseSelector.currentIndexChanged.connect(self.selectCaseAt)
 
@@ -398,9 +407,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def _layoutPanel(self):
         layoutPanel = OrientationButtonArrayWidget()
+
         def onNewCase(__: int):
             new_unit = self.logic.data_manager.select_current_unit()
             layoutPanel.changeLayoutHandler(new_unit.layout_handler, True)
+
         self.onCaseChanged.append(onNewCase)
         return layoutPanel
 
@@ -494,7 +505,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         return qt.QMessageBox.question(
             None,
             _("Initialize Profile?"),
-            _("You have not set up your user profile yet. Would you like to do so now?"),
+            _(
+                "You have not set up your user profile yet. Would you like to do so now?"
+            ),
             qt.QMessageBox.Yes | qt.QMessageBox.No,
             qt.QMessageBox.Yes,
         )
@@ -558,7 +571,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         :return: The name of the new job; None if the setup was terminated
         """
 
-        jobSetupWizard = JobSetupWizard(None, taken_names=self.logic.registered_jobs.keys())
+        jobSetupWizard = JobSetupWizard(
+            None, taken_names=self.logic.registered_jobs.keys()
+        )
         result = jobSetupWizard.exec()
 
         # If we got an "accept" signal, create the job config and initialize it
@@ -622,16 +637,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Next/Previous Case
         nextShortcut = qt.QShortcut(slicer.util.mainWindow())
         nextShortcut.setKey(qt.QKeySequence(qt.QKeySequence.MoveToNextPage))
-        nextShortcut.activated.connect(
-            self.nextCasePressed
-        )
+        nextShortcut.activated.connect(self.nextCasePressed)
         self.keyboardShortcuts.append(nextShortcut)
 
         previousShortcut = qt.QShortcut(slicer.util.mainWindow())
         previousShortcut.setKey(qt.QKeySequence(qt.QKeySequence.MoveToPreviousPage))
-        previousShortcut.activated.connect(
-            self.previousCasePressed
-        )
+        previousShortcut.activated.connect(self.previousCasePressed)
 
     def uninstallKeyboardShortcuts(self):
         for kbs in self.keyboardShortcuts:
@@ -732,12 +743,16 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         """
         # Confirm the requested job is registered
         if not job_name in self.registered_jobs.keys():
-            raise ValueError(f"Cannot set job '{job_name}' as active; it has not been registered!")
+            raise ValueError(
+                f"Cannot set job '{job_name}' as active; it has not been registered!"
+            )
 
         # Confirm the job config file exist
         job_file = Path(self.registered_jobs.get(job_name))
         if not job_file.exists() or not job_file.is_file():
-            raise ValueError(f"Cannot set job '{job_name}' as active; its corresponding config file does not exist!")
+            raise ValueError(
+                f"Cannot set job '{job_name}' as active; its corresponding config file does not exist!"
+            )
 
         # Get and load the job's config
         job_profile = JobProfileConfig(file_path=job_file)
@@ -759,7 +774,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             data_source=job_profile.data_path,
             data_unit_factory=duf,
             # TODO: Allow user configuration of this
-            cache_size=2
+            cache_size=2,
         )
 
         # Initialize the new task
@@ -834,7 +849,9 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         if not task_path.exists():
             raise ValueError(f"File '{task_path}' does not exist; cannot load task!")
         elif not task_path.is_file():
-            raise ValueError(f"Path '{task_path}' is not a file; cannot load directories!")
+            raise ValueError(
+                f"Path '{task_path}' is not a file; cannot load directories!"
+            )
         elif ".py" not in task_path.suffixes:
             self.logger.warning(
                 f"Registered task file '{task_path}' was not a Python file; "
@@ -847,7 +864,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # Add the parent of the path to our Python path
         module_path = str(task_path.parent.resolve())
         sys.path.append(module_path)
-        module_name = task_path.name.split('.')[0]
+        module_name = task_path.name.split(".")[0]
 
         try:
             # Try to load the module in question
@@ -865,8 +882,10 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # If no new tasks were registered, roll back the changes and raise an error
         if len(new_tasks) < 1:
             sys.path.remove(module_path)
-            raise ValueError(f"No tasks were registered when importing the file '{task_path}'; "
-                             f"Rolling everything back!")
+            raise ValueError(
+                f"No tasks were registered when importing the file '{task_path}'; "
+                f"Rolling everything back!"
+            )
         # Otherwise, keep the module loaded!
         sys.modules[module_name] = module
 
@@ -891,7 +910,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         example_task_paths = [
             examples_path / "Segmentation/SegmentationTask.py",
             examples_path / "GenericClassification/GenericClassificationTask.py",
-            examples_path / "Markup/Markup.py"
+            examples_path / "Markup/Markup.py",
         ]
 
         # Make sure the example tasks all exist before doing anything!
@@ -901,7 +920,9 @@ class CARTLogic(ScriptedLoadableModuleLogic):
                 missing_paths.append(p)
 
         if len(missing_paths) > 0:
-            err_msg = "CART seems to have been corrupted; was missing the following paths!\n"
+            err_msg = (
+                "CART seems to have been corrupted; was missing the following paths!\n"
+            )
             err_msg += f"\n  * ".join([str(p) for p in missing_paths])
             raise ValueError(err_msg)
 
@@ -1013,8 +1034,10 @@ class CARTLogic(ScriptedLoadableModuleLogic):
         # If the config version doesn't match the current CART version, warn the user
         if self.master_profile_config.version != CART_VERSION:
             # TODO: Prompt the user directly!
-            print("WARNING: Current CART version does not match that of the master profile! "
-                  "CART may not work as expected!")
+            print(
+                "WARNING: Current CART version does not match that of the master profile! "
+                "CART may not work as expected!"
+            )
             self.master_profile_config.version = CART_VERSION
 
     ## GUI Management ##

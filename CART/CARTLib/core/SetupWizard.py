@@ -6,14 +6,19 @@ import qt
 from slicer.i18n import tr as _
 
 from CARTLib.utils import CART_PATH
-from CARTLib.utils.cohort import cohort_from_generator, CohortTableWidget, CohortEditorDialog, NewCohortDialog
+from CARTLib.utils.cohort import (
+    cohort_from_generator,
+    CohortTableWidget,
+    CohortEditorDialog,
+    NewCohortDialog,
+)
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
-
 
 if TYPE_CHECKING:
     # Avoid a cyclical import
     from CART import CARTLogic
+
     # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
     # isn't the same as PyQT5 itself), but it's a LOT better than constant
     # cross-referencing
@@ -45,11 +50,8 @@ class CARTSetupWizard(qt.QWizard):
         self.prior_config = prior_config
 
         # Standard elements
-        self.setWindowTitle("CART " + _("Setup"))
-        self.setPixmap(
-            qt.QWizard.LogoPixmap,
-            CART_LOGO_PIXMAP
-        )
+        self.setWindowTitle(_("User Profile Setup"))
+        self.setPixmap(qt.QWizard.LogoPixmap, CART_LOGO_PIXMAP)
 
         # Add pages
         if prior_config is None:
@@ -60,7 +62,7 @@ class CARTSetupWizard(qt.QWizard):
         if prior_config is None:
             self.addPage(self.createConclusionPage())
 
-    ## Pages ##
+    ## Static Pages ##
     @staticmethod
     def createIntroPage():
         # Basic Attributes
@@ -70,9 +72,11 @@ class CARTSetupWizard(qt.QWizard):
         page.setLayout(layout)
 
         # Introduction text
-        label = qt.QLabel(_(
-            "Welcome to CART! This wizard will help you get started with your first job."
-        ))
+        label = qt.QLabel(
+            _(
+                "Welcome to CART! This wizard will help you get started with CART."
+            )
+        )
         label.setWordWrap(True)
         layout.addWidget(label)
 
@@ -87,9 +91,11 @@ class CARTSetupWizard(qt.QWizard):
         page.setLayout(layout)
 
         # Introduction text
-        label = qt.QLabel(_(
-            "You have finished initial setup; you will now be prompted to set up your first CART Job."
-        ))
+        label = qt.QLabel(
+            _(
+                "You have finished initial setup; you will now be prompted to set up your first CART Job."
+            )
+        )
         label.setWordWrap(True)
         layout.addWidget(label)
 
@@ -115,7 +121,9 @@ class CARTSetupWizard(qt.QWizard):
 
 
 class JobSetupWizard(qt.QWizard):
-    def __init__(self, parent, taken_names: Iterable[str] = None, config: JobProfileConfig = None):
+    def __init__(
+        self, parent, taken_names: Iterable[str] = None, config: JobProfileConfig = None
+    ):
         """
         Wizard for setting up a Job for use within CART.
 
@@ -127,10 +135,7 @@ class JobSetupWizard(qt.QWizard):
 
         # Standard elements
         self.setWindowTitle(_("Job Setup"))
-        self.setPixmap(
-            qt.QWizard.LogoPixmap,
-            CART_LOGO_PIXMAP
-        )
+        self.setPixmap(qt.QWizard.LogoPixmap, CART_LOGO_PIXMAP)
 
         # Generate our backing configuration, tracking the original name for later
         self._prior_name = None
@@ -179,19 +184,21 @@ class JobSetupWizard(qt.QWizard):
         page.setLayout(layout)
 
         # Introduction text
-        label = qt.QLabel(_(
-            "This wizard will help you define a 'Job' for CART to run, in three stages:\n"
-            "   1. Selecting your data (where you want CART to look, and where it should save things).\n"
-            "   2. Choosing the task you want to run for this Job.\n"
-            "   3. Defining the how you want to iterate through the data.\n"
-            "\n"
-            "If you are unsure of something, you can hover over most elements in this Wizard;"
-            "after a second or two, a tooltip will appear with more details about it!"
-            "\n\n"
-            "If you have any further question, the CART repository has more detailed documentation "
-            "on how CART and its built-in tasks work. You can also open an issue there if you have "
-            "any questions, or would like to make a feature request; don't be shy!"
-        ))
+        label = qt.QLabel(
+            _(
+                "This wizard will help you define a 'Job' for CART to run, in three stages:\n"
+                "   1. Selecting your data (where you want CART to look, and where it should save things).\n"
+                "   2. Choosing the task you want to run for this Job.\n"
+                "   3. Defining the how you want to iterate through the data.\n"
+                "\n"
+                "If you are unsure of something, you can hover over most elements in this Wizard;"
+                "after a second or two, a tooltip will appear with more details about it!"
+                "\n\n"
+                "If you have any further question, the CART repository has more detailed documentation "
+                "on how CART and its built-in tasks work. You can also open an issue there if you have "
+                "any questions, or would like to make a feature request; don't be shy!"
+            )
+        )
         label.setToolTip(_("See?"))
         label.setWordWrap(True)
         layout.addWidget(label)
@@ -208,16 +215,18 @@ class JobSetupWizard(qt.QWizard):
         page.setLayout(layout)
 
         # Introduction text
-        label = qt.QLabel(_(
-            "Click 'Finish' below to save the Job configuration; this will "
-            "register your job (with any changes you made) to CART."
-            "\n\n"
-            "If the job does not start automatically, you can select the "
-            "job's name from the drop-down and click 'Start' to start it "
-            "instead."
-            "\n\n"
-            "Thank you for choosing CART as your imaging analysis tool!"
-        ))
+        label = qt.QLabel(
+            _(
+                "Click 'Finish' below to save the Job configuration; this will "
+                "register your job (with any changes you made) to CART."
+                "\n\n"
+                "If the job does not start automatically, you can select the "
+                "job's name from the drop-down and click 'Start' to start it "
+                "instead."
+                "\n\n"
+                "Thank you for choosing CART as your imaging analysis tool!"
+            )
+        )
         label.setWordWrap(True)
         layout.addWidget(label)
 
@@ -312,9 +321,7 @@ class _ProfileWizardPage(qt.QWizardPage):
         layout.addRow(authorLabel, authorLineEdit)
         # The asterisk marks this field as "mandatory"
         self.registerField(self.AUTHOR_KEY + "*", authorLineEdit)
-        authorLineEdit.textChanged.connect(
-            lambda: self.completeChanged()
-        )
+        authorLineEdit.textChanged.connect(lambda: self.completeChanged())
 
         # Position
         positionLabel = qt.QLabel(_("Position"))
@@ -357,9 +364,7 @@ class _DataWizardPage(qt.QWizardPage):
         self._taken_names = taken_names
 
         # Instruction text
-        instructionLabel = qt.QLabel(_(
-            "Please fill out the following fields:"
-        ))
+        instructionLabel = qt.QLabel(_("Please fill out the following fields:"))
         instructionLabel.setWordWrap(True)
         layout.addRow(instructionLabel)
 
@@ -373,9 +378,9 @@ class _DataWizardPage(qt.QWizardPage):
         )
         jobNameLabel.setToolTip(jobNameTooltip)
         jobNameEntry.setToolTip(jobNameTooltip)
-        jobNameEntry.setPlaceholderText(_(
-            "i.e. SpineSegReview, VesselClassification, BrainMarkup"
-        ))
+        jobNameEntry.setPlaceholderText(
+            _("i.e. SpineSegReview, VesselClassification, BrainMarkup")
+        )
         jobNameLabel.setBuddy(jobNameEntry)
         self.registerField(JOB_NAME_FIELD, jobNameEntry)
         layout.addRow(jobNameLabel, jobNameEntry)
@@ -483,13 +488,15 @@ class _TaskWizardPage(qt.QWizardPage):
         self.setLayout(layout)
 
         # Task selection
-        taskDescriptionText = qt.QLabel(_(
-            "The job's 'Task' determines what you want to do to your data. Examples include "
-            "managing segmentations, placing markup labels, and classifying samples."
-            "\n\n"
-            "Select a Task using the dropdown below to display its intended use, considerations for "
-            "how to use it, and any other relevant information its developer may have provided."
-        ))
+        taskDescriptionText = qt.QLabel(
+            _(
+                "The job's 'Task' determines what you want to do to your data. Examples include "
+                "managing segmentations, placing markup labels, and classifying samples."
+                "\n\n"
+                "Select a Task using the dropdown below to display its intended use, considerations for "
+                "how to use it, and any other relevant information its developer may have provided."
+            )
+        )
         taskDescriptionText.setWordWrap(True)
         layout.addRow(taskDescriptionText)
         taskSelectionLabel = qt.QLabel(_("Task: "))
@@ -497,14 +504,12 @@ class _TaskWizardPage(qt.QWizardPage):
         taskSelectionToolTip = _(
             "If the details provided by the Task description below are insufficient, check out "
             "its formal documentation. If you installed the Task yourself, the repository you "
-            "downloaded it from will likely have it. Otherwise, check the CART repo's \"examples\" "
+            'downloaded it from will likely have it. Otherwise, check the CART repo\'s "examples" '
             "directory; all tasks installed in CART by default are stored there."
         )
         taskSelectionLabel.setToolTip(taskSelectionToolTip)
         taskSelectionWidget.setToolTip(taskSelectionToolTip)
-        taskSelectionWidget.addItems(list(
-            CART_TASK_REGISTRY.keys()
-        ))
+        taskSelectionWidget.addItems(list(CART_TASK_REGISTRY.keys()))
         # This doesn't work; keeping it here in case Slicer ever fixes this bug
         taskSelectionWidget.placeholderText = _("[None Selected]")
         taskSelectionWidget.setCurrentIndex(-1)
@@ -513,9 +518,9 @@ class _TaskWizardPage(qt.QWizardPage):
 
         # Task description
         taskDescriptionWidget = qt.QTextBrowser(None)
-        taskDescriptionWidget.setText(_(
-            "Details about your selected task will appear here."
-        ))
+        taskDescriptionWidget.setText(
+            _("Details about your selected task will appear here.")
+        )
         taskDescriptionWidget.setOpenExternalLinks(True)
         # Make it fill out all available space
         taskDescriptionWidget.setSizePolicy(
@@ -539,12 +544,13 @@ class _TaskWizardPage(qt.QWizardPage):
                     f"ERROR! The file for the selected task could not be accessed! "
                     "Please check that the associated drive is mounted, "
                     "and that it can be accessed with Slicer's current permission level!"
-                    '</span'
+                    "</span"
                 )
                 taskDescriptionWidget.setText(error_text)
             else:
                 taskDescriptionWidget.setMarkdown(task.description())
             self.completeChanged()
+
         taskSelectionWidget.currentTextChanged.connect(onSelectedTaskChanged)
 
         self.taskSelectionWidget = taskSelectionWidget
@@ -583,9 +589,8 @@ class _CohortWizardPage(qt.QWizardPage):
 
     Has enough unique functionality (including a Qt override) to form its own class;
     """
-    def __init__(
-            self,
-            parent=None):
+
+    def __init__(self, parent=None):
         """
         The data path hook should return a path containing the file a cohort editor should search
         for; it is a function to allow it to be implicitly "synced" when needed, rather than
@@ -641,11 +646,14 @@ class _CohortWizardPage(qt.QWizardPage):
 
         # Button to create/edit the selected cohort file
         createNewButton = qt.QPushButton(_("New"))
-        createNewButton.setToolTip(_(
-            "Generate a new cohort file from scratch! Will attempt to parse the contents of "
-            "the 'Input Data' folder you selected previously to determine which cases there "
-            "should be."
-        ))
+        createNewButton.setToolTip(
+            _(
+                "Generate a new cohort file from scratch! Will attempt to parse the contents of "
+                "the 'Input Data' folder you selected previously to determine which cases there "
+                "should be."
+            )
+        )
+
         def onCreateClick():
             # Create and show the creator dialog
             data_path = self.wizard().data_path
@@ -661,10 +669,13 @@ class _CohortWizardPage(qt.QWizardPage):
         # Button to edit the selected CSV
         editCohortButton = qt.QPushButton(_("Edit"))
         editCohortButton.setEnabled(False)
-        editCohortButton.setToolTip(_(
-            "Modifies the selected cohort file; you can add, remove, or change each case and/or "
-            "feature this way."
-        ))
+        editCohortButton.setToolTip(
+            _(
+                "Modifies the selected cohort file; you can add, remove, or change each case and/or "
+                "feature this way."
+            )
+        )
+
         def onEditClick():
             # Create and show the editor dialog
             wz: JobSetupWizard = self.wizard()
@@ -674,15 +685,18 @@ class _CohortWizardPage(qt.QWizardPage):
                 self.cohort_path, data_path, reference_task=reference_task
             )
             self.mediateCohortEditor(dialog, cohortPreviewWidget)
+
         editCohortButton.clicked.connect(onEditClick)
         buttonLayout.addWidget(editCohortButton)
 
         # Button to preview the selected CSV
         previewCohortButton = qt.QPushButton(_("Preview"))
         previewCohortButton.setEnabled(False)
-        previewCohortButton.setToolTip(_(
-            "Preview the selected cohort file; the contents will appear in the widget below."
-        ))
+        previewCohortButton.setToolTip(
+            _(
+                "Preview the selected cohort file; the contents will appear in the widget below."
+            )
+        )
         buttonLayout.addWidget(previewCohortButton)
 
         # Connections
@@ -693,6 +707,7 @@ class _CohortWizardPage(qt.QWizardPage):
             editCohortButton.setEnabled(enabled)
             # Emit a signal noting that the page's completeness may have changed
             self.completeChanged()
+
         cohortFileSelector.comboBox().currentTextChanged.connect(onTextChanged)
 
         # Add the button panel to our overall layout
@@ -702,8 +717,10 @@ class _CohortWizardPage(qt.QWizardPage):
 
         # Cohort preview widget; it's a preview, so disable editing
         cohortPreviewWidget = CohortTableWidget.from_path(None, editable=False)
+
         def onPreviewClick():
             cohortPreviewWidget.backing_csv = self.cohort_path
+
         previewCohortButton.clicked.connect(onPreviewClick)
         # Add a border around it to visually distinguish it
         cohortPreviewWidget.setFrameShape(qt.QFrame.Panel)
@@ -739,12 +756,12 @@ class _CohortWizardPage(qt.QWizardPage):
         return self.is_current_path_valid()
 
     def mediateCohortCreation(
-            self,
-            dialog: NewCohortDialog,
-            data_path: Path,
-            output_path: Path,
-            fileSelector: ctk.ctkPathLineEdit,
-            previewWidget: CohortTableWidget
+        self,
+        dialog: NewCohortDialog,
+        data_path: Path,
+        output_path: Path,
+        fileSelector: ctk.ctkPathLineEdit,
+        previewWidget: CohortTableWidget,
     ):
         """
         Mediates GUI updates required after a Cohort is initialized.
@@ -766,9 +783,7 @@ class _CohortWizardPage(qt.QWizardPage):
             self.mediateCohortEditor(editorDialog, previewWidget)
 
     def mediateCohortEditor(
-            self,
-            dialog: CohortEditorDialog,
-            cohortPreview: CohortTableWidget
+        self, dialog: CohortEditorDialog, cohortPreview: CohortTableWidget
     ):
         """
         Updates our GUI in response to a Cohort Editor finishing
