@@ -66,7 +66,7 @@ class CARTSetupWizard(qt.QWizard):
     @staticmethod
     def createIntroPage():
         # Basic Attributes
-        page = qt.QWizardPage()
+        page = qt.QWizardPage(None)
         page.setTitle(_("Introduction"))
         layout = qt.QVBoxLayout()
         page.setLayout(layout)
@@ -184,22 +184,27 @@ class JobSetupWizard(qt.QWizard):
         page.setLayout(layout)
 
         # Introduction text
-        label = qt.QLabel(
-            _(
-                "This wizard will help you define a 'Job' for CART to run, in three stages:\n"
-                "   1. Selecting your data (where you want CART to look, and where it should save things).\n"
-                "   2. Choosing the task you want to run for this Job.\n"
-                "   3. Defining the how you want to iterate through the data.\n"
-                "\n"
-                "If you are unsure of something, you can hover over most elements in this Wizard;"
-                "after a second or two, a tooltip will appear with more details about it!"
-                "\n\n"
-                "If you have any further question, the CART repository has more detailed documentation "
-                "on how CART and its built-in tasks work. You can also open an issue there if you have "
-                "any questions, or would like to make a feature request; don't be shy!"
-            )
+        label = qt.QLabel("")
+        text = _(
+            "This wizard will walk you through creating a Job for CART to run. "
+            "Through this you will be prompted to answer the following:\n"
+            "   1. What do you want to do, and how should it be done?\n"
+            "   2. Which files would you like to use, and how do you want to iterate through them?\n"
+            "   3. How should the results be handled, and where should they be saved?\n"
+            "\n"
+            "If you are unsure about what a specific element in the Wizard is, or what it would do, "
+            "hover your mouse over it; a tooltip with more details will usually appear. "
+            "You can also reference the "
+            '[CART repository](https://github.com/SomeoneInParticular/CART) '
+            "for further details, or "
+            '[open an issue](https://github.com/SomeoneInParticular/CART/issues) '
+            "with any questions or concerns you may have."
         )
+        label.setText(text)
+        # TODO; Find how to properly reference this enum
+        label.setTextFormat(3)  # 3 -> Markdown enum value
         label.setToolTip(_("See?"))
+        label.setOpenExternalLinks(True)
         label.setWordWrap(True)
         layout.addWidget(label)
 
