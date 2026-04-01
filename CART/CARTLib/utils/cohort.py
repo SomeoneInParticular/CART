@@ -2,7 +2,6 @@ import csv
 import json
 import logging
 import os
-import re
 from pathlib import Path
 from typing import Optional, Protocol, TYPE_CHECKING, Callable
 
@@ -13,7 +12,7 @@ import ctk
 import qt
 from slicer.i18n import tr as _
 
-from .widgets import CSVBackedTableModel, CSVBackedTableWidget
+from .widgets import CSVBackedTableModel, CSVBackedTableWidget, CARTPathLineEdit
 
 ## Type Utils ##
 if TYPE_CHECKING:
@@ -117,12 +116,14 @@ class CohortModel(CSVBackedTableModel):
         row_data = [["uid"], *[[k] for k in case_map.keys()]]
         with open(csv_path, "w") as fp:
             csv.writer(fp).writerows(row_data)
-        # Generate a new cohort instance, backed by this new CSV file
-        cohort = cls(csv_path, data_path, editable, reference_task, use_sidecar)
+        # Generate a new cohort instance, backed by this new CSV file and w/ a blank side-care
+        cohort = cls(csv_path, data_path, editable, reference_task, False)
+        cohort.use_sidecar = use_sidecar
         # Manually update its case map to match
         cohort._case_map = case_map
-        # Immediately save the sidecar as well, for parity
-        cohort._save_sidecar()
+        # If we're using a sidecar, save its contents as well
+        if use_sidecar:
+            cohort._save_sidecar()
 
         return cohort
 
@@ -486,46 +487,44 @@ class CaseGenerator(Protocol):
 
 
 # Default generators; simple BIDS support + blank slate
-def _bids_cases_by_subject(data_path: Path) -> CaseMap:
+def _bids_cases(data_path: Path) -> CaseMap:
     # Identify the initial "source" paths
-    case_map = {}
+    subject_map = {}
+    session_map = {}
+    # Search by subject first
     for p in data_path.glob("sub*/"):
-        # Add this path initially (the "source" path)
-        case_map[p.name] = [p.relative_to(data_path)]
-    # Add associated derivative paths, if a derivatives folder already exists
-    derivative_path = data_path / "derivatives"
-    if not derivative_path.exists():
-        logging.warning("No derivatives path found for BIDS directory, skipping.")
-    else:
-        for s, v in case_map.items():
-            v.extend(
-                [p.relative_to(data_path) for p in derivative_path.glob(f"*/{s}/")]
-            )
-    # Sort the results to make them easier to work with
-    case_map = {k: case_map[k] for k in sorted(case_map.keys())}
-    return case_map
+        # Find any sessions associated with this subject
+        ses_ps = list(p.glob("ses*/"))
+        # If there were none, use the subject alone for this case
+        if len(ses_ps) < 1:
+            name = p.parts[-1]
+            subject_map[name] = [p.relative_to(data_path)]
+        # Otherwise, prepare a case for each session
+        else:
+            for p2 in ses_ps:
+                name = "_".join(p2.parts[-2:])
+                session_map[name] = [p2.relative_to(data_path)]
 
-
-def _bids_cases_by_session(data_path: Path) -> CaseMap:
-    # Identify the initial "source" paths
-    data_map = {}
-    for p in data_path.glob("sub*/ses*/"):
-        # Add this path initially (the "source" path)
-        name = tuple(p.parts[-2:])
-        data_map[name] = [p.relative_to(data_path)]
     # Add associated derivative paths, if such a directory exists
     derivative_path = data_path / "derivatives"
     if not derivative_path.exists():
         logging.warning("No derivatives path found for BIDS directory, skipping.")
-        case_map = {"_".join(k): v for k, v in data_map.items()}
     else:
-        case_map = {}
-        for (subject, session), val_list in data_map.items():
+        # Parse subject-only cases
+        for subject, val_list in subject_map.items():
+            val_list.extend([
+                p.relative_to(data_path)
+                for p in derivative_path.glob(f"*/{subject}/")
+            ])
+        # Parse session-based cases
+        for (subject, session), val_list in session_map.items():
             val_list.extend([
                 p.relative_to(data_path)
                 for p in derivative_path.glob(f"*/{subject}/{session}/")
             ])
-            case_map[f"{subject}_{session}"] = val_list
+    # Stack everything together
+    case_map = {k: v for k, v in subject_map.items()}
+    case_map.update(session_map)
     # Sort the results to make them easier to work with
     case_map = {k: case_map[k] for k in sorted(case_map.keys())}
     return case_map
@@ -537,41 +536,45 @@ def _blank(__: Path) -> CaseMap:
 
 # Registry for cases to be displayed during Cohort init
 CASE_GENERATORS: dict[str, CaseGenerator] = {
-    "BIDS (Case By Subject)": _bids_cases_by_subject,
-    "BIDS (Case By Session)": _bids_cases_by_session,
+    "BIDS": _bids_cases,
     "Blank Slate": _blank,
 }
 
+GENERATOR_DESCRIPTIONS: dict[str, str] = {
+    "BIDS": _(
+        "Iterate through your BIDS dataset on a per-subject and per-session basis. "
+        "If multiple sessions are present, will iterate through them one-at-a-time. "
+        "Looks for the 'sub' prefix to identify subjects, and 'ses' for sessions."),
+    "Blank Slate": _(
+        "Generate a completely emply cohort file. You will need to add each case "
+        "manually; this only generates the (blank) files needed for a cohort file "
+        "to be managed by CART."
+    )
+}
 
-def register_case_generator(label: str, generator: CaseGenerator):
+def register_case_generator(label: str, description: str, generator: CaseGenerator):
     if label in CASE_GENERATORS.keys():
         raise ValueError(
             f"Cannot register generator '{label}', an existing generator with that label already exists!"
         )
+    GENERATOR_DESCRIPTIONS[label] = description
     CASE_GENERATORS[label] = generator
 
 
 def cohort_from_generator(
-    cohort_name: str, data_path: Path, output_path: Path, generator: CaseGenerator
+    cohort_path: Path, data_path: Path, generator: CaseGenerator
 ) -> CohortModel:
     """
     Generate a cohort from scratch, using the provided generator and input dataset.
 
-    :param cohort_name: The name the cohort (file) should have
+    :param cohort_path: The to-be-created (or overwritten) cohort file path
     :param data_path: The data path to reference when finding cases
-    :param output_path: The path the resulting cohort's files should be placed within
     :param generator: The generator to user.
     """
+    # Build the case map from the generator
     case_map = generator(data_path)
-    # Keep Windows from having a stroke + backslashes begone
-    cleaned_name = re.sub('[<>:"/|?*\\\\]', "-", cohort_name)
-    # Keep adding underscores until a valid file path is found
-    suffix = ""
-    csv_path = output_path / f"{cleaned_name}.csv"
-    while csv_path.exists():
-        suffix += "_"
-        csv_path = output_path / f"{cleaned_name}{suffix}.csv"
-    cohort = CohortModel.from_case_map(csv_path, data_path, case_map)
+    # Create the cohort model from that
+    cohort = CohortModel.from_case_map(cohort_path, data_path, case_map)
     return cohort
 
 
@@ -683,29 +686,81 @@ class NewCohortDialog(qt.QDialog):
         layout = qt.QFormLayout(self)
 
         # Name to give the cohort
-        cohortNameLabel = qt.QLabel(_("Name: "))
+        cohortNameLabel = qt.QLabel(_("File: "))
+        cohortFileEdit = CARTPathLineEdit()
         cohortNameTooltip = _(
-            "The name the cohort should have. Should follow your OS's file naming conventions."
+            "A CSV file with cases generated based on your input file will be created "
+            "when this prompt is closed; you can select (and edit) it later if you need to."
         )
         cohortNameLabel.setToolTip(cohortNameTooltip)
-        cohortNameEdit = qt.QLineEdit()
-        cohortNameEdit.setToolTip(cohortNameTooltip)
-        self.cohortNameEdit = cohortNameEdit
-        layout.addRow(cohortNameLabel, cohortNameEdit)
+        cohortFileEdit.setToolTip(cohortNameTooltip)
+        cohortFileEdit.setPlaceholderText(_(
+            "Where the cohort file should be saved."
+        ))
+        # Allow the user to create files as well
+        cohortFileEdit.filters = cohortFileEdit.filters | ctk.ctkPathLineEdit.Writable
+        # Make sure only CSV files are visible (and valid)
+        cohortFileEdit.nameFilters = [
+            "CSV files (*.csv)",
+        ]
+        self._cohortFileEdit = cohortFileEdit
+        layout.addRow(cohortNameLabel, cohortFileEdit)
 
         # Type of cohort to generate
-        cohortTypeComboBox = qt.QComboBox()
+        cohortTypeComboBox = qt.QComboBox(None)
         cohortTypeLabel = qt.QLabel(_("Cohort Type: "))
         cohortTypeComboBox.addItems(list(CASE_GENERATORS.keys()))
-        self.cohortTypeComboBox = cohortTypeComboBox
+        self._cohortTypeComboBox = cohortTypeComboBox
         layout.addRow(cohortTypeLabel, cohortTypeComboBox)
+
+        # Description of said type
+        cohortTypeDescription = qt.QTextBrowser(None)
+        cohortTypeDescription.setText(
+            _("Details about your selected task will appear here.")
+        )
+        # Fill all available space
+        cohortTypeDescription.setSizePolicy(
+            qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding
+        )
+        # Add a border around it to visually distinguish it
+        cohortTypeDescription.setFrameShape(qt.QFrame.Panel)
+        cohortTypeDescription.setFrameShadow(qt.QFrame.Sunken)
+        cohortTypeDescription.setLineWidth(3)
+        # Align text to the upper-left
+        cohortTypeDescription.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignTop)
+        # Make it read-only
+        cohortTypeDescription.setReadOnly(True)
+        layout.addRow(cohortTypeDescription)
+        # Default to no selected index
+        cohortTypeComboBox.setCurrentIndex(-1)
 
         # Ok/Cancel Buttons
         buttonBox = qt.QDialogButtonBox()
         buttonBox.setStandardButtons(
             qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel
         )
+        layout.addWidget(buttonBox)
+        # Disable the OK button until the user selects valid options
+        self._ok_button = buttonBox.button(qt.QDialogButtonBox.Ok)
 
+        # Connections
+        @qt.Slot(str)
+        def onCohortChanged(new_txt: str):
+            # Disable the button if the file changed
+            self.validate()
+
+        cohortFileEdit.textChanged.connect(onCohortChanged)
+
+        @qt.Slot(str)
+        def onCohortTypeChanged(new_txt: str):
+            # Update the preview text to match the new selection
+            new_description = GENERATOR_DESCRIPTIONS.get(new_txt, _("Missing description for this case generator!"))
+            cohortTypeDescription.setText(new_description)
+            self.validate()
+
+        cohortTypeComboBox.currentTextChanged.connect(onCohortTypeChanged)
+
+        @qt.Slot(qt.QPushButton)
         def onButtonClicked(button: qt.QPushButton):
             button_role = buttonBox.buttonRole(button)
             if button_role == qt.QDialogButtonBox.RejectRole:
@@ -716,17 +771,28 @@ class NewCohortDialog(qt.QDialog):
                 raise ValueError("Pressed a button with an invalid role!")
 
         buttonBox.clicked.connect(onButtonClicked)
-        layout.addWidget(buttonBox)
+
+        # Run validation to sync everything up
+        self.validate()
 
     @property
-    def cohort_name(self):
-        # Flip back-slashes to prevent horrific bugs
-        name = self.cohortNameEdit.text.replace("\\", "/")
-        return name
+    def cohort_file(self) -> Path:
+        # Workaround to CTK not playing nicely w/ "registerField"
+        path = self._cohortFileEdit.currentPath
+        if not path:
+            return None
+        return Path(path)
 
     @property
-    def current_generator(self) -> CaseGenerator:
-        return CASE_GENERATORS[self.cohortTypeComboBox.currentText]
+    def current_generator(self) -> Optional[CaseGenerator]:
+        # noinspection PyTypeChecker
+        return CASE_GENERATORS.get(self._cohortTypeComboBox.currentText, None)
+
+    def validate(self):
+        # Enable/disable the button based on current values
+        self._ok_button.setEnabled(
+            self.cohort_file is not None and self.current_generator
+        )
 
 
 class CohortEditorDialog(qt.QDialog):

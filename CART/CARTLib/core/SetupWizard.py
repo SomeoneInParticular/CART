@@ -571,9 +571,6 @@ class _DataSelectionPage(qt.QWizardPage):
             )
         )
         cohortFileSelector.filters = ctk.ctkPathLineEdit.Files
-        cohortFileSelector.nameFilters = [
-            "CSV files (*.csv)",
-        ]
         self._cohortFileSelector = cohortFileSelector
         layout.addRow(cohortFileLabel, cohortFileSelector)
 
@@ -683,7 +680,7 @@ class _DataSelectionPage(qt.QWizardPage):
     ## Utilities ##
     def createNewCohort(self):
         """
-        Walk the user through the creation of a new cohort file from-scratch
+        Walk the user through the creation of a new cohort file from scratch
         """
         # Prompt the user for the new cohort file's specifications
         dialog = NewCohortDialog(self.data_path)
@@ -694,7 +691,7 @@ class _DataSelectionPage(qt.QWizardPage):
 
         # Create the backing cohort (and its associated files)
         cohort = cohort_from_generator(
-            dialog.cohort_name, self.data_path, self.output_path, dialog.current_generator
+            dialog.cohort_file, self.data_path, dialog.current_generator
         )
         # Update the cohort's reference task to match ours
         task_id = self.wizard().selected_task
@@ -1152,7 +1149,7 @@ class _CohortWizardPage(qt.QWizardPage):
         if result:
             # Create the backing cohort (and its associated files)
             cohort = cohort_from_generator(
-                dialog.cohort_name, data_path, output_path, dialog.current_generator
+                dialog.cohort_file, data_path, output_path, dialog.current_generator
             )
             # Update the cohort's reference task to match outs
             task_id = self.wizard().selected_task
