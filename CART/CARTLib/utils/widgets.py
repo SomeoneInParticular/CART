@@ -230,6 +230,7 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
     def flags(self, __: qt.QModelIndex) -> "qt.Qt.ItemFlags":
         # Return the current set of flags for the model
         return self._flags
+
     ## I/O ##
     def load(self):
         # Denote that a full reset is beginning
@@ -265,7 +266,7 @@ class CSVBackedTableWidget(qt.QStackedWidget):
 
         # The table widget itself; shown when the CSV is valid
         self._model = model
-        tableView = qt.QTableView()
+        tableView = qt.QTableView(None)
         tableView.setModel(model)
         tableView.show()
         tableView.horizontalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
@@ -322,9 +323,21 @@ class CSVBackedTableWidget(qt.QStackedWidget):
 
     @backing_csv.setter
     def backing_csv(self, new_path: Path):
-        # Defer to our backing model
-        self.model.csv_path = new_path
-        self.refresh()
+        # If the new path is blank, reset to default
+        if new_path is None:
+            self.setCurrentWidget(self.defaultLabel)
+        # If the new path isn't a valid file, display an error
+        elif not new_path.is_file():
+            self.setCurrentWidget(self.errorLabel)
+        # Otherwise, run as normal
+        else:
+            try:
+                # Defer to our backing model
+                self.model.csv_path = new_path
+                self.refresh()
+            except:
+                logging.exception("Failed to load CSV contents in table model.")
+                self.setCurrentWidget(self.errorLabel)
 
     @property
     def tableView(self):
@@ -742,3 +755,28 @@ class CARTMarkupEditorWidget(slicer.qSlicerSimpleMarkupsWidget):
         prior_idx = self.markupSelectionComboBox.currentIndex
         self.markupSelectionComboBox.refresh()
         self.markupSelectionComboBox.onIndexChanged(prior_idx)
+
+
+## Extended File Selection Widget ##
+class CARTPathLineEdit(ctk.ctkPathLineEdit):
+    """
+    An extension of CTK's "ctkPathLineEdit" class, adding some new utilities
+    while also making existing functionality less clunky.
+    """
+    def __init__(self):
+        super().__init__()
+
+        # Find and track the text edit widget for later
+        for c in self.comboBox().children():
+            if isinstance(c, qt.QLineEdit):
+                self._lineEdit: qt.QLineEdit = c
+                return
+
+    @property
+    def textChanged(self):
+        return self._lineEdit.textChanged
+
+    def setPlaceholderText(self, new_text: str):
+        self._lineEdit.setPlaceholderText(new_text)
+
+

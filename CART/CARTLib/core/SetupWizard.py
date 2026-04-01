@@ -14,6 +14,7 @@ from CARTLib.utils.cohort import (
 )
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
+from CARTLib.utils.widgets import CARTPathLineEdit
 
 if TYPE_CHECKING:
     # Avoid a cyclical import
@@ -148,17 +149,19 @@ class JobSetupWizard(qt.QWizard):
             self.config = config
 
         # Workarounds for fields not playing nicely w/ CTK widgets
-        self._dataPage = _DataWizardPage(self, taken_names=taken_names)
-        self._taskPage = _TaskWizardPage(self)
-        self._cohortPage = _CohortWizardPage(self)
+        self._taskPage = _TaskDefinitionPage(self, taken_names=taken_names)
+        self._dataPage = _DataSelectionPage(self)
+
+        # self._dataPage = _DataWizardPage(self, taken_names=taken_names)
+        # self._taskPage = _TaskWizardPage(self)
+        # self._cohortPage = _CohortWizardPage(self)
 
         # Add initial pages
         if config is None:
             # Only add the introduction page if this is a brand-new job
             self.addPage(self.introPage())
-        self.addPage(self._dataPage)
         self.addPage(self._taskPage)
-        self.addPage(self._cohortPage)
+        self.addPage(self._dataPage)
         self.addPage(self.conclusionPage())
 
         # If we had a starting config, initialize our fields to match it
@@ -240,11 +243,19 @@ class JobSetupWizard(qt.QWizard):
     ## Attributes ##
     @property
     def job_name(self) -> str:
-        return self.field(JOB_NAME_FIELD)
+        return self._taskPage.job_name
 
     @job_name.setter
     def job_name(self, new_name: str):
-        self.setField(JOB_NAME_FIELD, new_name)
+        self._taskPage.job_name = new_name
+
+    @property
+    def selected_task(self) -> Optional[str]:
+        return self._taskPage.selected_task
+
+    @selected_task.setter
+    def selected_task(self, new_task: str):
+        self._taskPage.selected_task = new_task
 
     @property
     def data_path(self) -> Optional[Path]:
@@ -263,21 +274,12 @@ class JobSetupWizard(qt.QWizard):
         self._dataPage.output_path = new_path
 
     @property
-    def selected_task(self) -> Optional[str]:
-        return self._taskPage.selected_task
-
-    @selected_task.setter
-    def selected_task(self, new_task: str):
-        self._taskPage.selected_task = new_task
-
-    @property
     def cohort_path(self) -> Optional[Path]:
-        # Delegate property, due to the unique checks required for the cohort path
-        return self._cohortPage.cohort_path
+        return self._dataPage.cohort_path
 
     @cohort_path.setter
     def cohort_path(self, new_path: Path):
-        self._cohortPage.cohort_path = new_path
+        self._dataPage.cohort_path = new_path
 
     def save_config(self, logic: "CARTLogic") -> JobProfileConfig:
         # Generate the new config and immediately save it
@@ -356,6 +358,380 @@ class _ProfileWizardPage(qt.QWizardPage):
 
     def isComplete(self):
         return self.author != ""
+
+
+class _TaskDefinitionPage(qt.QWizardPage):
+    def __init__(self, parent=None, taken_names=Iterable[str]):
+        super().__init__(parent)
+
+        # Basic Attributes
+        self.setTitle(_("Name and Task"))
+        layout = qt.QFormLayout(self)
+
+        # Track the list of names already used by other Jobs so far
+        self._taken_names = taken_names
+
+        # Instruction text
+        instructionLabel = qt.QLabel(
+            _(
+                "Please give this job a name, and select the task you would like this Job to run."
+            )
+        )
+        instructionLabel.setWordWrap(True)
+        layout.addRow(instructionLabel)
+
+        # Job name
+        jobNameLabel = qt.QLabel(_("Job Name:"))
+        jobNameEntry = qt.QLineEdit()
+        jobNameTooltip = _(
+            "This label will be used to identify the Job within CART. "
+            "It can be any valid string, though you should try and name it something you'll remember later."
+        )
+        jobNameLabel.setToolTip(jobNameTooltip)
+        jobNameEntry.setToolTip(jobNameTooltip)
+        jobNameEntry.setPlaceholderText(
+            _(
+                "You will use this name to 'resume' the job if you close and reopen CART."
+            )
+        )
+        jobNameLabel.setBuddy(jobNameEntry)
+        self.jobNameEntry = jobNameEntry
+        layout.addRow(jobNameLabel, jobNameEntry)
+        jobNameEntry.textChanged.connect(
+            lambda __: self.completeChanged()
+        )
+
+        # Task selection
+        taskSelectionLabel = qt.QLabel(_("Task: "))
+        taskSelectionWidget = qt.QComboBox(None)
+        taskSelectionToolTip = _(
+            "The task determines what CART will do each time you load a set of files, what actions you can take, "
+            "and how your changes will be saved. Read the description below for further details."
+        )
+        taskSelectionLabel.setToolTip(taskSelectionToolTip)
+        taskSelectionWidget.setToolTip(taskSelectionToolTip)
+        taskSelectionWidget.addItems(list(CART_TASK_REGISTRY.keys()))
+        # This doesn't work; keeping it here in case Slicer ever fixes this bug
+        taskSelectionWidget.placeholderText = _("[None Selected]")
+        taskSelectionWidget.setCurrentIndex(-1)
+        taskSelectionLabel.setBuddy(taskSelectionWidget)
+        layout.addRow(taskSelectionLabel, taskSelectionWidget)
+        self.taskSelectionWidget = taskSelectionWidget
+
+        # Task description
+        taskDescriptionWidget = qt.QTextBrowser(None)
+        taskDescriptionWidget.setText(
+            _("Details about your selected task will appear here.")
+        )
+        taskDescriptionWidget.setOpenExternalLinks(True)
+        # Make it fill out all available space
+        taskDescriptionWidget.setSizePolicy(
+            qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding
+        )
+        # Add a border around it to visually distinguish it
+        taskDescriptionWidget.setFrameShape(qt.QFrame.Panel)
+        taskDescriptionWidget.setFrameShadow(qt.QFrame.Sunken)
+        taskDescriptionWidget.setLineWidth(3)
+        # Align text to the upper-left
+        taskDescriptionWidget.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignTop)
+        # Make it read-only
+        taskDescriptionWidget.setReadOnly(True)
+
+        # When the selected task changes, update the description text to match
+        def onSelectedTaskChanged(new_task: str):
+            task = CART_TASK_REGISTRY.get(new_task)
+            if task is None:
+                error_text = _(
+                    '<span style=" font-size:8pt; font-weight:600; color:#ff0000;" >'
+                    f"ERROR! The file for the selected task could not be accessed! "
+                    "Please check that the associated drive is mounted, "
+                    "and that it can be accessed with Slicer's current permission level!"
+                    "</span>"
+                )
+                taskDescriptionWidget.setText(error_text)
+            else:
+                taskDescriptionWidget.setMarkdown(task.description())
+            self.completeChanged()
+
+        taskSelectionWidget.currentTextChanged.connect(onSelectedTaskChanged)
+
+        # Add it to the layout
+        layout.addRow(taskDescriptionWidget)
+
+    @property
+    def job_name(self) -> str:
+        # noinspection PyTypeChecker
+        return self.jobNameEntry.text
+
+    @job_name.setter
+    def job_name(self, new_name: str):
+        self.jobNameEntry.setText(new_name)
+
+    @property
+    def selected_task(self) -> Optional[str]:
+        # noinspection PyTypeChecker
+        task_name: str = self.taskSelectionWidget.currentText
+        if task_name is None:
+            return None
+        # Confirm this is a valid task before returning the result
+        task_class = CART_TASK_REGISTRY.get(task_name, None)
+        if task_class is None:
+            return None
+        return task_name
+
+    @selected_task.setter
+    def selected_task(self, new_task: str):
+        task_class = CART_TASK_REGISTRY.get(new_task, None)
+        if task_class is None:
+            self.taskSelectionWidget.setCurrentIndex(-1)
+        else:
+            idx = self.taskSelectionWidget.findText(new_task)
+            self.taskSelectionWidget.setCurrentIndex(idx)
+
+    def isComplete(self):
+        # If we're missing a job name, said name was already taken,
+        # or we don't have a task, return false
+        return not any(
+            [
+                self.job_name == "",
+                self.job_name in self._taken_names,
+                self.selected_task is None,
+            ]
+        )
+
+
+class _DataSelectionPage(qt.QWizardPage):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        # Basic Attributes
+        self.setTitle(_("Data Selection"))
+        layout = qt.QFormLayout(self)
+
+        # Instruction text
+        instructionText = _(
+            "Please define the directory containing the files to use (the “Input Path”), "
+            "where you would like the results saved (the “Output Path”), "
+            "and how you would like to iterate through it (the “Cohort File”)."
+            "\n\n"
+            "If you have a cohort file you would like to reuse, click the “...” button to select it; "
+            "otherwise, click 'New' to generate a cohort file from scratch."
+        )
+        instructionLabel = qt.QLabel(instructionText)
+        instructionLabel.setWordWrap(True)
+        layout.addRow(instructionLabel)
+
+        # Data path
+        dataPathLabel = qt.QLabel(_("Input Path:"))
+        dataPathEntry: CARTPathLineEdit = CARTPathLineEdit()
+        dataPathToolTip = _(
+            "The path given here will be treated as the 'source' path when CART is looking for files."
+        )
+        dataPathLabel.setToolTip(dataPathToolTip)
+        dataPathEntry.setToolTip(dataPathToolTip)
+        dataPathEntry.setPlaceholderText(
+            _("The folder containing the files you want to use, i.e. a BIDS dataset.")
+        )
+        dataPathEntry.filters = ctk.ctkPathLineEdit.Dirs
+        dataPathLabel.setBuddy(dataPathEntry)
+        self._dataPathEntry = dataPathEntry
+        layout.addRow(dataPathLabel, dataPathEntry)
+
+        # Output path
+        outputPathLabel = qt.QLabel(_("Output Path:"))
+        outputPathEntry: CARTPathLineEdit = CARTPathLineEdit()
+        outputPathToolTip = _(
+            "The structure and format of output files depends on your selected task and its settings; "
+            "you'll probably be able to configure this more in the next page."
+        )
+        outputPathLabel.setToolTip(outputPathToolTip)
+        outputPathEntry.setToolTip(outputPathToolTip)
+        outputPathEntry.setPlaceholderText(
+            _("Where the saved results/edits from your task should be saved.")
+        )
+        outputPathEntry.filters = ctk.ctkPathLineEdit.Dirs
+        outputPathLabel.setBuddy(outputPathEntry)
+        self._outputPathEntry = outputPathEntry
+        layout.addRow(outputPathLabel, outputPathEntry)
+
+        # Cohort file
+        cohortFileLabel = qt.QLabel(_("Cohort File:"))
+        cohortFileSelector: CARTPathLineEdit = CARTPathLineEdit()
+        cohortFileToolTip = _(
+            "This file dictates how CART will iterate through your dataset and load files. "
+            "See your task's documentation for further details on what is required here, and "
+            "how it should be formatted."
+        )
+        cohortFileLabel.setToolTip(cohortFileToolTip)
+        cohortFileSelector.setToolTip(cohortFileToolTip)
+        cohortFileSelector.setPlaceholderText(
+            _(
+                "A CSV file, with one row per iteration (case) CART should run, "
+                "and one column per resource each iteration should try to load."
+            )
+        )
+        cohortFileSelector.filters = ctk.ctkPathLineEdit.Files
+        cohortFileSelector.nameFilters = [
+            "CSV files (*.csv)",
+        ]
+        self._cohortFileSelector = cohortFileSelector
+        layout.addRow(cohortFileLabel, cohortFileSelector)
+
+        # Cohort create/edit button panel
+        buttonLayout = qt.QHBoxLayout()
+
+        # Button to create the selected cohort file
+        createNewButton = qt.QPushButton(_("New Cohort File"))
+        createNewButton.setToolTip(
+            _(
+                "Generate a cohort file from scratch. "
+                "Will reference the contents of your input directory to do so, whenever possible."
+            )
+        )
+        editCohortButton = qt.QPushButton(_("Edit Cohort File"))
+        editCohortButton.setToolTip(
+            _(
+                "Edit the selected selected cohort file. "
+                "Changes are not saved until you explicitly request them."
+            )
+        )
+        buttonLayout.addWidget(createNewButton)
+        buttonLayout.addWidget(editCohortButton)
+        layout.addRow(buttonLayout)
+
+        # Cohort preview widget; it's a preview, so disable editing
+        cohortPreviewWidget = CohortTableWidget.from_path(None, editable=False)
+        cohortPreviewWidget.setFrameShape(qt.QFrame.Panel)
+        cohortPreviewWidget.setFrameShadow(qt.QFrame.Sunken)
+        cohortPreviewWidget.setLineWidth(3)
+        self._cohortPreviewWidget = cohortPreviewWidget
+        layout.addRow(cohortPreviewWidget)
+
+        # Connections
+        @qt.Slot(str)
+        def onDataPathChanged(new_txt: str):
+            # Enable the "create" button if there is now text
+            createNewButton.setEnabled(new_txt != "")
+            # Denote that the completion state has likely changed
+            self.completeChanged()
+        dataPathEntry.textChanged.connect(onDataPathChanged)
+
+        outputPathEntry.textChanged.connect(lambda: self.completeChanged())
+
+        @qt.Slot(str)
+        def onCohortPathChanged(new_txt: str):
+            text_is_valid = new_txt != ""
+            # Enable the "edit" button if there is now text
+            editCohortButton.setEnabled(text_is_valid)
+            # Preview the new cohort file, if it exists
+            if text_is_valid:
+                cohortPreviewWidget.backing_csv = Path(new_txt)
+            else:
+                cohortPreviewWidget.backing_csv = None
+            # Mark that the completion state has likely changed
+            self.completeChanged()
+
+        cohortFileSelector.textChanged.connect(onCohortPathChanged)
+
+        createNewButton.clicked.connect(self.createNewCohort)
+        editCohortButton.clicked.connect(self.editCohort)
+
+        # Sync and end
+        onDataPathChanged("")
+        onCohortPathChanged("")
+
+    ## Properties ##
+    @property
+    def data_path(self) -> Optional[Path]:
+        currentPath = self._dataPathEntry.currentPath
+        if not currentPath:
+            return None
+        else:
+            return Path(currentPath)
+
+    @data_path.setter
+    def data_path(self, new_path: Path):
+        path_str = str(new_path)
+        self._dataPathEntry.currentPath = path_str
+
+    @property
+    def output_path(self) -> Optional[Path]:
+        currentPath = self._outputPathEntry.currentPath
+        if not currentPath:
+            return None
+        else:
+            return Path(currentPath)
+
+    @output_path.setter
+    def output_path(self, new_path: Path):
+        path_str = str(new_path)
+        self._outputPathEntry.currentPath = path_str
+
+    @property
+    def cohort_path(self) -> Optional[Path]:
+        currentPath = self._cohortFileSelector.currentPath
+        if not currentPath:
+            return None
+        else:
+            return Path(currentPath)
+
+    @cohort_path.setter
+    def cohort_path(self, new_path: Path):
+        path_str = str(new_path)
+        self._cohortFileSelector.currentPath = path_str
+
+    ## Utilities ##
+    def createNewCohort(self):
+        """
+        Walk the user through the creation of a new cohort file from-scratch
+        """
+        # Prompt the user for the new cohort file's specifications
+        dialog = NewCohortDialog(self.data_path)
+
+        # If the user backs out or cancels, end here
+        if not dialog.exec():
+            return
+
+        # Create the backing cohort (and its associated files)
+        cohort = cohort_from_generator(
+            dialog.cohort_name, self.data_path, self.output_path, dialog.current_generator
+        )
+        # Update the cohort's reference task to match ours
+        task_id = self.wizard().selected_task
+        cohort.reference_task = CART_TASK_REGISTRY.get(task_id, None)
+
+        # Update the GUI's selected file to use the newly created cohort file
+        self._cohortFileSelector.setCurrentPath(str(cohort.csv_path))
+
+        # Begin editing the selected cohort
+        self.editCohort()
+
+    def editCohort(self):
+        task_name = self.wizard().selected_task
+        selected_task = CART_TASK_REGISTRY.get(task_name)
+        if selected_task is None:
+            raise ValueError(f"Cannot load task {task_name}, has not been registered!")
+        dialog = CohortEditorDialog.from_paths(
+            self.cohort_path, self.data_path, reference_task=selected_task
+        )
+        # Refresh the preview if the dialogue succeeded in changing something
+        if dialog.exec():
+            self._cohortPreviewWidget.refresh()
+        # Disconnect it from everything, no matter what the user did.
+        dialog.disconnectAll()
+
+    def isComplete(self):
+        to_check = [self.data_path, self.output_path, self.cohort_path]
+        # Ensure all fields are filled (not blank)
+        if not all(to_check):
+            return False
+        # Confirm the fields are the correct type of object (directory and/or path)
+        if not self.data_path.is_dir() and self.output_path.is_dir():
+            return False
+        if not self.cohort_path.is_file():
+            return False
+        # If all checks pass, return True
+        return True
 
 
 class _DataWizardPage(qt.QWizardPage):
