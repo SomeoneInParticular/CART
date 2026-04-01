@@ -611,7 +611,7 @@ class _DataSelectionPage(qt.QWizardPage):
         @qt.Slot(str)
         def onDataPathChanged(new_txt: str):
             # Enable the "create" button if there is now text
-            createNewButton.setEnabled(new_txt != "")
+            createNewButton.setEnabled(new_txt != "" and Path(new_txt).is_dir())
             # Denote that the completion state has likely changed
             self.completeChanged()
         dataPathEntry.textChanged.connect(onDataPathChanged)
