@@ -112,13 +112,13 @@ class DictBackedConfig(ABC):
         and returns it instead.
         """
         # Try to get the specified value
-        val = self._backing_dict.get(key, None)
+        val = self.backing_dict.get(key, None)
 
         # If it didn't exist, set it to our default and make a logged note
         if val is None:
             print(f"No '{key}' entry existed, setting it to {default}.")
             val = default
-            self._backing_dict[key] = val
+            self.backing_dict[key] = val
             self.has_changed = True
 
         return val
