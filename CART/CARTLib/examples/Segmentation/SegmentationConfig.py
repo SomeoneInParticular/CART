@@ -125,7 +125,7 @@ class SegmentationConfig(DictBackedConfig):
         self.has_changed = True
 
     def generateGUILayout(self) -> tuple[str, Optional[qt.QLayout]]:
-        return "Segmentation Configuration", SegmentationConfigGUILayout(self)
+        return _("Segmentation Configuration"), SegmentationConfigGUILayout(self)
 
 
 class SegmentationConfigGUILayout(qt.QFormLayout):
