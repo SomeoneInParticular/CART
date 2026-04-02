@@ -5,7 +5,7 @@ from typing import Optional, TYPE_CHECKING
 import qt
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
-from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
+from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig, DictBackedConfig
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import showErrorPrompt
 
@@ -71,8 +71,8 @@ class SegmentationTask(
             f for f in self.cohort_features if "segmentation" in f.lower()
         ]
 
-        # Config init
-        self.local_config = SegmentationConfig(job_profile)
+        # Self-managed configuration instance
+        self.local_config = self.init_config(job_profile)
 
         # I/O Manager
         self.io = SegmentationIO(master_profile, job_profile, self.local_config)
@@ -128,6 +128,10 @@ class SegmentationTask(
         return {
             "Default": SegmentationUnit
         }
+
+    @classmethod
+    def init_config(cls, job_config: JobProfileConfig) -> DictBackedConfig:
+        return SegmentationConfig(job_config)
 
     ## Configurable Settings ##
     @property

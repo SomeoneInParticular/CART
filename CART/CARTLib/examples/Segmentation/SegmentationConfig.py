@@ -1,4 +1,25 @@
+from enum import Enum
+from typing import Optional, TYPE_CHECKING
+
+import qt
+from slicer.i18n import tr as _
+
 from CARTLib.utils.config import DictBackedConfig, JobProfileConfig
+
+if TYPE_CHECKING:
+    # Provide some type references for QT, even if they're not
+    #  perfectly useful.
+    import PyQt5.Qt as qt
+
+
+class SegmentationFileStructure(Enum):
+    BIDS = "BIDS"
+    FolderPerCase = "Folder-per-Case"
+
+
+class SegmentationFileFormat(Enum):
+    NIFTI = "NiFTI"
+    NRRD = "NRRD"
 
 
 class SegmentationConfig(DictBackedConfig):
@@ -14,9 +35,6 @@ class SegmentationConfig(DictBackedConfig):
     @classmethod
     def default_config_label(cls) -> str:
         return cls.CONFIG_KEY
-
-    def show_gui(self) -> None:
-        pass
 
     ## CONFIG ENTRIES ##
     SHOULD_INTERPOLATE_KEY = "should_interpolate"
@@ -105,3 +123,45 @@ class SegmentationConfig(DictBackedConfig):
     def default_custom_output_path(self, new_val: str):
         self.backing_dict[self.DEFAULT_CUSTOM_OUTPUT_PATH_KEY] = new_val
         self.has_changed = True
+
+    def generateGUILayout(self) -> tuple[str, Optional[qt.QLayout]]:
+        return "Segmentation Configuration", SegmentationConfigGUILayout(self)
+
+
+class SegmentationConfigGUILayout(qt.QFormLayout):
+    def __init__(self, config: SegmentationConfig, parent = None, ):
+        super().__init__(parent)
+
+        # Output folder structure selection
+        fileStructureComboBox = qt.QComboBox(None)
+        fileStructureComboBox.addItems([x.value for x in SegmentationFileStructure])
+        fileStructureLabel = qt.QLabel(_("Output File Structure:"))
+        self.addRow(fileStructureLabel, fileStructureComboBox)
+
+        # Output file structure selection
+        fileFormatComboBox = qt.QComboBox(None)
+        fileFormatComboBox.addItems([x.value for x in SegmentationFileFormat])
+        fileFormatLabel = qt.QLabel(_("Output File Format:"))
+        self.addRow(fileFormatLabel, fileFormatComboBox)
+
+        # Toggle-able options
+        toggleLayout = qt.QFormLayout(None)
+        self.addRow(toggleLayout)
+
+        ## Segmentation Overlap
+        segmentOverlapCheckBox = qt.QCheckBox()
+        segmentOverlapLabel = qt.QLabel(_("Disallow Overlapping Segments"))
+        toggleLayout.addRow(segmentOverlapCheckBox, segmentOverlapLabel)
+
+        ## Hide To-Edit Segments on Load
+        hideEditSegmentsInitiallyCheckBox = qt.QCheckBox()
+        hideEditSegmentsInitiallyLabel = qt.QLabel(_("Initially Hide To-Edit Segmentations"))
+        toggleLayout.addRow(hideEditSegmentsInitiallyCheckBox, hideEditSegmentsInitiallyLabel)
+
+        ## Whether to save blank segmentations
+        saveEmptySegmentsCheckBox = qt.QCheckBox()
+        saveEmptySegmentsLabel = qt.QLabel(_("Save Empty Segmentations (will result in 'blank' files)"))
+        toggleLayout.addRow(saveEmptySegmentsCheckBox, saveEmptySegmentsLabel)
+
+        # Connections
+        # TODO
