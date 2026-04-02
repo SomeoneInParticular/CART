@@ -155,6 +155,7 @@ class SegmentationConfigGUILayout(qt.QFormLayout):
 
         ## Hide To-Edit Segments on Load
         hideEditSegmentsInitiallyCheckBox = qt.QCheckBox()
+        hideEditSegmentsInitiallyCheckBox.setChecked(config.hide_editable_on_start)
         hideEditSegmentsInitiallyLabel = qt.QLabel(_("Initially Hide To-Edit Segmentations"))
         toggleLayout.addRow(hideEditSegmentsInitiallyCheckBox, hideEditSegmentsInitiallyLabel)
 
@@ -164,4 +165,7 @@ class SegmentationConfigGUILayout(qt.QFormLayout):
         toggleLayout.addRow(saveEmptySegmentsCheckBox, saveEmptySegmentsLabel)
 
         # Connections
-        # TODO
+        @qt.Slot(None)
+        def onHideEditsToggled():
+            config.hide_to_edit = hideEditSegmentsInitiallyCheckBox.isChecked()
+        hideEditSegmentsInitiallyCheckBox.toggled.connect(onHideEditsToggled)
