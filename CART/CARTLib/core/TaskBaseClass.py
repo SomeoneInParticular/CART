@@ -8,7 +8,7 @@ import slicer
 from slicer.i18n import tr as _
 
 from CARTLib.core.DataUnitBase import DataUnitBase
-from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
+from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig, DictBackedConfig
 
 # Generic type hint class for anything which is a subclass of DataUnitBase
 D = TypeVar("D", bound=DataUnitBase)
@@ -60,7 +60,7 @@ class TaskBaseClass(ABC, Generic[D]):
         # Create a logger to track the goings-on of this task.
         self.logger = logging.getLogger(f"{__class__.__name__}")
 
-    # Aliases for commonly accessed attributes
+    ## Property Aliases ##
     @property
     def profile_label(self) -> str:
         return self.job_profile.label
@@ -69,6 +69,7 @@ class TaskBaseClass(ABC, Generic[D]):
     def profile_role(self) -> str:
         return self.job_profile.role
 
+    ## Abstract Methods ##
     @abstractmethod
     def setup(self, container: qt.QWidget):
         """
@@ -121,6 +122,95 @@ class TaskBaseClass(ABC, Generic[D]):
         raise NotImplementedError("save must be implemented in subclasses")
 
     @classmethod
+    @abstractmethod
+    def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
+        """
+        Returns a factory map (in label -> factory form) which, when called,
+        generates a new DataUnit instance of a type appropriate for use by this
+        task.
+
+        The "default" factory is just the class of your DataUnit subclass; for
+         example:
+
+        ```
+        return {
+            "Main": TaskDataUnit
+        }
+        ```
+
+        If you have a factory method instead, you can return that:
+
+        ```
+        return {
+            "Factory": TaskDataUnit.build_unit
+        }
+        ```
+
+        Note the lack of a trailing '()' in both; we need the *functions* here,
+         not their results!
+        """
+
+        raise NotImplementedError("setup must be implemented in subclasses")
+
+    ## Class Methods ##
+    @classmethod
+    def feature_types(cls, data_factory_label: str) -> dict[str, str]:
+        """
+        Provides a map containing a feature type label and its description
+        for a "class" of feature this task can handle for the given data factory.
+        `data_factory_label` will always be a value defined in `getDataUnitFactories`
+        above.
+
+        For example, if the given data unit factory can handle anatomical
+        volume files and segmentation labels, you might return the following:
+
+        ```
+        {
+            "Volume": "An anatomical volume you want to view. Must have 'volume' in its name.",
+            "Segmentation: "A segmentation label to overlay on viewed volumes. Must have 'segmentation' in its name"
+        }
+        ```
+
+        These are shown to the user during cohort creation, and used in conjunction
+        with `feature_label_for` below to ensure each cohort feature will abide by
+        the format required for this task when using the selected Data Unit Factory.
+
+        By default, this returns an empty dictionary; if CART sees this, it will not
+        provide ANY support to the user during cohort generation, likely result in
+        cohort files which are malformed and/or misleading.
+        """
+        return {}
+
+    @classmethod
+    def format_feature_label_for_type(
+        cls, initial_label: str, data_unit_factory_type: str, feature_type: str
+    ):
+        """
+        Should reformat the "initial" label provided to be recognized as the
+        specified feature type when provided to the specified data unit factory.
+
+        The data unit type will always be one specified by `getDataUnitFactories`,
+        and the feature type will always be one specified by `feature_types` for
+        said data unit factory.
+
+        For example, if we use the following feature types for `feature_types` prior:
+
+        ```
+        {
+            "Volume": "An anatomical volume you want to view. Must have 'volume' in its name.",
+            "Segmentation: "A segmentation label to overlay on viewed volumes. Must have 'segmentataion' in its name"
+        }
+        ```
+
+        An initial label of "T2w" for a "Volume" type could be returned as "volume_T2w";
+        if it were a "Segmentation" type instead, it could be "segmentation_T2w" instead.
+
+        If this is not overridden in a subclass, only the bare-minimum processing
+        (replacing commas with underscores) is applied.
+        """
+        return initial_label.replace(",", "_")
+
+    @classmethod
     def description(cls):
         """
         A description for this task, detailing what it should be used for, as well as
@@ -132,6 +222,18 @@ class TaskBaseClass(ABC, Generic[D]):
             f"'{cls.__name__}' has no description; you should remind the developer to provide one!"
         )
 
+    @classmethod
+    def init_config(cls, job_config: JobProfileConfig) -> DictBackedConfig:
+        """
+        Initialize a config instance to manage configurable settings for a Task
+        instance. If None is returned, CART will not properly clear any changes
+        you make to the Job profile if/when the user changes a Job's task.
+        Likewise, if the returned config instance does not provide a QT layout
+        with its "
+        """
+        return None
+
+    ## Instance Methods ##
     def save_on_iter(self) -> Optional[str]:
         """
         Called when the task is asked to save due to the case being changed.
@@ -218,91 +320,3 @@ class TaskBaseClass(ABC, Generic[D]):
         instead.
         """
         return None
-
-    @classmethod
-    @abstractmethod
-    def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
-        """
-        Returns a factory map (in label -> factory form) which, when called,
-        generates a new DataUnit instance of a type appropriate for use by this
-        task.
-
-        The "default" factory is just the class of your DataUnit subclass; for
-         example:
-
-        ```
-        return {
-            "Main": TaskDataUnit
-        }
-        ```
-
-        If you have a factory method instead, you can return that:
-
-        ```
-        return {
-            "Factory": TaskDataUnit.build_unit
-        }
-        ```
-
-        Note the lack of a trailing '()' in both; we need the *functions* here,
-         not their results!
-        """
-
-        raise NotImplementedError("setup must be implemented in subclasses")
-
-    @classmethod
-    def feature_types(cls, data_factory_label: str) -> dict[str, str]:
-        """
-        Provides a map containing a feature type label and its description
-        for a "class" of feature this task can handle for the given data factory.
-        `data_factory_label` will always be a value defined in `getDataUnitFactories`
-        above.
-
-        For example, if the given data unit factory can handle anatomical
-        volume files and segmentation labels, you might return the following:
-
-        ```
-        {
-            "Volume": "An anatomical volume you want to view. Must have 'volume' in its name.",
-            "Segmentation: "A segmentation label to overlay on viewed volumes. Must have 'segmentation' in its name"
-        }
-        ```
-
-        These are shown to the user during cohort creation, and used in conjunction
-        with `feature_label_for` below to ensure each cohort feature will abide by
-        the format required for this task when using the selected Data Unit Factory.
-
-        By default, this returns an empty dictionary; if CART sees this, it will not
-        provide ANY support to the user during cohort generation, likely result in
-        cohort files which are malformed and/or misleading.
-        """
-        return {}
-
-    @classmethod
-    def format_feature_label_for_type(
-        cls, initial_label: str, data_unit_factory_type: str, feature_type: str
-    ):
-        """
-        Should reformat the "initial" label provided to be recognized as the
-        specified feature type when provided to the specified data unit factory.
-
-        The data unit type will always be one specified by `getDataUnitFactories`,
-        and the feature type will always be one specified by `feature_types` for
-        said data unit factory.
-
-        For example, if we use the following feature types for `feature_types` prior:
-
-        ```
-        {
-            "Volume": "An anatomical volume you want to view. Must have 'volume' in its name.",
-            "Segmentation: "A segmentation label to overlay on viewed volumes. Must have 'segmentataion' in its name"
-        }
-        ```
-
-        An initial label of "T2w" for a "Volume" type could be returned as "volume_T2w";
-        if it were a "Segmentation" type instead, it could be "segmentation_T2w" instead.
-
-        If this is not overridden in a subclass, only the bare-minimum processing
-        (replacing commas with underscores) is applied.
-        """
-        return initial_label.replace(",", "_")

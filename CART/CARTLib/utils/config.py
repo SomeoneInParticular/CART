@@ -2,11 +2,17 @@ import json
 from abc import ABC, abstractmethod, ABCMeta
 from pathlib import Path
 import re
-from typing import Generic, Optional, TypeVar, Callable
+from typing import Generic, Optional, TypeVar, Callable, TYPE_CHECKING
 
 import qt
 
 from . import CART_PATH, CART_VERSION
+
+if TYPE_CHECKING:
+    # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
+    # isn't the same as PyQT5 itself), but it's a LOT better than constant
+    # cross-referencing
+    import PyQt5.Qt as qt
 
 # The location of the default config used by a fresh installation of CART.
 #  DO NOT TOUCH IT UNLESS YOU KNOW WHAT YOU'RE DOING.
@@ -36,13 +42,8 @@ class DictBackedConfig(ABC):
         else:
             self.config_label = self.default_config_label()
 
-        # Get (or generate) a backing dict
-        if self.parent_config:
-            # If the parent exists, ensure the backing dict is embedded within it
-            self._backing_dict = parent_config.get_or_default(self.config_label, {})
-        else:
-            # Otherwise, use a standalone dict
-            self._backing_dict = {}
+        # The backing dictionary containing our managed config options
+        self._backing_dict = None
 
         # Whether the contents of this config has been changed since creation
         self._has_changed = False
@@ -62,6 +63,17 @@ class DictBackedConfig(ABC):
 
     @property
     def backing_dict(self) -> dict:
+        # If we already have a backing dict, return it
+        if self._backing_dict is not None:
+            return self._backing_dict
+
+        # Otherwise, fetch or generate one
+        if self.parent_config:
+            # If the parent exists, ensure the backing dict is embedded within it
+            self._backing_dict = self.parent_config.get_or_default(self.config_label, {})
+        else:
+            # Otherwise, create a standalone dict
+            self._backing_dict = {}
         return self._backing_dict
 
     @backing_dict.setter
@@ -77,9 +89,10 @@ class DictBackedConfig(ABC):
         # KO: To prevent de-sync with the parent config, replace the contents of
         #  our backing dict with the new dicts contents (instead of replacing
         #  the dictionary itself)
-        self._backing_dict.clear()
+        to_update = self.backing_dict  # Fetched to ensure its initialized if need be
+        to_update.clear()
         for k, v in new_dict.items():
-            self._backing_dict[k] = v
+            to_update[k] = v
 
     @classmethod
     @abstractmethod
@@ -110,13 +123,17 @@ class DictBackedConfig(ABC):
 
         return val
 
-    @abstractmethod
-    def show_gui(self) -> None:
+    def generateGUILayout(self) -> Optional[tuple[str, qt.QLayout]]:
         """
-        Should show a dialogue prompt to the user, allowing them to change
-        the configuration values managed by this Config object.
+        Should generate a QT layout for a GUI to be shown to the
+        user, presenting configurable settings to the user.
+
+        Used during CART job setup and to change settings while
+        a job is running. If none is returned, the user will not
+        be able to configure the Job within CART, needing to
+        modify the job profile `.json` file directly instead.
         """
-        ...
+        return None
 
     def save_without_parent(self) -> None:
         """
@@ -435,18 +452,12 @@ class MasterProfileConfig(DictBackedConfig):
         with open(GLOBAL_CONFIG_PATH, "r") as fp:
             self.backing_dict = json.load(fp)
 
-    def show_gui(self) -> qt.QDialog:
-        # TODO
-        pass
-
     @classmethod
     def default_config_label(cls) -> str:
         return "cart_master_profile"
 
 
 class JobProfileConfig(DictBackedConfig):
-    NAME_KEY = "name"
-
     def __init__(
             self,
             parent_config: Optional["DictBackedConfig"] = None,
@@ -456,6 +467,8 @@ class JobProfileConfig(DictBackedConfig):
         super().__init__(parent_config, config_key_override)
 
         self._file_path = file_path
+
+    NAME_KEY = "name"
 
     @property
     def name(self) -> Optional[str]:
@@ -529,8 +542,25 @@ class JobProfileConfig(DictBackedConfig):
     def default_config_label(cls) -> str:
         return "job_profile"
 
-    def show_gui(self) -> None:
-        pass
+    ## Utilities ##
+    def purge_child_configs(self):
+        """
+        Purges all additions made by child configs (usually task-specific settings)
+        from this config instance, making it a "clean slate" for new child
+        configs to be added
+        """
+        # Only carry over universally shared keys
+        new_backing_dict = {
+            k: self._backing_dict[k] for k in [
+                self.NAME_KEY,
+                self.DATA_PATH_KEY,
+                self.OUTPUT_PATH_KEY,
+                self.COHORT_FILE_KEY,
+                self.TASK_KEY
+            ]
+        }
+        # Replace the backing config with this new "clean" one
+        self.backing_dict = new_backing_dict
 
     ## File I/O ##
     @property
