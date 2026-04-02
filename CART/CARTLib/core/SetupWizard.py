@@ -172,13 +172,23 @@ class JobSetupWizard(qt.QWizard):
             self._initFields()
 
     def _initFields(self):
+        # TODO: Remove these, have the pages directly modify the config
         self.job_name = self.config.name
         data_path = self.config.data_path
         self.data_path = data_path if data_path else ""
         output_path = self.config.output_path
         self.output_path = output_path if output_path else ""
-        self.selected_task = self.config.task
         self.cohort_path = self.config.cohort_path
+
+        # Hold out the backing config temporarily to avoid issues
+        # TODO: Fix this jank
+        backing_dict = self.config.backing_dict.copy()
+        self.selected_task = self.config.task
+        self.config.backing_dict = backing_dict
+
+        # Initialize the selected task's GUI
+        task_type = CART_TASK_REGISTRY.get(self.config.task)
+        self._settingsPage.init_task_gui(task_type)
 
     ## Page Management ##
     @staticmethod
