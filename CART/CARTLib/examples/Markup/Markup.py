@@ -333,10 +333,12 @@ class MarkupOutputStructure(Enum):
     BIDS = "BIDS"
     FolderPerCase = "Folder-per-Case"
 
+
 class MarkupOutputFormat(Enum):
     NIFTI = "NiFTI"
     NRRD = "NRRD"
     JSON = "JSON"
+
 
 class MarkupConfig(DictBackedConfig):
     CONFIG_KEY = "markup"
