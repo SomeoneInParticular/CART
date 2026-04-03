@@ -550,15 +550,17 @@ class JobProfileConfig(DictBackedConfig):
         configs to be added
         """
         # Only carry over universally shared keys
-        new_backing_dict = {
-            k: self._backing_dict[k] for k in [
-                self.NAME_KEY,
-                self.DATA_PATH_KEY,
-                self.OUTPUT_PATH_KEY,
-                self.COHORT_FILE_KEY,
-                self.TASK_KEY
-            ]
-        }
+        new_backing_dict = dict()
+        for k in [
+            self.NAME_KEY,
+            self.DATA_PATH_KEY,
+            self.OUTPUT_PATH_KEY,
+            self.COHORT_FILE_KEY,
+            self.TASK_KEY
+        ]:
+            if not k in self.backing_dict.keys():
+                continue
+            new_backing_dict[k] = self.backing_dict[k]
         # Replace the backing config with this new "clean" one
         self.backing_dict = new_backing_dict
 
