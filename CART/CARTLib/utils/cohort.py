@@ -716,7 +716,7 @@ class NewCohortDialog(qt.QDialog):
         # Description of said type
         cohortTypeDescription = qt.QTextBrowser(None)
         cohortTypeDescription.setText(
-            _("Details about your selected task will appear here.")
+            _("Details about the selected cohort type will appear here.")
         )
         # Fill all available space
         cohortTypeDescription.setSizePolicy(
