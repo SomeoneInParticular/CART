@@ -415,9 +415,25 @@ class _TaskDefinitionPage(qt.QWizardPage):
         jobNameLabel.setBuddy(jobNameEntry)
         self.jobNameEntry = jobNameEntry
         layout.addRow(jobNameLabel, jobNameEntry)
-        jobNameEntry.textChanged.connect(
-            lambda __: self.completeChanged()
-        )
+
+        # Highlight the text box in red if the name is already taken
+        default_style = jobNameEntry.styleSheet
+        error_style = "QLineEdit { color: red }"
+        duplicateJobToolTip = _("Job with this name already exists!")
+
+        @qt.Slot(str)
+        def onJobNameChanged(new_txt: str):
+
+            if new_txt in taken_names:
+                jobNameEntry.setStyleSheet(error_style)
+                jobNameEntry.setToolTip(duplicateJobToolTip)
+            else:
+                jobNameEntry.setStyleSheet(default_style)
+                jobNameEntry.setToolTip(jobNameTooltip)
+
+            self.completeChanged()
+
+        jobNameEntry.textChanged.connect(onJobNameChanged)
 
         # Task selection
         taskSelectionLabel = qt.QLabel(_("Task: "))
