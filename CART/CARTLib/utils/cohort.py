@@ -38,7 +38,7 @@ COHORT_VERSION = "0.1.0"
 class CohortModel(CSVBackedTableModel):
     """
     More specialized version of the CSV-backed model w/ additional checks
-    and features specific to cohort editing.
+    and resources specific to cohort editing.
     """
 
     ## Constructors ##
@@ -77,7 +77,7 @@ class CohortModel(CSVBackedTableModel):
         else:
             # If no sidecar is to be used, generate blank cohort/filter entries
             self._case_map: CaseMap = dict()
-            self._feature_map: FilterMap = dict()
+            self._resource_map: FilterMap = dict()
 
         # Set ourselves to "not changed"
         self.has_changed = False
@@ -160,9 +160,9 @@ class CohortModel(CSVBackedTableModel):
         return self._case_map
 
     @property
-    def feature_map(self):
+    def resource_map(self):
         # Get only; use the set/remove functions instead
-        return self._feature_map
+        return self._resource_map
 
     ## Sidecar Management ##
     def set_case_data(self, case_label: str, search_paths: list[Path]):
@@ -188,7 +188,7 @@ class CohortModel(CSVBackedTableModel):
             )
         # Otherwise, replace the row's values with the newly found paths
         else:
-            # Find the column position which matches our feature label
+            # Find the column position which matches our resource label
             row_idx = np.argwhere(self.indices == case_label).flatten()[0]
             # Change the column's contents to our new list of paths
             self.setRow(row_idx, new_paths)
@@ -225,13 +225,13 @@ class CohortModel(CSVBackedTableModel):
     FILTER_INCLUDE_KEY = "include"
     FILTER_EXCLUDE_KEY = "exclude"
 
-    def set_feature_data(self, feature_label: str, filter_entry: FilterEntry):
+    def set_resource_data(self, resource_label: str, filter_entry: FilterEntry):
         """
-        Set the filters for a given feature in the cohort.
+        Set the filters for a given resource in the cohort.
 
-        :param feature_label: The label of the feature to update/create.
+        :param resource_label: The label of the resource to update/create.
             If a filter already exists with this label, replaces it; otherwise, a new filter is created
-        :param filter_entry: The filter entry to associate with the new/updated feature.
+        :param filter_entry: The filter entry to associate with the new/updated resource.
         """
         # Validate the new filter entry
         keyset = set(filter_entry.keys())
@@ -244,42 +244,42 @@ class CohortModel(CSVBackedTableModel):
         new_paths = self.find_column_files(filter_entry)
         new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
 
-        # If this is a new feature, create a new column to match
-        if feature_label not in self.header:
+        # If this is a new resource, create a new column to match
+        if resource_label not in self.header:
             # Add a new column to the end of the dataset
             col_idx = self.columnCount()
             self.addColumn(col_idx, new_paths)
             # Set the header to this new label
             self.setHeaderData(
-                col_idx, qt.Qt.Horizontal, feature_label, qt.Qt.EditRole
+                col_idx, qt.Qt.Horizontal, resource_label, qt.Qt.EditRole
             )
         # Otherwise, replace the column's values with the newly found paths
         else:
-            # Find the column position which matches our feature label
-            col_idx = np.argwhere(self.header == feature_label).flatten()[0]
+            # Find the column position which matches our resource label
+            col_idx = np.argwhere(self.header == resource_label).flatten()[0]
             # Change the model's contents to our new list of paths
             self.setColumn(col_idx, new_paths)
 
         # Save the new filter for later
-        self.feature_map[feature_label] = filter_entry
+        self.resource_map[resource_label] = filter_entry
 
     def rename_filter(self, old_name: str, new_name: str):
         # Check that there's actually a filter to rename
-        if old_name not in self.feature_map.keys():
-            raise ValueError(f"Cannot rename feature '{old_name}'; it doesn't exist!")
+        if old_name not in self.resource_map.keys():
+            raise ValueError(f"Cannot rename resource '{old_name}'; it doesn't exist!")
         # Update the backing model
         col_idx = np.argwhere(self.header == old_name).flatten()[0]
         self.setHeaderData(col_idx, qt.Qt.Horizontal, new_name, qt.Qt.EditRole)
         # Update the filter map to reflect the change
-        filter_map = self.feature_map.pop(old_name)
-        self.feature_map[new_name] = filter_map
+        filter_map = self.resource_map.pop(old_name)
+        self.resource_map[new_name] = filter_map
 
     def drop_filters(self, names: list[str]):
         # Check the names before proceeding
         for name in names:
             # Check if a case map with this name exists
-            if name not in self.feature_map.keys():
-                raise ValueError(f"Cannot delete feature '{name}'; it doesn't exist!")
+            if name not in self.resource_map.keys():
+                raise ValueError(f"Cannot delete resource '{name}'; it doesn't exist!")
 
         # Do everything in one go to avoid partial corruption
         for name in names:
@@ -287,7 +287,7 @@ class CohortModel(CSVBackedTableModel):
             col_idx = np.argwhere(self.header == name).flatten()[0]
             self.dropColumn(col_idx)
             # Update the case map
-            self.feature_map.pop(name)
+            self.resource_map.pop(name)
 
     ## Data Management ##
     @property
@@ -315,7 +315,7 @@ class CohortModel(CSVBackedTableModel):
             return _(
                 "Double-click to manually set the value of this cell.\n"
                 "Right click to edit the settings for the entire case "
-                f"({row_name}) or feature ({col_name});\n"
+                f"({row_name}) or resource ({col_name});\n"
                 "This will update ALL cells for that row/column!"
             )
         # Otherwise, delegate to the superclass
@@ -393,7 +393,7 @@ class CohortModel(CSVBackedTableModel):
 
     def find_row_files(self, search_paths: list[Path]) -> list[Optional[Path]]:
         result_map = {}
-        for k, v in self.feature_map.items():
+        for k, v in self.resource_map.items():
             result_map[k] = self.find_first_valid_file(search_paths, v)
         sorted_pathlist = [result_map.get(k, None) for k in self.header]
         return sorted_pathlist
@@ -427,7 +427,7 @@ class CohortModel(CSVBackedTableModel):
             self.CASE_PATH_KEY: {
                 k: [str(x) for x in v] for k, v in self.case_map.items()
             },
-            self.FILTERS_KEY: self.feature_map,
+            self.FILTERS_KEY: self.resource_map,
         }
 
         with open(self.sidecar_path, "w") as fp:
@@ -446,14 +446,14 @@ class CohortModel(CSVBackedTableModel):
         if not self.csv_path:
             # ... reset everything and end
             self._case_map = {}
-            self._feature_map = {}
+            self._resource_map = {}
             self._csv_data = None
             return
         # If we're just missing the sidecar...
         elif not self.sidecar_path.exists():
             # ... just reset the relevant contents instead
             self._case_map = {}
-            self._feature_map = {}
+            self._resource_map = {}
             return
         # Otherwise, use the sidecar's contents to update ourselves
         with open(self.sidecar_path, "r") as fp:
@@ -473,7 +473,7 @@ class CohortModel(CSVBackedTableModel):
             raise ValueError(
                 f"Cannot load sidecar, '{self.FILTERS_KEY}' was malformed!"
             )
-        self._feature_map = {k: v for k, v in filter_data.items()}
+        self._resource_map = {k: v for k, v in filter_data.items()}
 
 ## Generators ##
 class CaseGenerator(Protocol):
@@ -631,7 +631,7 @@ class CohortTableView(qt.QTableView):
         # Modification action
         editAction = menu.addAction(_(f"Modify {col_id}"))
         def _modifyColumn():
-            dialog = FeatureEditorDialog(self.model(), col_id)
+            dialog = ResourceEditorDialogue(self.model(), col_id)
             dialog.exec()
         editAction.triggered.connect(_modifyColumn)
 
@@ -862,11 +862,11 @@ class CohortEditorDialog(qt.QDialog):
         layout.addWidget(buttonBox)
 
     def _addButtons(self, layout: "qt.QVBoxLayout", cohortWidget: "CohortTableWidget") -> qt.QGridLayout:
-        # Add Case (Row) + Add Feature (Column) buttons
-        newCaseButton = qt.QPushButton(_("New Case"))
+        # Add Case (Row) + Add Resource (Column) buttons
+        newCaseButton = qt.QPushButton(_("New Case [Row]"))
         newCaseButton.setToolTip(
             _(
-                "Add a new case (row) to the cohort. All features (columns) "
+                "Add a new case to the cohort. All resources (columns) "
                 "will be automatically populated with corresponding files "
                 "wherever possible."
             )
@@ -882,30 +882,29 @@ class CohortEditorDialog(qt.QDialog):
         newCaseButton.clicked.connect(newCaseClicked)
         self._to_disconnect.append(newCaseButton.clicked)
 
-        newFeatureButton = qt.QPushButton(_("New Feature"))
-        newFeatureButton.setToolTip(
+        newResourceButton = qt.QPushButton(_("New Resource [Column]"))
+        newResourceButton.setToolTip(
             _(
-                "Add a new feature (column) to the cohort. All cases (rows) "
-                "will be automatically populated with corresponding files "
-                "wherever possible"
+                "Add a new resource to the cohort. All cases (rows) "
+                "will be automatically populated wherever possible."
             )
         )
 
         @qt.Slot(None)
-        def newFeatureClicked():
-            dialog = FeatureEditorDialog(self._cohort)
+        def newResourceClicked():
+            dialog = ResourceEditorDialogue(self._cohort)
             if dialog.exec():
                 # Without this, the cells rapidly bloat for some reason
                 cohortWidget.tableView.resizeColumnsToContents()
                 cohortWidget.tableView.resizeRowsToContents()
-        newFeatureButton.clicked.connect(newFeatureClicked)
-        self._to_disconnect.append(newFeatureButton.clicked)
+        newResourceButton.clicked.connect(newResourceClicked)
+        self._to_disconnect.append(newResourceButton.clicked)
 
-        # Drop Cases (Rows) + Drop Features (Columns) Buttons
-        dropCasesButton = qt.QPushButton(_("Drop Case(s)"))
+        # Drop Cases (Rows) + Drop Resources (Columns) Buttons
+        dropCasesButton = qt.QPushButton(_("Drop Case(s) [Rows]"))
         dropCasesButton.setToolTip(
             _(
-                "Drop the selected case(s) (rows) in the cohort. THIS CANNOT BE UNDONE!"
+                "Drop the selected case(s) in the cohort. THIS CANNOT BE UNDONE!"
             )
         )
 
@@ -931,38 +930,38 @@ class CohortEditorDialog(qt.QDialog):
         dropCasesButton.clicked.connect(dropCasesClicked)
         self._to_disconnect.append(dropCasesButton.clicked)
 
-        dropFeatureButton = qt.QPushButton(_("Drop Feature(s)"))
-        dropFeatureButton.setToolTip(
-            _("Drop the selected feature(s) (columns) in the cohort. THIS CANNOT BE UNDONE!")
+        dropResourcesButton = qt.QPushButton(_("Drop Resource(s) [Columns]"))
+        dropResourcesButton.setToolTip(
+            _("Drop the selected resource(s) in the cohort. THIS CANNOT BE UNDONE!")
         )
 
         @qt.Slot(None)
-        def dropFeatureClicked():
+        def dropResourcesClicked():
             # Prompt the user to confirm this is what they want to do
             msg = qt.QMessageBox()
             msg.setWindowTitle("Are you sure?")
-            feature_names = list({
+            resource_names = list({
                 self._cohort.header[idx.column()]
                 for idx in cohortWidget.selectedIndices
             })
-            feature_points = "\n".join(["  * " + c for c in feature_names])
+            resource_points = "\n".join(["  * " + c for c in resource_names])
             msg.setText(
-                "You are about to delete the following features:\n"
-                f"{feature_points}\n"
+                "You are about to delete the following resources:\n"
+                f"{resource_points}\n"
                 f"Are you sure?"
             )
             msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
             # Only apply the deletion if confirmed by the user
             if msg.exec() == qt.QMessageBox.Yes:
-                self._cohort.drop_filters(feature_names)
-        dropFeatureButton.clicked.connect(dropFeatureClicked)
-        self._to_disconnect.append(dropFeatureButton.clicked)
+                self._cohort.drop_filters(resource_names)
+        dropResourcesButton.clicked.connect(dropResourcesClicked)
+        self._to_disconnect.append(dropResourcesButton.clicked)
 
         buttonPanel = qt.QGridLayout()
         buttonPanel.addWidget(newCaseButton, 0, 0)
-        buttonPanel.addWidget(newFeatureButton, 0, 1)
+        buttonPanel.addWidget(newResourceButton, 0, 1)
         buttonPanel.addWidget(dropCasesButton, 1, 0)
-        buttonPanel.addWidget(dropFeatureButton, 1, 1)
+        buttonPanel.addWidget(dropResourcesButton, 1, 1)
         layout.addLayout(buttonPanel)
 
     def closeEvent(self, event):
@@ -1004,20 +1003,20 @@ class CohortEditorDialog(qt.QDialog):
             v.disconnect()
 
 
-class FeatureEditorDialog(qt.QDialog):
+class ResourceEditorDialogue(qt.QDialog):
 
     def __init__(
         self,
         cohort: CohortModel,
-        feature_name: str = None,
+        resource_name: str = None,
         parent: qt.QObject = None,
     ):
         """
-        Dialog for editing (or creating) new Features within a cohort.
+        Dialog for editing (or creating) new resources within a cohort.
 
         :param cohort: The Cohort to apply the edits to
-        :param feature_name: The name of the feature to edit. If None, will create a feature with
-            the user specified name instead.
+        :param resource_name: The name of the resource to edit.
+            If None, will create a resource with the user specified name instead.
         :param parent: Parent widget, as required by QT.
         """
         super().__init__(parent)
@@ -1029,32 +1028,32 @@ class FeatureEditorDialog(qt.QDialog):
         # Backing cohort manager
         self._cohort = cohort
 
-        # Reference feature name
-        self._reference_feature = feature_name
+        # Reference resource name
+        self._reference_resource = resource_name
 
         # Initial setup
-        if feature_name:
-            self.setWindowTitle(_(f"Editing Feature '{feature_name}'"))
+        if resource_name:
+            self.setWindowTitle(_(f"Editing Resource '{resource_name}'"))
         else:
-            self.setWindowTitle(_("Add New Feature"))
+            self.setWindowTitle(_("Add New Resource"))
         self.setMinimumSize(500, self.minimumHeight)
         layout = qt.QFormLayout(self)
 
-        # The feature name itself (prior to formatting)
-        nameLabel = qt.QLabel(_("Feature Name:"))
+        # The resource name itself (prior to formatting)
+        nameLabel = qt.QLabel(_("Resource Name:"))
         nameField = qt.QLineEdit()
-        if feature_name:
-            nameField.setText(feature_name)
+        if resource_name:
+            nameField.setText(resource_name)
         nameField.setPlaceholderText(_("e.g. disk_labels, spinal_T2w, liver_segmentation"))
         nameTooltip = _(
-            "The name should represent what this feature contains at-a-glance. "
+            "The name should represent what this resource contains at-a-glance. "
             "You can use any text you like, with the EXCEPTION of commas; any commas "
             "will be automatically replaced with underscores!"
             "\n\n"
-            "If the task provides it, you can also select a 'feature type' from the "
+            "If the task provides it, you can also select a 'resource type' from the "
             "drop-down above; doing so will provide a description for that type, and "
-            "ensure this feature's name is formatted in the correct way for the task. "
-            "The feature's label after this formatting has been applied can be seen found below."
+            "ensure this resource's name is formatted in the correct way for the task. "
+            "The resource's label after this formatting has been applied can be seen found below."
         )
         nameLabel.setToolTip(nameTooltip)
         nameField.setToolTip(nameTooltip)
@@ -1063,14 +1062,14 @@ class FeatureEditorDialog(qt.QDialog):
         # Other input fields
         includeLabel = qt.QLabel(_("Include:"))
         includeField = qt.QLineEdit()
-        if feature_name:
-            include_vals = self._cohort.feature_map.get(feature_name, {}).get(
+        if resource_name:
+            include_vals = self._cohort.resource_map.get(resource_name, {}).get(
                 CohortModel.FILTER_INCLUDE_KEY, []
             )
             includeField.setText(", ".join(include_vals))
         includeField.textChanged.connect(self.mark_changed)
         includeTooltip = _(
-            "Comma-separated elements that a file MUST have to be used for this feature. "
+            "Comma-separated elements that a file MUST have to be used for this resource. "
             "This incudes the directory the file is contained within!"
         )
         includeLabel.setToolTip(includeTooltip)
@@ -1081,14 +1080,14 @@ class FeatureEditorDialog(qt.QDialog):
 
         excludeLabel = qt.QLabel(_("Exclude:"))
         excludeField = qt.QLineEdit()
-        if feature_name:
-            exclude_vals = self._cohort.feature_map.get(feature_name, {}).get(
+        if resource_name:
+            exclude_vals = self._cohort.resource_map.get(resource_name, {}).get(
                 CohortModel.FILTER_EXCLUDE_KEY, []
             )
             excludeField.setText(", ".join(exclude_vals))
         excludeField.textChanged.connect(self.mark_changed)
         excludeTooltip = _(
-            "Comma-separated elements that a file MUST NOT have to be used for this feature. "
+            "Comma-separated elements that a file MUST NOT have to be used for this resource. "
             "This incudes the directory the file is contained within!"
         )
         excludeLabel.setToolTip(excludeTooltip)
@@ -1132,53 +1131,53 @@ class FeatureEditorDialog(qt.QDialog):
             layout: "qt.QFormLayout",
             nameField: "qt.QLineEdit"
     ):
-        # Feature type selector and description
-        featureTypeLabel = qt.QLabel(_("Feature Type:"))
-        featureTypeSelector = qt.QComboBox(None)
-        feature_map = {
-            "None": "Do not treat this feature as any specific feature type."
+        # Resource type selector and description
+        resourceTypeLabel = qt.QLabel(_("Resource Type:"))
+        resourceTypeSelector = qt.QComboBox(None)
+        resource_map = {
+            "None": "Do not treat this resource as any specific resource type."
         }
         task = self._cohort.reference_task
         # TODO; Make this user selectable
         duf_type = list(task.getDataUnitFactories().keys())[0]
         for k, v in task.feature_types(duf_type).items():
-            feature_map[k] = v
-        featureTypeSelector.addItems(list(feature_map.keys()))
-        featureTypeToolTip = _(
-            "The feature type for this column."
+            resource_map[k] = v
+        resourceTypeSelector.addItems(list(resource_map.keys()))
+        resourceTypeToolTip = _(
+            "The resource type for this column."
             "\n\n"
-            "Most tasks will use the name of each feature to determine "
+            "Most tasks will use the name of each resource to determine "
             "how to process the corresponding resource for each case; "
-            "selecting the correct feature type ensures the task can "
+            "selecting the correct resource type ensures the task can "
             "do so successfully."
         )
-        featureTypeLabel.setToolTip(featureTypeToolTip)
-        featureTypeSelector.setToolTip(featureTypeToolTip)
-        layout.addRow(featureTypeLabel, featureTypeSelector)
+        resourceTypeLabel.setToolTip(resourceTypeToolTip)
+        resourceTypeSelector.setToolTip(resourceTypeToolTip)
+        layout.addRow(resourceTypeLabel, resourceTypeSelector)
 
         # Add it to the overall layout
-        layout.addRow(featureTypeLabel, featureTypeSelector)
+        layout.addRow(resourceTypeLabel, resourceTypeSelector)
 
-        # Description for the selected feature to help inform the user
-        featureTypeDescriptionBox = ctk.ctkCollapsibleGroupBox()
-        featureTypeDescriptionBox.setTitle(_("Type Description"))
-        featureTypeDescriptionBoxLayout = qt.QVBoxLayout()
-        featureTypeDescriptionBox.setLayout(featureTypeDescriptionBoxLayout)
-        featureTypeDescription = qt.QLabel(_("[PLEASE WAIT]"))
-        featureTypeDescription.setWordWrap(True)
-        featureTypeDescriptionBoxLayout.addWidget(featureTypeDescription)
+        # Description for the selected resource to help inform the user
+        resourceTypeDescriptionBox = ctk.ctkCollapsibleGroupBox()
+        resourceTypeDescriptionBox.setTitle(_("Type Description"))
+        resourceTypeDescriptionBoxLayout = qt.QVBoxLayout()
+        resourceTypeDescriptionBox.setLayout(resourceTypeDescriptionBoxLayout)
+        resourceTypeDescription = qt.QLabel(_("[PLEASE WAIT]"))
+        resourceTypeDescription.setWordWrap(True)
+        resourceTypeDescriptionBoxLayout.addWidget(resourceTypeDescription)
 
         def syncDescriptionText(__):
-            new_type = str(featureTypeSelector.currentText)
-            new_desc = feature_map.get(new_type, _("No Description Available"))
-            featureTypeDescription.setText(new_desc)
+            new_type = str(resourceTypeSelector.currentText)
+            new_desc = resource_map.get(new_type, _("No Description Available"))
+            resourceTypeDescription.setText(new_desc)
 
-        featureTypeSelector.currentIndexChanged.connect(syncDescriptionText)
+        resourceTypeSelector.currentIndexChanged.connect(syncDescriptionText)
 
         # Add it to the layout
-        layout.addRow(featureTypeDescriptionBox)
+        layout.addRow(resourceTypeDescriptionBox)
 
-        # Preview of the feature name after processing
+        # Preview of the resource name after processing
         previewFieldLabel = qt.QLabel(_("Final Name: "))
         previewField = qt.QLabel("[PLEASE WAIT]")
         previewFont = qt.QFont()
@@ -1190,13 +1189,13 @@ class FeatureEditorDialog(qt.QDialog):
             t = self._cohort.reference_task
             # TODO: make this user-selectable
             duf = list(t.getDataUnitFactories().keys())[0]
-            feature_type = str(featureTypeSelector.currentText)
-            new_text = t.format_feature_label_for_type(user_text, duf, feature_type)
+            resource_type = str(resourceTypeSelector.currentText)
+            new_text = t.format_feature_label_for_type(user_text, duf, resource_type)
             if prior_text != new_text:
                 previewField.setText(new_text)
                 self.mark_changed()
         nameField.textChanged.connect(syncPreviewField)
-        featureTypeSelector.currentIndexChanged.connect(syncPreviewField)
+        resourceTypeSelector.currentIndexChanged.connect(syncPreviewField)
 
         # Track and add it to our layout
         self.namePreviewField = previewField
@@ -1211,13 +1210,13 @@ class FeatureEditorDialog(qt.QDialog):
         syncDescriptionText(-1)  # Variable is unused, but required.
         syncPreviewField()
 
-        # Disable feature-type widgets for tasks which do not specify feature types
-        if len(feature_map) < 2:
-            featureTypeSelector.setEnabled(False)
-            featureTypeDescriptionBox.setEnabled(False)
-            disabledToolTip = _("The selected task did specify any feature types.")
-            featureTypeSelector.setToolTip(disabledToolTip)
-            featureTypeDescriptionBox.setToolTip(disabledToolTip)
+        # Disable resource-type widgets for tasks which do not specify resource types
+        if len(resource_map) < 2:
+            resourceTypeSelector.setEnabled(False)
+            resourceTypeDescriptionBox.setEnabled(False)
+            disabledToolTip = _("The selected task did specify any resource types.")
+            resourceTypeSelector.setToolTip(disabledToolTip)
+            resourceTypeDescriptionBox.setToolTip(disabledToolTip)
 
     def onCancel(self):
         # If we have changed anything, confirm we want to exit first
@@ -1238,15 +1237,15 @@ class FeatureEditorDialog(qt.QDialog):
         if not self.has_changed:
             return True
 
-        # Make sure a feature of this name doesn't already exist
+        # Make sure a resource of this name doesn't already exist
         label = self.namePreviewField.text.strip()
-        if self._reference_feature is None and label in self._cohort.feature_map.keys():
+        if self._reference_resource is None and label in self._cohort.resource_map.keys():
 
             # If it does, show an error and return "False" (no changes made)
             qt.QMessageBox.critical(
                 None,
-                "Invalid Feature Name",
-                f"A feature of the name '{label}' already exists; please change it to be unique.",
+                "Invalid Resource Name",
+                f"A resourece of the name '{label}' already exists; please change it to be unique.",
                 qt.QMessageBox.Ok,
             )
             return False
@@ -1269,12 +1268,12 @@ class FeatureEditorDialog(qt.QDialog):
             x for x in filter_entry[CohortModel.FILTER_EXCLUDE_KEY] if x != ""
         ]
 
-        # If this an updated feature, rename the feature to this new name
-        if self._reference_feature:
-            self._cohort.rename_filter(self._reference_feature, label)
+        # If this an updated resource, rename the resource to this new name
+        if self._reference_resource:
+            self._cohort.rename_filter(self._reference_resource, label)
 
         # Update cohort to use the new filter
-        self._cohort.set_feature_data(label, filter_entry)
+        self._cohort.set_resource_data(label, filter_entry)
 
         # Signal that everything ran successfully
         return True
@@ -1283,10 +1282,10 @@ class FeatureEditorDialog(qt.QDialog):
 class CaseEditorDialog(qt.QDialog):
     def __init__(self, cohort: CohortModel, case_id: str = None, parent: qt.QObject = None):
         """
-        Dialog for editing (or creating) new Features within a cohort.
+        Dialog for editing (or creating) new resources within a cohort.
 
         :param cohort: The Cohort to apply the edits to
-        :param case_id: The name of the case to edit. If None, will create a feature with
+        :param case_id: The name of the case to edit. If None, will create a resource with
             the user specified name instead.
         :param parent: Parent widget, as required by QT.
         """
@@ -1299,7 +1298,7 @@ class CaseEditorDialog(qt.QDialog):
         # Backing cohort manager
         self._cohort = cohort
 
-        # Reference feature name
+        # Reference resource name
         self._reference_case = case_id
 
         # Initial setup
