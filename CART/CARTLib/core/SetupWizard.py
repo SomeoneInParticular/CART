@@ -755,6 +755,8 @@ class _DataSelectionPage(qt.QWizardPage):
         # Refresh the preview if the dialogue succeeded in changing something
         if dialog.exec():
             self._cohortPreviewWidget.refresh()
+            if self._cohortPreviewWidget.currentWidget() == self._cohortPreviewWidget.tableView:
+                self._cohortPreviewWidget.model.load()
         # Disconnect it from everything, no matter what the user did.
         dialog.disconnectAll()
 
