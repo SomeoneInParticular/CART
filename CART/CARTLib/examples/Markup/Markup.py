@@ -107,14 +107,6 @@ class MarkupTask(TaskBaseClass[CARTStandardUnit]):
         }
 
     @classmethod
-    def feature_types(cls, data_factory_label: str) -> dict[str, str]:
-        # Defer to the data unit itself
-        duf = cls.getDataUnitFactories().get(data_factory_label, None)
-        if duf == CARTStandardUnit:
-            return CARTStandardUnit.feature_types()
-        return {}
-
-    @classmethod
     def format_feature_label_for_type(
         cls, initial_label: str, data_unit_factory_type: str, feature_type: str
     ):

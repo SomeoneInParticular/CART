@@ -36,11 +36,6 @@ class SegmentationTask(
         # TODO: Remove un-usable images
 
     @classmethod
-    def feature_types(cls, data_factory_label: str) -> dict[str, str]:
-        # Delegate to the data unit's defaults
-        return SegmentationUnit.feature_types()
-
-    @classmethod
     def format_feature_label_for_type(
         cls, initial_label: str, data_unit_factory_type: str, feature_type: str
     ):

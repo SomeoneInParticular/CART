@@ -950,18 +950,6 @@ class CARTStandardUnit(DataUnitBase):
 
     DEFAULT_ORIENTATION = Orientation.AXIAL
 
-    FEATURE_CLASSES = {
-        VOLUME_PREFIX:
-            "An anatomical volume you want to view. "
-            "Must have 'volume' in its name.",
-        SEGMENTATION_PREFIX:
-            "A segmentation label to overlay on viewed volumes. "
-            "Must have 'segmentation' in its name.",
-        MARKUP_PREFIX:
-            "A set of named point markups to indicate on viewed volumes. "
-            "Must have 'markup' in its name."
-    }
-
     RESOURCE_TYPES = {
         VolumeResource.id: VolumeResource,
         SegmentationResource.id: SegmentationResource,
@@ -1211,14 +1199,6 @@ class CARTStandardUnit(DataUnitBase):
     @classmethod
     def resource_types(cls) -> dict[str, ResourceType]:
         return cls.RESOURCE_TYPES
-
-    @classmethod
-    def feature_types(cls) -> dict[str, str]:
-        """
-        Report our own valid feature types for Tasks which use this class
-        as a data unit factory
-        """
-        return cls.FEATURE_CLASSES
 
     @classmethod
     def feature_label_for(cls, init_label: str, feature_type: str):
