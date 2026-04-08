@@ -9,8 +9,10 @@ import numpy as np
 
 import slicer
 import vtk
+from slicer.i18n import tr as _
 
 from CARTLib.core.DataUnitBase import DataUnitBase
+from CARTLib.core.TaskBaseClass import ResourceType
 from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
 from CARTLib.core.LayoutManagement import Orientation, LayoutHandler
 
@@ -690,6 +692,7 @@ def stack_json_dicts(source: dict, dest: dict):
         else:
             dest[k] = v
 
+
 ## ORGANIZATION ##
 def create_subject(label: str, *child_nodes):
     # Get Slicer's hierarchy node
@@ -866,6 +869,74 @@ def parse_markups(case_data, data_path) -> tuple[list[str], dict[str, Path]]:
     return markup_keys, valid_markup_paths
 
 
+## "Standard" Resource Types ##
+class VolumeResource(ResourceType):
+
+    id = "volume"
+    pretty_name = "Volume"
+    description = _(
+        "An anatomical volume to load and view for each case.",
+    )
+
+    @classmethod
+    def format_for_csv(cls, resource_name: str) -> str:
+        if "_volume" in resource_name:
+            return resource_name
+        return f"{resource_name}_volume"
+
+    @classmethod
+    def format_for_gui(cls, resource_name: str) -> str:
+        return f"{resource_name} [Volume]"
+
+    @classmethod
+    def is_type(cls, csv_label: str) -> bool:
+        return "_volume" in csv_label
+
+
+class SegmentationResource(ResourceType):
+
+    id = "segmentation"
+    pretty_name = "Segmentation"
+    description = _("A segmentation label to overlay on viewed volumes.")
+
+    @classmethod
+    def format_for_csv(cls, resource_name: str) -> str:
+        if "_segmentation" in resource_name:
+            return resource_name
+        return f"{resource_name}_segmentation"
+
+    @classmethod
+    def format_for_gui(cls, resource_name: str) -> str:
+        return f"{resource_name} [Segmentation]"
+
+    @classmethod
+    def is_type(cls, csv_label: str) -> bool:
+        return "_segmentation" in csv_label
+
+
+class MarkupResource(ResourceType):
+
+    id = "markup"
+    pretty_name = "Markup"
+    description = _(
+        "A set of markups to display over viewed volumes."
+    )
+
+    @classmethod
+    def format_for_csv(cls, resource_name: str) -> str:
+        if "_markup" in resource_name:
+            return resource_name
+        return f"{resource_name}_markup"
+
+    @classmethod
+    def format_for_gui(cls, resource_name: str) -> str:
+        return f"{resource_name} [Markup]"
+
+    @classmethod
+    def is_type(cls, csv_label: str) -> bool:
+        return "_markup" in csv_label
+
+
 ## "Standard" Data Unit ##
 class CARTStandardUnit(DataUnitBase):
     """
@@ -889,6 +960,12 @@ class CARTStandardUnit(DataUnitBase):
         MARKUP_PREFIX:
             "A set of named point markups to indicate on viewed volumes. "
             "Must have 'markup' in its name."
+    }
+
+    RESOURCE_TYPES = {
+        VolumeResource.id: VolumeResource,
+        SegmentationResource.id: SegmentationResource,
+        MarkupResource.id: MarkupResource
     }
 
     def __init__(
@@ -1131,6 +1208,10 @@ class CARTStandardUnit(DataUnitBase):
             self.hierarchy_node.SetItemDisplayVisibility(self.subject_id, new_state)
 
     ## Utilities ##
+    @classmethod
+    def resource_types(cls) -> dict[str, ResourceType]:
+        return cls.RESOURCE_TYPES
+
     @classmethod
     def feature_types(cls) -> dict[str, str]:
         """

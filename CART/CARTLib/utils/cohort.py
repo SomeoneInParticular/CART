@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Protocol, TYPE_CHECKING, Callable
+from typing import Optional, Protocol, TYPE_CHECKING
 
 import numpy as np
 from numpy import typing as npt
@@ -17,7 +17,7 @@ from .widgets import CSVBackedTableModel, CSVBackedTableWidget, CARTPathLineEdit
 ## Type Utils ##
 if TYPE_CHECKING:
     # Avoid potential cyclic imports
-    from CARTLib.core.TaskBaseClass import TaskBaseClass
+    from CARTLib.core.TaskBaseClass import TaskBaseClass, ResourceType
 
     # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
     # isn't the same as PyQT5 itself), but it's a LOT better than constant
@@ -26,12 +26,11 @@ if TYPE_CHECKING:
 
 # Typing aliases for commonly used dictionary mappings
 CaseMap = dict[str, list[Path]]
-FilterEntry = dict[str, list[str]]
-FilterMap = dict[str, FilterEntry]
-
+FilterMap = dict[str, dict]
+NameMap = dict[str, str]
 
 # Current version of the cohort manager
-COHORT_VERSION = "0.1.0"
+COHORT_VERSION = "0.2.0"
 
 
 ## Core ##
@@ -75,7 +74,7 @@ class CohortModel(CSVBackedTableModel):
         if use_sidecar:
             self._load_sidecar()
         else:
-            # If no sidecar is to be used, generate blank cohort/filter entries
+            # If no sidecar is to be used, start again from scratch
             self._case_map: CaseMap = dict()
             self._resource_map: FilterMap = dict()
 
@@ -222,10 +221,13 @@ class CohortModel(CSVBackedTableModel):
             # Update the case map
             self.case_map.pop(name)
 
+    # TODO: Track the resource type instead of the pretty name, generating the latter from the former
+    ORIGINAL_NAME = "original_name"
+    PRETTY_NAME = "pretty_name"
     FILTER_INCLUDE_KEY = "include"
     FILTER_EXCLUDE_KEY = "exclude"
 
-    def set_resource_data(self, resource_label: str, filter_entry: FilterEntry):
+    def set_resource_data(self, resource_label: str, filter_entry: dict):
         """
         Set the filters for a given resource in the cohort.
 
@@ -235,9 +237,12 @@ class CohortModel(CSVBackedTableModel):
         """
         # Validate the new filter entry
         keyset = set(filter_entry.keys())
-        if len(keyset - {self.FILTER_INCLUDE_KEY, self.FILTER_EXCLUDE_KEY}) > 0:
+        invalid_keys = keyset - {
+            self.ORIGINAL_NAME, self.PRETTY_NAME, self.FILTER_EXCLUDE_KEY, self.FILTER_INCLUDE_KEY
+        }
+        if len(invalid_keys) > 0:
             raise ValueError(
-                "Filter maps can only have two entries: 'include' and 'exclude'"
+                f"Filter map had invalid entries: {invalid_keys}"
             )
 
         # Find and process the list of paths associated with this filter
@@ -260,7 +265,7 @@ class CohortModel(CSVBackedTableModel):
             # Change the model's contents to our new list of paths
             self.setColumn(col_idx, new_paths)
 
-        # Save the new filter for later
+        # Save the filter for later
         self.resource_map[resource_label] = filter_entry
 
     def rename_filter(self, old_name: str, new_name: str):
@@ -325,7 +330,16 @@ class CohortModel(CSVBackedTableModel):
         # Note; "section" -> column for Horizontal, row for Vertical
         if role == qt.Qt.DisplayRole:
             if orientation == qt.Qt.Horizontal:
-                return self.header[section]
+                # Get the CSV value at this position
+                csv_label = self.header[section]
+                # Get the resource entry for this column
+                resource = self.resource_map.get(csv_label)
+                if resource is None:
+                    return csv_label
+                # Pull the "pretty" name for this resource
+                # TODO: Generate this based on resource type instead
+                display_label = resource.get(self.PRETTY_NAME, csv_label)
+                return display_label
             elif orientation == qt.Qt.Vertical:
                 return self.indices[section]
         return None
@@ -347,7 +361,7 @@ class CohortModel(CSVBackedTableModel):
 
     ## File Searching/Filtering ##
     def find_first_valid_file(
-        self, search_paths: list[Path], filters: FilterEntry
+        self, search_paths: list[Path], filters: dict
     ) -> Optional[Path]:
         # Isolate the filters from one another
         include_values = filters[self.FILTER_INCLUDE_KEY]
@@ -398,7 +412,7 @@ class CohortModel(CSVBackedTableModel):
         sorted_pathlist = [result_map.get(k, None) for k in self.header]
         return sorted_pathlist
 
-    def find_column_files(self, column_filters: FilterEntry) -> list[Optional[Path]]:
+    def find_column_files(self, column_filters: dict) -> list[Optional[Path]]:
         result_map = {}
         for k, v in self.case_map.items():
             result_map[k] = self.find_first_valid_file(v, column_filters)
@@ -445,15 +459,15 @@ class CohortModel(CSVBackedTableModel):
         # If this is for a not-yet-created cohort...
         if not self.csv_path:
             # ... reset everything and end
-            self._case_map = {}
-            self._resource_map = {}
+            self._case_map = dict()
+            self._resource_map = dict()
             self._csv_data = None
             return
         # If we're just missing the sidecar...
         elif not self.sidecar_path.exists():
             # ... just reset the relevant contents instead
-            self._case_map = {}
-            self._resource_map = {}
+            self._case_map = dict()
+            self._resource_map = dict()
             return
         # Otherwise, use the sidecar's contents to update ourselves
         with open(self.sidecar_path, "r") as fp:
@@ -474,6 +488,7 @@ class CohortModel(CSVBackedTableModel):
                 f"Cannot load sidecar, '{self.FILTERS_KEY}' was malformed!"
             )
         self._resource_map = {k: v for k, v in filter_data.items()}
+
 
 ## Generators ##
 class CaseGenerator(Protocol):
@@ -1015,7 +1030,7 @@ class ResourceEditorDialogue(qt.QDialog):
         Dialog for editing (or creating) new resources within a cohort.
 
         :param cohort: The Cohort to apply the edits to
-        :param resource_name: The name of the resource to edit.
+        :param resource_name: The name of the resource (within the cohort CSV) to edit.
             If None, will create a resource with the user specified name instead.
         :param parent: Parent widget, as required by QT.
         """
@@ -1029,7 +1044,12 @@ class ResourceEditorDialogue(qt.QDialog):
         self._cohort = cohort
 
         # Reference resource name
-        self._reference_resource = resource_name
+        self._prior_resource_name = resource_name
+
+        # Cached map of the resource types for this provided task
+        # TODO: Let the user select the data unit factory to use
+        duf = next(iter(cohort.reference_task.getDataUnitFactories().values()))
+        self._resource_type_map = duf.resource_types()
 
         # Initial setup
         if resource_name:
@@ -1043,21 +1063,17 @@ class ResourceEditorDialogue(qt.QDialog):
         nameLabel = qt.QLabel(_("Resource Name:"))
         nameField = qt.QLineEdit()
         if resource_name:
-            nameField.setText(resource_name)
+            original_name = cohort.resource_map.get(resource_name).get(CohortModel.ORIGINAL_NAME, resource_name)
+            nameField.setText(original_name)
         nameField.setPlaceholderText(_("e.g. disk_labels, spinal_T2w, liver_segmentation"))
         nameTooltip = _(
-            "The name should represent what this resource contains at-a-glance. "
-            "You can use any text you like, with the EXCEPTION of commas; any commas "
-            "will be automatically replaced with underscores!"
-            "\n\n"
-            "If the task provides it, you can also select a 'resource type' from the "
-            "drop-down above; doing so will provide a description for that type, and "
-            "ensure this resource's name is formatted in the correct way for the task. "
-            "The resource's label after this formatting has been applied can be seen found below."
+            "The name you'd like this resource to have. "
+            "This can be anything you'd like; just don't use any commas."
         )
         nameLabel.setToolTip(nameTooltip)
         nameField.setToolTip(nameTooltip)
         layout.addRow(nameLabel, nameField)
+        self.nameField = nameField
 
         # Other input fields
         includeLabel = qt.QLabel(_("Include:"))
@@ -1097,7 +1113,7 @@ class ResourceEditorDialogue(qt.QDialog):
         layout.addRow(excludeLabel, excludeField)
 
         # Field type selection GUI
-        self._generate_field_type_gui(layout, nameField)
+        self._generate_field_type_gui(layout)
 
         # Ok/Cancel Buttons
         buttonBox = qt.QDialogButtonBox()
@@ -1123,26 +1139,11 @@ class ResourceEditorDialogue(qt.QDialog):
         # Track whether changes have been made since this dialog was created
         self.has_changed = False
 
-    def mark_changed(self):
-        self.has_changed = True
-
-    def _generate_field_type_gui(
-            self,
-            layout: "qt.QFormLayout",
-            nameField: "qt.QLineEdit"
-    ):
+    def _generate_field_type_gui(self, layout: "qt.QFormLayout"):
         # Resource type selector and description
         resourceTypeLabel = qt.QLabel(_("Resource Type:"))
         resourceTypeSelector = qt.QComboBox(None)
-        resource_map = {
-            "None": "Do not treat this resource as any specific resource type."
-        }
-        task = self._cohort.reference_task
-        # TODO; Make this user selectable
-        duf_type = list(task.getDataUnitFactories().keys())[0]
-        for k, v in task.feature_types(duf_type).items():
-            resource_map[k] = v
-        resourceTypeSelector.addItems(list(resource_map.keys()))
+        resourceTypeSelector.addItems([v.pretty_name for v in self._resource_type_map.values()])
         resourceTypeToolTip = _(
             "The resource type for this column."
             "\n\n"
@@ -1163,60 +1164,44 @@ class ResourceEditorDialogue(qt.QDialog):
         resourceTypeDescriptionBox.setTitle(_("Type Description"))
         resourceTypeDescriptionBoxLayout = qt.QVBoxLayout()
         resourceTypeDescriptionBox.setLayout(resourceTypeDescriptionBoxLayout)
-        resourceTypeDescription = qt.QLabel(_("[PLEASE WAIT]"))
+        default_description = _(
+            "A description of the selected resource type will appear here"
+        )
+        resourceTypeDescription = qt.QLabel(default_description)
         resourceTypeDescription.setWordWrap(True)
         resourceTypeDescriptionBoxLayout.addWidget(resourceTypeDescription)
 
-        def syncDescriptionText(__):
-            new_type = str(resourceTypeSelector.currentText)
-            new_desc = resource_map.get(new_type, _("No Description Available"))
-            resourceTypeDescription.setText(new_desc)
+        @qt.Slot(str)
+        def syncDescriptionText(__: str):
+            # noinspection PyTypeChecker
+            new_type = self.resource_type
+            if new_type is None:
+                resourceTypeDescription.setText(default_description)
+            else:
+                resourceTypeDescription.setText(new_type.description)
 
         resourceTypeSelector.currentIndexChanged.connect(syncDescriptionText)
 
         # Add it to the layout
         layout.addRow(resourceTypeDescriptionBox)
 
-        # Preview of the resource name after processing
-        previewFieldLabel = qt.QLabel(_("Final Name: "))
-        previewField = qt.QLabel("[PLEASE WAIT]")
-        previewFont = qt.QFont()
-        previewFont.setBold(True)
-        previewField.setFont(previewFont)
-        def syncPreviewField():
-            prior_text = str(previewField.text)
-            user_text = nameField.text.strip()
-            t = self._cohort.reference_task
-            # TODO: make this user-selectable
-            duf = list(t.getDataUnitFactories().keys())[0]
-            resource_type = str(resourceTypeSelector.currentText)
-            new_text = t.format_feature_label_for_type(user_text, duf, resource_type)
-            if prior_text != new_text:
-                previewField.setText(new_text)
-                self.mark_changed()
-        nameField.textChanged.connect(syncPreviewField)
-        resourceTypeSelector.currentIndexChanged.connect(syncPreviewField)
-
-        # Track and add it to our layout
-        self.namePreviewField = previewField
-        w = qt.QWidget(None)
-        l = qt.QHBoxLayout(w)
-        l.addWidget(previewFieldLabel)
-        l.addWidget(previewField)
-        l.addStretch()
-        layout.addRow(w)
-
-        # Run a "sync" to update everything correctly
-        syncDescriptionText(-1)  # Variable is unused, but required.
-        syncPreviewField()
+        # Set the resource type to not be selected until the user selects it
+        # TODO populate this from previous resource (if any)
+        resourceTypeSelector.setCurrentIndex(-1)
 
         # Disable resource-type widgets for tasks which do not specify resource types
-        if len(resource_map) < 2:
+        if len(self._resource_type_map) < 2:
             resourceTypeSelector.setEnabled(False)
             resourceTypeDescriptionBox.setEnabled(False)
-            disabledToolTip = _("The selected task did specify any resource types.")
+            disabledToolTip = _("The selected task did specify multiple resource types.")
             resourceTypeSelector.setToolTip(disabledToolTip)
             resourceTypeDescriptionBox.setToolTip(disabledToolTip)
+
+        # Track the resource selector for later
+        self.resourceTypeSelector = resourceTypeSelector
+
+    def mark_changed(self):
+        self.has_changed = True
 
     def onCancel(self):
         # If we have changed anything, confirm we want to exit first
@@ -1238,20 +1223,24 @@ class ResourceEditorDialogue(qt.QDialog):
             return True
 
         # Make sure a resource of this name doesn't already exist
-        label = self.namePreviewField.text.strip()
-        if self._reference_resource is None and label in self._cohort.resource_map.keys():
-
+        base_str = self.nameField.text.strip()
+        csv_str = self.resource_type.format_for_csv(base_str)
+        pretty_str = self.resource_type.format_for_gui(base_str)
+        if self._prior_resource_name is None and csv_str in self._cohort.resource_map.keys():
             # If it does, show an error and return "False" (no changes made)
             qt.QMessageBox.critical(
                 None,
                 "Invalid Resource Name",
-                f"A resourece of the name '{label}' already exists; please change it to be unique.",
+                f"'{pretty_str}' already exists; please change this resources name or type to make it unique.",
                 qt.QMessageBox.Ok,
             )
             return False
 
         # Parse the contents of our GUI elements, stripping leading/trailing whitespace
-        filter_entry: FilterEntry = {
+        # TODO: Replace "pretty string" with the resource type ID after other uses have been handled
+        filter_entry: dict = {
+            CohortModel.ORIGINAL_NAME: base_str,
+            CohortModel.PRETTY_NAME: pretty_str,
             CohortModel.FILTER_INCLUDE_KEY: [
                 s.strip() for s in self.includeField.text.split(",")
             ],
@@ -1269,14 +1258,34 @@ class ResourceEditorDialogue(qt.QDialog):
         ]
 
         # If this an updated resource, rename the resource to this new name
-        if self._reference_resource:
-            self._cohort.rename_filter(self._reference_resource, label)
+        if self._prior_resource_name:
+            self._cohort.rename_filter(self._prior_resource_name, csv_str)
 
         # Update cohort to use the new filter
-        self._cohort.set_resource_data(label, filter_entry)
+        self._cohort.set_resource_data(csv_str, filter_entry)
 
         # Signal that everything ran successfully
         return True
+
+    @property
+    def resource_type(self) -> "Optional[ResourceType]":
+        # noinspection PyTypeChecker
+        idx = int(self.resourceTypeSelector.currentIndex)
+        if idx < 0:
+            return None
+        else:
+            new_type = list(self._resource_type_map.values())[idx]
+            return new_type
+
+    @resource_type.setter
+    def resource_type(self, new_type: "ResourceType"):
+        # Make sure the provided resource type is one recognized by our mapping
+        if new_type not in self._resource_type_map.values():
+            raise ValueError(
+                f"Resource type {new_type.id} is not a valid type for the selected data unit."
+            )
+        # Update our GUI (and everything else that follows) to match
+        self.resourceTypeSelector.setCurrentText(new_type.pretty_name)
 
 
 class CaseEditorDialog(qt.QDialog):

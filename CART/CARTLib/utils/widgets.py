@@ -233,6 +233,9 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
 
     ## I/O ##
     def load(self):
+        # If we don't have a CSV path to pull from yet, do not proceed
+        if self.csv_path is None:
+            return
         # Denote that a full reset is beginning
         self.beginResetModel()
         # Reset the backing data to contain the contents of the CSV file
