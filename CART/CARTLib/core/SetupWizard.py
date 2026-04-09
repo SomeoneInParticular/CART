@@ -12,6 +12,7 @@ from CARTLib.utils.cohort import (
     CohortTableWidget,
     CohortEditorDialog,
     NewCohortDialog,
+    CohortModel,
 )
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig, DictBackedConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
@@ -295,8 +296,17 @@ class JobSetupWizard(qt.QWizard):
         self._dataPage.cohort_path = new_path
 
     ## Utilities ##
-    def updateTaskPage(self, new_label: str):
-        self._settingsPage.change_task_type(new_label)
+    def taskChanged(self, new_label: str):
+        # Confirm the new task type is properly registered with CART
+        new_type = CART_TASK_REGISTRY.get(new_label, None)
+        if not new_type:
+            raise ValueError(
+                f"Could not switch to task type '{new_type}', "
+                f"no such task has been registered with CART."
+            )
+
+        self._dataPage.change_preview_task(new_type)
+        self._settingsPage.change_task_type(new_type)
 
     def save_config(self, logic: "CARTLogic") -> JobProfileConfig:
         # Generate the new config and immediately save it
@@ -488,8 +498,8 @@ class _TaskDefinitionPage(qt.QWizardPage):
             else:
                 taskDescriptionWidget.setMarkdown(task.description())
 
-            # Notify our wizard to update the task-specific page to match
-            self.wizard().updateTaskPage(new_task)
+            # Notify our wizard to run the corresponding changes downwind
+            self.wizard().taskChanged(new_task)
 
             # Signal that the completion state may have changed
             self.completeChanged()
@@ -719,6 +729,10 @@ class _DataSelectionPage(qt.QWizardPage):
         self._cohortFileSelector.currentPath = path_str
 
     ## Utilities ##
+    def change_preview_task(self, new_type: type[TaskBaseClass]):
+        # Update the preview widget's reference task to use the new type
+        self._cohortPreviewWidget.tableView.model().reference_task = new_type
+
     def createNewCohort(self):
         """
         Walk the user through the creation of a new cohort file from scratch
@@ -808,15 +822,7 @@ class _TaskSettingsPage(qt.QWizardPage):
         self.setTitle("No Task Configurations Found!")
         self.setLayout(defaultLayout)
 
-    def change_task_type(self, task_label: str):
-        # Confirm the new task type is properly registered with CART
-        new_type = CART_TASK_REGISTRY.get(task_label, None)
-        if not new_type:
-            raise ValueError(
-                f"Could not switch to task type '{new_type}', "
-                f"no such task has been registered with CART."
-            )
-
+    def change_task_type(self, new_type: type[TaskBaseClass]):
         # Purge all non-core configuration options from the job profile
         self._bound_config.purge_child_configs()
 

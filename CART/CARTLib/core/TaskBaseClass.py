@@ -65,6 +65,7 @@ class DataUnitFactory(Protocol):
         # The "constructor"
         ...
 
+    @abstractmethod
     def resource_types(self) -> Mapping[str, ResourceType]:
         """
         Provide a map of identifiers to the resource type they represent
