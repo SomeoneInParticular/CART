@@ -108,15 +108,6 @@ class TaskBaseClass(ABC, Generic[D]):
         # Create a logger to track the goings-on of this task.
         self.logger = logging.getLogger(f"{__class__.__name__}")
 
-    ## Property Aliases ##
-    @property
-    def profile_label(self) -> str:
-        return self.job_profile.label
-
-    @property
-    def profile_role(self) -> str:
-        return self.job_profile.role
-
     ## Abstract Methods ##
     @abstractmethod
     def setup(self, container: qt.QWidget):
