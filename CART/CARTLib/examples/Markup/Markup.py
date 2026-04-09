@@ -101,10 +101,8 @@ class MarkupTask(TaskBaseClass[CARTStandardUnit]):
         return self._output_manager.is_unit_complete(author, uid)
 
     @classmethod
-    def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
-        return {
-            "Default": CARTStandardUnit
-        }
+    def getDataUnitFactory(cls) -> DataUnitFactory:
+        return CARTStandardUnit
 
     @classmethod
     def format_feature_label_for_type(
@@ -115,7 +113,7 @@ class MarkupTask(TaskBaseClass[CARTStandardUnit]):
             initial_label, data_unit_factory_type, feature_type
         )
         # Defer to the data unit itself for further processing
-        duf = cls.getDataUnitFactories().get(data_unit_factory_type, None)
+        duf = cls.getDataUnitFactory().get(data_unit_factory_type, None)
         if duf is CARTStandardUnit:
             return CARTStandardUnit.feature_label_for(
                 initial_label, feature_type

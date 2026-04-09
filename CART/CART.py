@@ -765,8 +765,7 @@ class CARTLogic(ScriptedLoadableModuleLogic):
                 f"Could not load job '{job_profile.name}', "
                 f"no task of name '{job_profile.task}' has been registered."
             )
-        # TODO: Allow user selection of this instead
-        duf = list(new_task_cls.getDataUnitFactories().values())[0]
+        duf = new_task_cls.getDataUnitFactory()
 
         # Initialize the data loader using the job's settings
         data_manager = DataManager(

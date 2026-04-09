@@ -1047,8 +1047,7 @@ class ResourceEditorDialogue(qt.QDialog):
         self._prior_resource_name = resource_name
 
         # Cached map of the resource types for this provided task
-        # TODO: Let the user select the data unit factory to use
-        duf = next(iter(cohort.reference_task.getDataUnitFactories().values()))
+        duf = cohort.reference_task.getDataUnitFactory()
         self._resource_type_map = duf.resource_types()
 
         # Initial setup

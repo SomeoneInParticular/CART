@@ -44,7 +44,7 @@ class SegmentationTask(
             initial_label, data_unit_factory_type, feature_type
         )
         # Defer to the data unit itself for further processing
-        duf = cls.getDataUnitFactories().get(data_unit_factory_type, None)
+        duf = cls.getDataUnitFactory().get(data_unit_factory_type, None)
         if duf is SegmentationUnit:
             return SegmentationUnit.feature_label_for(initial_label, feature_type)
         return initial_label
@@ -119,10 +119,8 @@ class SegmentationTask(
             self.gui.onSavePrompt(*result_packet)
 
     @classmethod
-    def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
-        return {
-            "Default": SegmentationUnit
-        }
+    def getDataUnitFactory(cls) -> DataUnitFactory:
+        return SegmentationUnit
 
     @classmethod
     def init_config(cls, job_config: JobProfileConfig) -> DictBackedConfig:

@@ -170,31 +170,11 @@ class TaskBaseClass(ABC, Generic[D]):
 
     @classmethod
     @abstractmethod
-    def getDataUnitFactories(cls) -> dict[str, DataUnitFactory]:
+    def getDataUnitFactory(cls) -> DataUnitFactory:
         """
-        Returns a factory map (in label -> factory form) which, when called,
-        generates a new DataUnit instance of a type appropriate for use by this
-        task.
+        Get the data unit factory for this task.
 
-        The "default" factory is just the class of your DataUnit subclass; for
-         example:
-
-        ```
-        return {
-            "Main": TaskDataUnit
-        }
-        ```
-
-        If you have a factory method instead, you can return that:
-
-        ```
-        return {
-            "Factory": TaskDataUnit.build_unit
-        }
-        ```
-
-        Note the lack of a trailing '()' in both; we need the *functions* here,
-         not their results!
+        If in doubt, just return the class object, as it (should) matches the Protocol.
         """
 
         raise NotImplementedError("setup must be implemented in subclasses")
