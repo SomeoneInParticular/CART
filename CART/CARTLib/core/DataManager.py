@@ -4,8 +4,8 @@ from functools import lru_cache, cached_property
 from pathlib import Path
 from typing import Optional, Callable
 
-from .DataUnitBase import DataUnitBase
-from .TaskBaseClass import DataUnitFactory, TaskBaseClass
+from .DataUnitBase import DataUnitBase, DataUnitFactory
+from .TaskBaseClass import TaskBaseClass
 
 
 class DataManager:

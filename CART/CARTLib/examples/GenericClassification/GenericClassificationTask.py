@@ -3,9 +3,9 @@ from pathlib import Path
 from typing import Optional
 
 import qt
-import ctk
 
-from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from CARTLib.core.TaskBaseClass import TaskBaseClass
+from CARTLib.core.DataUnitBase import DataUnitFactory
 from CARTLib.examples.GenericClassification.GenericClassificationOutputManager import GenericClassificationOutputManager
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import cart_task

@@ -4,7 +4,8 @@ from typing import Optional, TYPE_CHECKING
 
 import qt
 
-from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory
+from CARTLib.core.TaskBaseClass import TaskBaseClass
+from CARTLib.core.DataUnitBase import DataUnitFactory
 from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig, DictBackedConfig
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import showErrorPrompt

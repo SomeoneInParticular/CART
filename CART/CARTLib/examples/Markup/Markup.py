@@ -8,7 +8,8 @@ from typing import Optional, TYPE_CHECKING
 import qt
 from slicer.i18n import tr as _
 
-from CARTLib.core.TaskBaseClass import TaskBaseClass, DataUnitFactory, D
+from CARTLib.core.TaskBaseClass import TaskBaseClass
+from CARTLib.core.DataUnitBase import DataUnitFactory
 from CARTLib.utils.config import JobProfileConfig, DictBackedConfig, MasterProfileConfig
 from CARTLib.utils.data import (
     CARTStandardUnit,
@@ -82,7 +83,7 @@ class MarkupTask(TaskBaseClass[CARTStandardUnit]):
         if self.data_unit:
             self.gui.sync()
 
-    def receive(self, data_unit: D):
+    def receive(self, data_unit: CARTStandardUnit):
         # Update the data unit
         self.data_unit = data_unit
 

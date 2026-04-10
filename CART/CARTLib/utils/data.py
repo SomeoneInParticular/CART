@@ -3,7 +3,7 @@ from datetime import datetime
 import json
 from functools import singledispatch
 from pathlib import Path
-from typing import Optional, Any, Callable
+from typing import Optional, Any
 
 import numpy as np
 
@@ -11,9 +11,8 @@ import slicer
 import vtk
 from slicer.i18n import tr as _
 
-from CARTLib.core.DataUnitBase import DataUnitBase
-from CARTLib.core.TaskBaseClass import ResourceType
-from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
+from CARTLib.core.DataUnitBase import DataUnitBase, ResourceType
+from CARTLib.utils.config import MasterProfileConfig
 from CARTLib.core.LayoutManagement import Orientation, LayoutHandler
 
 

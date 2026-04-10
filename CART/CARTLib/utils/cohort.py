@@ -17,7 +17,8 @@ from .widgets import CSVBackedTableModel, CSVBackedTableWidget, CARTPathLineEdit
 ## Type Utils ##
 if TYPE_CHECKING:
     # Avoid potential cyclic imports
-    from CARTLib.core.TaskBaseClass import TaskBaseClass, ResourceType
+    from CARTLib.core.TaskBaseClass import TaskBaseClass
+    from CARTLib.core.DataUnitBase import ResourceType
 
     # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
     # isn't the same as PyQT5 itself), but it's a LOT better than constant
