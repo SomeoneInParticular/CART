@@ -1112,6 +1112,7 @@ class ResourceEditorDialogue(qt.QDialog):
         nameLabel.setToolTip(nameTooltip)
         nameField.setToolTip(nameTooltip)
         layout.addRow(nameLabel, nameField)
+        nameField.textChanged.connect(self.mark_changed)
         self.nameField = nameField
 
         # Other input fields
@@ -1122,7 +1123,6 @@ class ResourceEditorDialogue(qt.QDialog):
                 CohortModel.FILTER_INCLUDE_KEY, []
             )
             includeField.setText(", ".join(include_vals))
-        includeField.textChanged.connect(self.mark_changed)
         includeTooltip = _(
             "Comma-separated elements that a file MUST have to be used for this resource. "
             "This incudes the directory the file is contained within!"
@@ -1140,7 +1140,6 @@ class ResourceEditorDialogue(qt.QDialog):
                 CohortModel.FILTER_EXCLUDE_KEY, []
             )
             excludeField.setText(", ".join(exclude_vals))
-        excludeField.textChanged.connect(self.mark_changed)
         excludeTooltip = _(
             "Comma-separated elements that a file MUST NOT have to be used for this resource. "
             "This incudes the directory the file is contained within!"
@@ -1151,6 +1150,9 @@ class ResourceEditorDialogue(qt.QDialog):
         self.excludeField = excludeField
         layout.addRow(excludeLabel, excludeField)
 
+        includeField.textChanged.connect(self.mark_changed)
+        excludeField.textChanged.connect(self.mark_changed)
+
         # Field type selection GUI
         self._generate_field_type_gui(layout)
 
@@ -1160,14 +1162,18 @@ class ResourceEditorDialogue(qt.QDialog):
             qt.QDialogButtonBox.Ok | qt.QDialogButtonBox.Cancel
         )
 
+        @qt.Slot(qt.QPushButton)
         def onButtonClicked(button: qt.QPushButton):
             button_role = buttonBox.buttonRole(button)
             if button_role == qt.QDialogButtonBox.RejectRole:
                 # Delegate to "onCancel" to prevent immediate closing
-                self.onCancel()
+                if self.confirmDiscardingUnsavedChanges():
+                    self.disconnectAll()
+                    self.reject()
             elif button_role == qt.QDialogButtonBox.AcceptRole:
                 # Attempt to apply the requested changes before closing
                 if self.apply_changes():
+                    self.disconnectAll()
                     self.accept()
             else:
                 raise ValueError("Pressed a button with an invalid role!")
@@ -1217,8 +1223,12 @@ class ResourceEditorDialogue(qt.QDialog):
                 resourceTypeDescription.setText(default_description)
             else:
                 resourceTypeDescription.setText(new_type.description)
+            self.mark_changed()
 
         resourceTypeSelector.currentIndexChanged.connect(syncDescriptionText)
+
+        # Track the resource selector for later
+        self.resourceTypeSelector = resourceTypeSelector
 
         # Disable resource-type widgets for tasks which do not specify resource types
         if len(self._resource_type_map) < 2:
@@ -1230,9 +1240,6 @@ class ResourceEditorDialogue(qt.QDialog):
 
         # Add it to the layout
         layout.addRow(resourceTypeDescriptionBox)
-
-        # Track the resource selector for later
-        self.resourceTypeSelector = resourceTypeSelector
 
         # Match the selected resource type to the previous resource type (if possible)
         if self._prior_resource is not None:
@@ -1251,20 +1258,6 @@ class ResourceEditorDialogue(qt.QDialog):
 
     def mark_changed(self):
         self.has_changed = True
-
-    def onCancel(self):
-        # If we have changed anything, confirm we want to exit first
-        if self.has_changed:
-            msg = qt.QMessageBox()
-            msg.setWindowTitle("Are you sure?")
-            msg.setText("You have unsaved changes. Do you want to close anyways?")
-            msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
-            result = msg.exec()
-            # If the user backs out, return early to do nothing.
-            if result != qt.QMessageBox.Yes:
-                return
-        # Otherwise, exit the program with a "rejection" signal
-        self.reject()
 
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed
@@ -1331,6 +1324,44 @@ class ResourceEditorDialogue(qt.QDialog):
             )
         # Update our GUI (and everything else that follows) to match
         self.resourceTypeSelector.setCurrentText(new_type.pretty_name)
+
+    ## Closing Helpers ##
+    def confirmDiscardingUnsavedChanges(self) -> bool:
+        # If we don't have unsaved changes, assume the user confirms
+        if not self.has_changed:
+            return True
+        # Confirm w/ the user if they want to discard the unsaved changes
+        msg = qt.QMessageBox()
+        msg.setWindowTitle("Unsaved Changes")
+        msg.setText(
+            "You have unsaved changes, which will be lost if you close this prompt. "
+            "Are you sure?"
+        )
+        msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
+        choice = msg.exec()
+        # Return true only if the user confirms they want these resources discarded
+        return choice == qt.QMessageBox.Yes
+
+    def closeEvent(self, event: qt.QCloseEvent = None):
+        # If the user tries to close the window w/ unsaved changes,
+        # confirm the intention before doing so
+        if self.confirmDiscardingUnsavedChanges():
+            self.disconnectAll()
+            event.accept()
+        else:
+            event.ignore()
+
+    def disconnectAll(self):
+        # QT isn't smart enough to resolve cyclic connections between Python and C,
+        # so this prevents a memory leak.
+        # Based on: https://sep.com/blog/prevent-signal-slot-memory-leaks-in-python/
+        layout = self.layout()
+        # Get all widgets in our layout
+        for w in map(lambda i: layout.itemAt(i).widget(), range(layout.count())):
+            # Disconnect all signals w/ at least one connection
+            w_dir = map(lambda x: (x, getattr(w, x)), dir(w))
+            for name, signal in filter(lambda x: type(x[1]) == qt.Signal, w_dir):
+                signal.disconnect()
 
 
 class CaseEditorDialog(qt.QDialog):

@@ -62,6 +62,12 @@ def load_segmentation(path: Path):
         label_node, segment_node
     )
 
+    # Copy the source filename from the label node to the segmentation node
+    segment_node.AddDefaultStorageNode()
+    storage_node = segment_node.GetStorageNode()
+    print("IGNORE THE FOLLOWING ERROR, VTK IS DRUNK!")
+    storage_node.Copy(label_node.GetStorageNode())
+
     # Hide it from view by default
     segment_node.SetDisplayVisibility(False)
 
