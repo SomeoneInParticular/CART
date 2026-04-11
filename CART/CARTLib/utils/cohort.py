@@ -227,9 +227,8 @@ class CohortModel(CSVBackedTableModel):
             # Update the case map
             self.case_map.pop(name)
 
-    # TODO: Track the resource type instead of the pretty name, generating the latter from the former
-    ORIGINAL_NAME = "original_name"
-    RESOURCE_TYPE = "resource_type"
+    ORIGINAL_NAME_KEY = "original_name"
+    RESOURCE_TYPE_KEY = "resource_type"
     FILTER_INCLUDE_KEY = "include"
     FILTER_EXCLUDE_KEY = "exclude"
 
@@ -244,7 +243,7 @@ class CohortModel(CSVBackedTableModel):
         # Validate the new filter entry
         keyset = set(filter_entry.keys())
         invalid_keys = keyset - {
-            self.ORIGINAL_NAME, self.RESOURCE_TYPE, self.FILTER_EXCLUDE_KEY, self.FILTER_INCLUDE_KEY
+            self.ORIGINAL_NAME_KEY, self.RESOURCE_TYPE_KEY, self.FILTER_EXCLUDE_KEY, self.FILTER_INCLUDE_KEY
         }
         for v in invalid_keys:
             logging.warning(f"Found key {v} which wasn't recognized; ignored!")
@@ -494,16 +493,20 @@ class CohortModel(CSVBackedTableModel):
         resource = self.resource_map.get(csv_label)
         if resource is None:
             return None
-        return resource.get(self.ORIGINAL_NAME)
+        return resource.get(self.ORIGINAL_NAME_KEY)
 
     def csv_to_resource_type(self, csv_label: str) -> "Optional[ResourceType]":
-        # Get the resource for this label
+        # If we don't have a reference task, there are no resource types (yet)
+        if self.reference_task is None:
+            return None
+
+        # Get the resource associated with this label; return None if we couldn't find one
         resource = self.resource_map.get(csv_label)
         if resource is None:
             return None
 
         # Get the type of resource for this instance
-        type_id = resource.get(self.RESOURCE_TYPE)
+        type_id = resource.get(self.RESOURCE_TYPE_KEY)
         resource_type: "ResourceType" = (
             self.reference_task.getDataUnitFactory().resource_types().get(type_id)
         )
@@ -1241,7 +1244,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
 
         # Match the selected resource type to the previous resource type (if possible)
         if self._prior_resource is not None:
-            prior_type_id = self._prior_resource.get(self._cohort.RESOURCE_TYPE)
+            prior_type_id = self._prior_resource.get(self._cohort.RESOURCE_TYPE_KEY)
             if prior_type_id is None:
                 resourceTypeSelector.setCurrentIndex(-1)
             else:
@@ -1276,8 +1279,8 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Parse the contents of our GUI elements, stripping leading/trailing whitespace
         # TODO: Replace "pretty string" with the resource type ID after other uses have been handled
         filter_entry: dict = {
-            CohortModel.ORIGINAL_NAME: base_str,
-            CohortModel.RESOURCE_TYPE: self.resource_type.id,
+            CohortModel.ORIGINAL_NAME_KEY: base_str,
+            CohortModel.RESOURCE_TYPE_KEY: self.resource_type.id,
             CohortModel.FILTER_INCLUDE_KEY: [
                 s.strip() for s in self.includeField.text.split(",")
             ],
