@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABC
 from pathlib import Path
-from typing import Any, Optional, Protocol, Mapping
+from typing import Any, Mapping, Optional, Protocol
 
 import slicer
 from slicer.i18n import tr as _
