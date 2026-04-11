@@ -12,7 +12,12 @@ import ctk
 import qt
 from slicer.i18n import tr as _
 
-from .widgets import CSVBackedTableModel, CSVBackedTableWidget, CARTPathLineEdit
+from .widgets import (
+    CSVBackedTableModel,
+    CSVBackedTableWidget,
+    CARTPathLineEdit,
+    ChangeTrackingDialogue,
+)
 
 ## Type Utils ##
 if TYPE_CHECKING:
@@ -1055,7 +1060,7 @@ class CohortEditorDialog(qt.QDialog):
             v.disconnect()
 
 
-class ResourceEditorDialogue(qt.QDialog):
+class ResourceEditorDialogue(ChangeTrackingDialogue):
 
     def __init__(
         self,
@@ -1166,23 +1171,16 @@ class ResourceEditorDialogue(qt.QDialog):
         def onButtonClicked(button: qt.QPushButton):
             button_role = buttonBox.buttonRole(button)
             if button_role == qt.QDialogButtonBox.RejectRole:
-                # Delegate to "onCancel" to prevent immediate closing
-                if self.confirmDiscardingUnsavedChanges():
-                    self.disconnectAll()
-                    self.reject()
+                self.reject()
             elif button_role == qt.QDialogButtonBox.AcceptRole:
                 # Attempt to apply the requested changes before closing
                 if self.apply_changes():
-                    self.disconnectAll()
                     self.accept()
             else:
                 raise ValueError("Pressed a button with an invalid role!")
 
         buttonBox.clicked.connect(onButtonClicked)
         layout.addWidget(buttonBox)
-
-        # Track whether changes have been made since this dialog was created
-        self.has_changed = False
 
     def _generate_field_type_gui(self, layout: "qt.QFormLayout"):
         # Resource type selector and description
@@ -1256,12 +1254,9 @@ class ResourceEditorDialogue(qt.QDialog):
         else:
             resourceTypeSelector.setCurrentIndex(-1)
 
-    def mark_changed(self):
-        self.has_changed = True
-
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed
-        if not self.has_changed:
+        if not self._has_changed:
             return True
 
         # Make sure a resource of this name doesn't already exist
@@ -1325,46 +1320,8 @@ class ResourceEditorDialogue(qt.QDialog):
         # Update our GUI (and everything else that follows) to match
         self.resourceTypeSelector.setCurrentText(new_type.pretty_name)
 
-    ## Closing Helpers ##
-    def confirmDiscardingUnsavedChanges(self) -> bool:
-        # If we don't have unsaved changes, assume the user confirms
-        if not self.has_changed:
-            return True
-        # Confirm w/ the user if they want to discard the unsaved changes
-        msg = qt.QMessageBox()
-        msg.setWindowTitle("Unsaved Changes")
-        msg.setText(
-            "You have unsaved changes, which will be lost if you close this prompt. "
-            "Are you sure?"
-        )
-        msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
-        choice = msg.exec()
-        # Return true only if the user confirms they want these resources discarded
-        return choice == qt.QMessageBox.Yes
 
-    def closeEvent(self, event: qt.QCloseEvent = None):
-        # If the user tries to close the window w/ unsaved changes,
-        # confirm the intention before doing so
-        if self.confirmDiscardingUnsavedChanges():
-            self.disconnectAll()
-            event.accept()
-        else:
-            event.ignore()
-
-    def disconnectAll(self):
-        # QT isn't smart enough to resolve cyclic connections between Python and C,
-        # so this prevents a memory leak.
-        # Based on: https://sep.com/blog/prevent-signal-slot-memory-leaks-in-python/
-        layout = self.layout()
-        # Get all widgets in our layout
-        for w in map(lambda i: layout.itemAt(i).widget(), range(layout.count())):
-            # Disconnect all signals w/ at least one connection
-            w_dir = map(lambda x: (x, getattr(w, x)), dir(w))
-            for name, signal in filter(lambda x: type(x[1]) == qt.Signal, w_dir):
-                signal.disconnect()
-
-
-class CaseEditorDialog(qt.QDialog):
+class CaseEditorDialog(ChangeTrackingDialogue):
     def __init__(self, cohort: CohortModel, case_id: str = None, parent: qt.QObject = None):
         """
         Dialog for editing (or creating) new resources within a cohort.
@@ -1386,7 +1343,9 @@ class CaseEditorDialog(qt.QDialog):
         # Reference resource name
         self._reference_case = case_id
 
-        # Initial setup
+        # Nested signals which need to be disconnected to avoid a memory leak
+        self._nested_connections = []
+
         # Initial setup
         if case_id:
             self.setWindowTitle(_(f"Editing Case '{case_id}'"))
@@ -1422,11 +1381,15 @@ class CaseEditorDialog(qt.QDialog):
                     searchPathList.addItem(str(p))
                 else:
                     searchPathList.addItem(str(cohort.data_path / p))
-        searchPathList.model().rowsInserted.connect(self.mark_changed)
-        searchPathList.model().rowsRemoved.connect(self.mark_changed)
+
+        model = searchPathList.model()
+        model.rowsInserted.connect(self.mark_changed)
+        model.rowsRemoved.connect(self.mark_changed)
         layout.addRow(searchPathLabels)
         layout.addRow(searchPathList)
         self.searchPathList = searchPathList
+        self._nested_connections.append(model.rowsInserted)
+        self._nested_connections.append(model.rowsRemoved)
 
         # Button panel
         addButton = qt.QPushButton("Add")
@@ -1434,7 +1397,7 @@ class CaseEditorDialog(qt.QDialog):
         removeButton.setEnabled(False)
 
         def onAddClicked():
-            fileDialog = qt.QFileDialog()
+            fileDialog = qt.QFileDialog(None)
             fileDialog.setDirectory(str(cohort.data_path))
             fileDialog.setFileMode(qt.QFileDialog.Directory)
             if fileDialog.exec():
@@ -1456,11 +1419,14 @@ class CaseEditorDialog(qt.QDialog):
         removeButton.clicked.connect(onRemoveClicked)
 
         # Make them side-by-side and add them to the layout
-        w = qt.QWidget()
+        w = qt.QWidget(None)
         l = qt.QHBoxLayout(w)
         l.addWidget(addButton)
         l.addWidget(removeButton)
         layout.addRow(w)
+
+        self._nested_connections.append(addButton.clicked)
+        self._nested_connections.append(removeButton.clicked)
 
         # Ok/Cancel Buttons
         buttonBox = qt.QDialogButtonBox()
@@ -1471,8 +1437,7 @@ class CaseEditorDialog(qt.QDialog):
         def onButtonClicked(button: qt.QPushButton):
             button_role = buttonBox.buttonRole(button)
             if button_role == qt.QDialogButtonBox.RejectRole:
-                # Delegate to "onCancel" to prevent immediate closing
-                self.onCancel()
+                self.reject()
             elif button_role == qt.QDialogButtonBox.AcceptRole:
                 # Apply the requested changes to the cohort before closing.
                 if self.apply_changes():
@@ -1483,28 +1448,9 @@ class CaseEditorDialog(qt.QDialog):
         buttonBox.clicked.connect(onButtonClicked)
         layout.addWidget(buttonBox)
 
-        self.has_changed = False
-
-    def mark_changed(self):
-        self.has_changed = True
-
-    def onCancel(self):
-        # If we have changed anything, confirm we want to exit first
-        if self.has_changed:
-            msg = qt.QMessageBox()
-            msg.setWindowTitle("Are you sure?")
-            msg.setText("You have unsaved changes. Do you want to close anyways?")
-            msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
-            result = msg.exec()
-            # If the user backs out, return early to do nothing.
-            if result != qt.QMessageBox.Yes:
-                return
-        # Otherwise, exit the program with a "rejection" signal
-        self.reject()
-
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed
-        if not self.has_changed:
+        if not self._has_changed:
             return True
 
         # Make sure a case with this name doesn't already exist
@@ -1537,3 +1483,8 @@ class CaseEditorDialog(qt.QDialog):
 
         # Confirm that the changes went through
         return True
+
+    def _disconnectAll(self):
+        super()._disconnectAll()
+        for c in self._nested_connections:
+            c.disconnect()

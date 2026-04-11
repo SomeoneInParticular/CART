@@ -47,6 +47,91 @@ def showErrorPrompt(msg: str, parent_widget: Optional[qt.QWidget]):
     errBox.exec()
 
 
+## Smarter Dialogues ##
+class SmartClosingDialogue(qt.QDialog):
+    """
+    Dialogue extended to get around QT's problematic memory leaks,
+    caused when a Python-side object references itself via connecting
+    a signal to a slot.
+
+    Note that it will only check for signals directly accessible from
+    widgets within the dialogues layout; signals for nested widgets and
+    layouts will NOT be disconnected automatically!
+
+    Based on: https://sep.com/blog/prevent-signal-slot-memory-leaks-in-python/
+    """
+
+    def _disconnectAll(self):
+        # Disconnect all available signals contained within this object's layout
+        layout = self.layout()
+        # Get all widgets in our layout
+        for w in map(lambda i: layout.itemAt(i).widget(), range(layout.count())):
+            # Disconnect all signals w/ at least one connection
+            w_dir = map(lambda x: getattr(w, x), dir(w))
+            for signal in filter(lambda x: type(x) == qt.Signal, w_dir):
+                signal.disconnect()
+
+    @qt.Slot()
+    def done(self, val: int):
+        self._disconnectAll()
+        qt.QDialog.done(self, val)
+
+    # noinspection PyMethodOverriding
+    def closeEvent(self, event: qt.QCloseEvent = None):
+        # Disconnect any errant signals before actually closing
+        self._disconnectAll()
+        event.accept()
+
+
+class ChangeTrackingDialogue(SmartClosingDialogue):
+    """
+    Dialogue which tracks whether changes have been made to it, and
+    asks the user to confirm if they try to close the dialogue
+    without accepting said changes.
+    """
+
+    def __init__(self, parent: qt.QWidget):
+        super().__init__(parent)
+
+        # Track whether the contents of this widget has changed or not
+        self._has_changed = False
+
+    def mark_changed(self):
+        # Mark this dialogue has having been changed
+        self._has_changed = True
+
+    def _confirmDiscardingUnsavedChanges(self) -> bool:
+        # If we don't have unsaved changes, assume the user confirms
+        if not self._has_changed:
+            return True
+        # Confirm w/ the user if they want to discard the unsaved changes
+        msg = qt.QMessageBox()
+        msg.setWindowTitle(_("Unsaved Changes"))
+        msg.setText(
+            _(
+                "You have unsaved changes, which will be lost if you close this prompt. "
+                "Are you sure?"
+            )
+        )
+        msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
+        choice = msg.exec()
+        # Return true only if the user confirms they want these resources discarded
+        return choice == qt.QMessageBox.Yes
+
+    def closeEvent(self, event: qt.QCloseEvent = None):
+        # Only proceed with closing if the user confirms they want to
+        if self._confirmDiscardingUnsavedChanges():
+            super().closeEvent(event)
+        else:
+            event.ignore()
+
+    @qt.Slot()
+    def reject(self):
+        # Only continue with the "rejection" if the user confirms it
+        if self._confirmDiscardingUnsavedChanges():
+            SmartClosingDialogue.reject(self)
+
+
 ## CSV-Backed Table Widget ##
 class CSVBackedTableModel(qt.QAbstractTableModel):
     def __init__(self, csv_path: Optional[Path], editable: bool = True, parent: qt.QObject = None):
@@ -781,5 +866,3 @@ class CARTPathLineEdit(ctk.ctkPathLineEdit):
 
     def setPlaceholderText(self, new_text: str):
         self._lineEdit.setPlaceholderText(new_text)
-
-
