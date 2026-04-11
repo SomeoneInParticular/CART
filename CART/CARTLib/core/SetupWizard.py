@@ -151,9 +151,9 @@ class JobSetupWizard(qt.QWizard):
             self.config = config
 
         # Workarounds for fields not playing nicely w/ CTK widgets
-        self._taskPage = _TaskDefinitionPage(self, taken_names=taken_names)
-        self._dataPage = _DataSelectionPage(self)
-        self._settingsPage = _TaskSettingsPage(self)
+        self._taskPage = _TaskDefinitionPage(self.config, taken_names)
+        self._dataPage = _DataSelectionPage(self.config)
+        self._settingsPage = _TaskSettingsPage(self.config)
 
         # self._dataPage = _DataWizardPage(self, taken_names=taken_names)
         # self._taskPage = _TaskWizardPage(self)
@@ -168,25 +168,8 @@ class JobSetupWizard(qt.QWizard):
         self.addPage(self._settingsPage)
         self.addPage(self.conclusionPage())
 
-        # If we had a starting config, initialize our fields to match it
-        if config is not None:
-            self._initFields()
-
     def _initFields(self):
         # TODO: Remove these, have the pages directly modify the config
-        self.job_name = self.config.name
-        data_path = self.config.data_path
-        self.data_path = data_path if data_path else ""
-        output_path = self.config.output_path
-        self.output_path = output_path if output_path else ""
-        self.cohort_path = self.config.cohort_path
-
-        # Hold out the backing config temporarily to avoid issues
-        # TODO: Fix this jank
-        backing_dict = self.config.backing_dict.copy()
-        self.selected_task = self.config.task
-        self.config.backing_dict = backing_dict
-
         # Initialize the selected task's GUI
         task_type = CART_TASK_REGISTRY.get(self.config.task)
         self._settingsPage.init_task_gui(task_type)
@@ -309,14 +292,6 @@ class JobSetupWizard(qt.QWizard):
         self._settingsPage.change_task_type(new_type)
 
     def save_config(self, logic: "CARTLogic") -> JobProfileConfig:
-        # Generate the new config and immediately save it
-        # TODO: Have each page update the config instance directly as it changes
-        self.config.name = self.job_name
-        self.config.data_path = self.data_path
-        self.config.output_path = self.output_path
-        self.config.task = self.selected_task
-        self.config.cohort_path = self.cohort_path
-
         # If the job's name has changed, purge the prior config entry
         if self._prior_name != self.config.name:
             logic.delete_job_config(self._prior_name)
@@ -389,10 +364,16 @@ class _ProfileWizardPage(qt.QWizardPage):
 
 
 class _TaskDefinitionPage(qt.QWizardPage):
-    def __init__(self, parent: JobSetupWizard = None, taken_names=Iterable[str]):
+
+    def __init__(
+        self,
+        config: JobProfileConfig,
+        taken_names: Iterable[str],
+        parent: JobSetupWizard = None,
+    ):
         super().__init__(parent)
 
-        # Basic Attributes
+        ## Basic Attributes ##
         self.setTitle(_("Name and Task"))
         layout = qt.QFormLayout(self)
 
@@ -408,7 +389,7 @@ class _TaskDefinitionPage(qt.QWizardPage):
         instructionLabel.setWordWrap(True)
         layout.addRow(instructionLabel)
 
-        # Job name
+        ## Job name ##
         jobNameLabel = qt.QLabel(_("Job Name:"))
         jobNameEntry = qt.QLineEdit()
         jobNameTooltip = _(
@@ -423,8 +404,12 @@ class _TaskDefinitionPage(qt.QWizardPage):
             )
         )
         jobNameLabel.setBuddy(jobNameEntry)
-        self.jobNameEntry = jobNameEntry
         layout.addRow(jobNameLabel, jobNameEntry)
+
+        # Set the job name to the current config's value (if any)
+        job_name = config.name
+        if job_name is not None:
+            jobNameEntry.setText(job_name)
 
         # Highlight the text box in red if the name is already taken
         default_style = jobNameEntry.styleSheet
@@ -433,7 +418,10 @@ class _TaskDefinitionPage(qt.QWizardPage):
 
         @qt.Slot(str)
         def onJobNameChanged(new_txt: str):
+            # Update the backing config to use the new name
+            config.name = new_txt
 
+            # Update the formatting of the name to indicate an error if present
             if new_txt in taken_names:
                 jobNameEntry.setStyleSheet(error_style)
                 jobNameEntry.setToolTip(duplicateJobToolTip)
@@ -441,11 +429,11 @@ class _TaskDefinitionPage(qt.QWizardPage):
                 jobNameEntry.setStyleSheet(default_style)
                 jobNameEntry.setToolTip(jobNameTooltip)
 
+            # Emit the "completion changed" signal
             self.completeChanged()
-
         jobNameEntry.textChanged.connect(onJobNameChanged)
 
-        # Task selection
+        ## Task selection ##
         taskSelectionLabel = qt.QLabel(_("Task: "))
         taskSelectionWidget = qt.QComboBox(None)
         taskSelectionToolTip = _(
@@ -457,27 +445,36 @@ class _TaskDefinitionPage(qt.QWizardPage):
         taskSelectionWidget.addItems(list(CART_TASK_REGISTRY.keys()))
         # This doesn't work; keeping it here in case Slicer ever fixes this bug
         taskSelectionWidget.placeholderText = _("[None Selected]")
-        taskSelectionWidget.setCurrentIndex(-1)
         taskSelectionLabel.setBuddy(taskSelectionWidget)
         layout.addRow(taskSelectionLabel, taskSelectionWidget)
-        self.taskSelectionWidget = taskSelectionWidget
 
-        # Task description
+        # Set the task's value to match our config's (if any)
+        task_id = config.task
+        if task_id is not None:
+            taskSelectionWidget.setCurrentText(task_id)
+        else:
+            taskSelectionWidget.setCurrentIndex(-1)
+
+        ## Task description ##
         taskDescriptionWidget = qt.QTextBrowser(None)
         taskDescriptionWidget.setText(
             _("Details about your selected task will appear here.")
         )
         taskDescriptionWidget.setOpenExternalLinks(True)
+
         # Make it fill out all available space
         taskDescriptionWidget.setSizePolicy(
             qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding
         )
+
         # Add a border around it to visually distinguish it
         taskDescriptionWidget.setFrameShape(qt.QFrame.Panel)
         taskDescriptionWidget.setFrameShadow(qt.QFrame.Sunken)
         taskDescriptionWidget.setLineWidth(3)
+
         # Align text to the upper-left
         taskDescriptionWidget.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignTop)
+
         # Make it read-only
         taskDescriptionWidget.setReadOnly(True)
 
@@ -486,6 +483,7 @@ class _TaskDefinitionPage(qt.QWizardPage):
         def onSelectedTaskChanged(new_task: str):
             # Update the task description to inform the user
             task = CART_TASK_REGISTRY.get(new_task)
+            # If no task was found, display error text and set the job's task to None (null)
             if task is None:
                 error_text = _(
                     '<span style=" font-size:8pt; font-weight:600; color:#ff0000;" >'
@@ -494,8 +492,11 @@ class _TaskDefinitionPage(qt.QWizardPage):
                     "and that it can be accessed with Slicer's current permission level!"
                     "</span>"
                 )
+                config.task = None
                 taskDescriptionWidget.setText(error_text)
+            # Otherwise, update the task as expected
             else:
+                config.task = new_task
                 taskDescriptionWidget.setMarkdown(task.description())
 
             # Notify our wizard to run the corresponding changes downwind
@@ -503,11 +504,20 @@ class _TaskDefinitionPage(qt.QWizardPage):
 
             # Signal that the completion state may have changed
             self.completeChanged()
-
         taskSelectionWidget.currentTextChanged.connect(onSelectedTaskChanged)
+
+        # Set the initial description to match the selected task (if any)
+        if task_id:
+            task = CART_TASK_REGISTRY.get(task_id)
+            if task is not None:
+                taskDescriptionWidget.setMarkdown(task.description())
 
         # Add it to the layout
         layout.addRow(taskDescriptionWidget)
+
+        ## Tracked Widgets ##
+        self.jobNameEntry = jobNameEntry
+        self.taskSelectionWidget = taskSelectionWidget
 
     @property
     def job_name(self) -> str:
@@ -522,10 +532,8 @@ class _TaskDefinitionPage(qt.QWizardPage):
     def selected_task(self) -> Optional[str]:
         # noinspection PyTypeChecker
         task_name: str = self.taskSelectionWidget.currentText
-        if task_name is None:
-            return None
         # Confirm this is a valid task before returning the result
-        task_class = CART_TASK_REGISTRY.get(task_name, None)
+        task_class = CART_TASK_REGISTRY.get(task_name)
         if task_class is None:
             return None
         return task_name
@@ -536,8 +544,7 @@ class _TaskDefinitionPage(qt.QWizardPage):
         if task_class is None:
             self.taskSelectionWidget.setCurrentIndex(-1)
         else:
-            idx = self.taskSelectionWidget.findText(new_task)
-            self.taskSelectionWidget.setCurrentIndex(idx)
+            self.taskSelectionWidget.setCurrentText(new_task)
 
     def isComplete(self):
         # If we're missing a job name, said name was already taken,
@@ -552,14 +559,18 @@ class _TaskDefinitionPage(qt.QWizardPage):
 
 
 class _DataSelectionPage(qt.QWizardPage):
-    def __init__(self, parent=None):
+    def __init__(
+        self,
+        config: JobProfileConfig,
+        parent: JobSetupWizard = None
+    ):
         super().__init__(parent)
 
-        # Basic Attributes
+        ## Basic Attributes ##
         self.setTitle(_("Data Selection"))
         layout = qt.QFormLayout(self)
 
-        # Instruction text
+        ## Instruction text ##
         instructionText = _(
             "Please define the directory containing the files to use (the “Input Path”), "
             "where you would like the results saved (the “Output Path”), "
@@ -572,8 +583,8 @@ class _DataSelectionPage(qt.QWizardPage):
         instructionLabel.setWordWrap(True)
         layout.addRow(instructionLabel)
 
-        # Data path
-        dataPathLabel = qt.QLabel(_("Input Path:"))
+        ## Data Path ##
+        dataPathLabel = qt.QLabel(_("Data Path:"))
         dataPathEntry: CARTPathLineEdit = CARTPathLineEdit()
         dataPathToolTip = _(
             "The path given here will be treated as the 'source' path when CART is looking for files."
@@ -588,7 +599,12 @@ class _DataSelectionPage(qt.QWizardPage):
         self._dataPathEntry = dataPathEntry
         layout.addRow(dataPathLabel, dataPathEntry)
 
-        # Output path
+        # Initialize ourselves to match the config
+        data_path = config.data_path
+        if data_path is not None:
+            dataPathEntry.currentPath = str(data_path)
+
+        ## Output Path ##
         outputPathLabel = qt.QLabel(_("Output Path:"))
         outputPathEntry: CARTPathLineEdit = CARTPathLineEdit()
         outputPathToolTip = _(
@@ -598,14 +614,19 @@ class _DataSelectionPage(qt.QWizardPage):
         outputPathLabel.setToolTip(outputPathToolTip)
         outputPathEntry.setToolTip(outputPathToolTip)
         outputPathEntry.setPlaceholderText(
-            _("Where the saved results/edits from your task should be saved.")
+            _("Where the saved results/edits from your task should be placed.")
         )
         outputPathEntry.filters = ctk.ctkPathLineEdit.Dirs
         outputPathLabel.setBuddy(outputPathEntry)
         self._outputPathEntry = outputPathEntry
         layout.addRow(outputPathLabel, outputPathEntry)
 
-        # Cohort file
+        # Update ourselves to match the config
+        out_path = config.output_path
+        if out_path is not None:
+            outputPathEntry.currentPath = str(out_path)
+
+        ## Cohort File ##
         cohortFileLabel = qt.QLabel(_("Cohort File:"))
         cohortFileSelector: CARTPathLineEdit = CARTPathLineEdit()
         cohortFileToolTip = _(
@@ -625,7 +646,12 @@ class _DataSelectionPage(qt.QWizardPage):
         self._cohortFileSelector = cohortFileSelector
         layout.addRow(cohortFileLabel, cohortFileSelector)
 
-        # Cohort create/edit button panel
+        # Update ourselves to match the config
+        cohort_file = config.cohort_path
+        if cohort_file is not None:
+            cohortFileSelector.currentPath = str(cohort_file)
+
+        ## Cohort Button Panel ##
         buttonLayout = qt.QHBoxLayout()
 
         # Button to create the selected cohort file
@@ -636,6 +662,12 @@ class _DataSelectionPage(qt.QWizardPage):
                 "Will reference the contents of your input directory to do so, whenever possible."
             )
         )
+
+        def shouldEnableCreate():
+            return config.data_path is not None and config.data_path.is_dir()
+
+        createNewButton.setEnabled(shouldEnableCreate())
+
         editCohortButton = qt.QPushButton(_("Edit Cohort File"))
         editCohortButton.setToolTip(
             _(
@@ -643,36 +675,65 @@ class _DataSelectionPage(qt.QWizardPage):
                 "Changes are not saved until you explicitly request them."
             )
         )
+
+        def shouldEnabledEdit():
+            return shouldEnableCreate() and config.cohort_path is not None
+        editCohortButton.setEnabled(shouldEnabledEdit())
+
+        # User prompt connections
+        createNewButton.clicked.connect(self.createNewCohort)
+        editCohortButton.clicked.connect(self.editCohort)
+
         buttonLayout.addWidget(createNewButton)
         buttonLayout.addWidget(editCohortButton)
         layout.addRow(buttonLayout)
 
-        # Cohort preview widget; it's a preview, so disable editing
-        cohortPreviewWidget = CohortTableWidget.from_path(None, editable=False)
+        ## Cohort Preview ##
+        cohortPreviewWidget = CohortTableWidget.from_path(
+            config.cohort_path,
+            config.data_path,
+            # It's a preview, so disable editing
+            editable=False
+        )
+
+        # Give it a distinct frame
         cohortPreviewWidget.setFrameShape(qt.QFrame.Panel)
         cohortPreviewWidget.setFrameShadow(qt.QFrame.Sunken)
         cohortPreviewWidget.setLineWidth(3)
+
+        # Add it to the layout and track it
         self._cohortPreviewWidget = cohortPreviewWidget
         layout.addRow(cohortPreviewWidget)
 
-        # Connections
+        # Update its reference task, if the provided config already had one
+        if config.task:
+            task_ref = CART_TASK_REGISTRY.get(config.task)
+            if task_ref is not None:
+                self.change_preview_task(task_ref)
+
+        ## Connections ##
         @qt.Slot(str)
         def onDataPathChanged(new_txt: str):
-            # Enable the "create" button if there is now text
-            createNewButton.setEnabled(new_txt != "" and Path(new_txt).is_dir())
+            # Enable the "create" button if our conditions are met now
+            createNewButton.setEnabled(shouldEnableCreate())
+            # Update the data path to match our new value
+            config.data_path = Path(new_txt)
             # Denote that the completion state has likely changed
             self.completeChanged()
         dataPathEntry.textChanged.connect(onDataPathChanged)
 
-        outputPathEntry.textChanged.connect(lambda: self.completeChanged())
+        @qt.Slot(str)
+        def onOutputPathChanged(new_text: str):
+            config.output_path = Path(new_text)
+            self.completeChanged()
+        outputPathEntry.textChanged.connect(onOutputPathChanged)
 
         @qt.Slot(str)
         def onCohortPathChanged(new_txt: str):
-            text_is_valid = new_txt != ""
             # Enable the "edit" button if there is now text
-            editCohortButton.setEnabled(text_is_valid)
-            # Preview the new cohort file, if it exists
-            if text_is_valid:
+            editCohortButton.setEnabled(shouldEnabledEdit())
+            # Preview the provided cohort file, if it exists
+            if new_txt != "":
                 cohortPreviewWidget.backing_csv = Path(new_txt)
             else:
                 cohortPreviewWidget.backing_csv = None
@@ -680,13 +741,6 @@ class _DataSelectionPage(qt.QWizardPage):
             self.completeChanged()
 
         cohortFileSelector.textChanged.connect(onCohortPathChanged)
-
-        createNewButton.clicked.connect(self.createNewCohort)
-        editCohortButton.clicked.connect(self.editCohort)
-
-        # Sync and end
-        onDataPathChanged("")
-        onCohortPathChanged("")
 
     ## Properties ##
     @property
@@ -789,11 +843,11 @@ class _DataSelectionPage(qt.QWizardPage):
 
 
 class _TaskSettingsPage(qt.QWizardPage):
-    def __init__(self, parent: JobSetupWizard = None, ):
+    def __init__(self, config: JobProfileConfig, parent: JobSetupWizard = None):
         super().__init__(parent)
 
         # Track the bound config for later
-        self._bound_config: JobProfileConfig = parent.config
+        self._bound_config: JobProfileConfig = config
 
         # Try to initialize the task-specific config elements immediately
         task_label = self._bound_config.task
