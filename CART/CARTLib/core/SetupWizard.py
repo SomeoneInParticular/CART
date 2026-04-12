@@ -297,6 +297,34 @@ class JobSetupWizard(qt.QWizard):
         self._dataPage.changePreviewTask(new_type)
         self._settingsPage.initTaskGUI()
 
+    def confirmDiscardChanges(self):
+        # If no changes have been made, allow closing as-is
+        if not self.config.has_changed:
+            return True
+
+        # Otherwise, confirm the user wants to discard changes made before doing so
+        response = qt.QMessageBox.warning(
+            self,
+            _("Unsaved Changes"),
+            _("Closing the wizard now would discard changes made to the job. Are you sure?"),
+            qt.QMessageBox.Yes | qt.QMessageBox.No
+        )
+        # If the user confirms they want to close, proceed
+        return response == qt.QMessageBox.Yes
+
+    @qt.Slot()
+    def reject(self):
+        # Only reject if the user confirms discarding unsaved changes
+        if self.confirmDiscardChanges():
+            qt.QWizard.reject(self)
+
+    # noinspection PyMethodOverriding
+    def closeEvent(self, event: qt.QCloseEvent = None):
+        if self.confirmDiscardChanges():
+            event.accept()
+        else:
+            event.ignore()
+
     def save_config(self, logic: "CARTLogic") -> JobProfileConfig:
         # If the job's name has changed, purge the prior config entry
         if self._prior_name != self.config.name:
