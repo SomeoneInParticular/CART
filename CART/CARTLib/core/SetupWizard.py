@@ -150,14 +150,17 @@ class JobSetupWizard(qt.QWizard):
             taken_names = [n for n in taken_names if n != config.name]
             self.config = config
 
+        # Generate and track the task-specific config, if there is one
+        self.task_config: Optional[DictBackedConfig] = None
+        if self.config.task is not None:
+            task_type = CART_TASK_REGISTRY.get(self.config.task)
+            if task_type is not None:
+                self.task_config = task_type.init_config(config)
+
         # Workarounds for fields not playing nicely w/ CTK widgets
         self._taskPage = _TaskDefinitionPage(self.config, taken_names)
         self._dataPage = _DataSelectionPage(self.config)
-        self._settingsPage = _TaskSettingsPage(self.config)
-
-        # self._dataPage = _DataWizardPage(self, taken_names=taken_names)
-        # self._taskPage = _TaskWizardPage(self)
-        # self._cohortPage = _CohortWizardPage(self)
+        self._settingsPage = _TaskSettingsPage()
 
         # Add initial pages
         if config is None:
@@ -168,11 +171,13 @@ class JobSetupWizard(qt.QWizard):
         self.addPage(self._settingsPage)
         self.addPage(self.conclusionPage())
 
+        # Try to initialize the task page's GUI immediately
+        self._settingsPage.initTaskGUI()
+
     ## Page Management ##
-    @staticmethod
-    def introPage():
+    def introPage(self):
         # Basic Attributes
-        page = qt.QWizardPage()
+        page = qt.QWizardPage(self)
         page.setTitle(_("Introduction"))
         layout = qt.QVBoxLayout()
         page.setLayout(layout)
@@ -282,8 +287,15 @@ class JobSetupWizard(qt.QWizard):
                 f"no such task has been registered with CART."
             )
 
-        self._dataPage.change_preview_task(new_type)
-        self._settingsPage.change_task_type(new_type)
+        # Purge config options added by the prior task (if any)
+        self.config.purge_child_configs()
+
+        # Create a new task config instance for our own reference
+        self.task_config = new_type.init_config(self.config)
+
+        # Update the rest of the Wizard to reflect the new task
+        self._dataPage.changePreviewTask(new_type)
+        self._settingsPage.initTaskGUI()
 
     def save_config(self, logic: "CARTLogic") -> JobProfileConfig:
         # If the job's name has changed, purge the prior config entry
@@ -703,7 +715,7 @@ class _DataSelectionPage(qt.QWizardPage):
         if config.task:
             task_ref = CART_TASK_REGISTRY.get(config.task)
             if task_ref is not None:
-                self.change_preview_task(task_ref)
+                self.changePreviewTask(task_ref)
 
         ## Connections ##
         @qt.Slot(str)
@@ -777,7 +789,7 @@ class _DataSelectionPage(qt.QWizardPage):
         self._cohortFileSelector.currentPath = path_str
 
     ## Utilities ##
-    def change_preview_task(self, new_type: type[TaskBaseClass]):
+    def changePreviewTask(self, new_type: type[TaskBaseClass]):
         # Update the preview widget's reference task to use the new type
         self._cohortPreviewWidget.tableView.model().reference_task = new_type
 
@@ -837,24 +849,18 @@ class _DataSelectionPage(qt.QWizardPage):
 
 
 class _TaskSettingsPage(qt.QWizardPage):
-    def __init__(self, config: JobProfileConfig, parent: JobSetupWizard = None):
+    def __init__(self, parent: JobSetupWizard = None):
         super().__init__(parent)
 
-        # Track the bound config for later
-        self._bound_config: JobProfileConfig = config
-
-        # Try to initialize the task-specific config elements immediately
-        task_label = self._bound_config.task
-        if task_label is not None:
-            task_type = CART_TASK_REGISTRY.get(task_label, None)
-            if task_type is not None:
-                self.init_task_gui(task_type)
+        # Initialize w/ our default layout
+        self.resetToDefaultLayout()
 
     def resetToDefaultLayout(self):
         # Assign the old layout to a temporary widget to re-parent it
-        tmp = qt.QWidget(None)
-        tmp.setLayout(self.layout())
-        del tmp
+        if self.layout():
+            tmp = qt.QWidget(None)
+            tmp.setLayout(self.layout())
+            del tmp
 
         # Generate the placehold layout
         defaultLayout = qt.QFormLayout(self)
@@ -870,20 +876,13 @@ class _TaskSettingsPage(qt.QWizardPage):
         self.setTitle("No Task Configurations Found!")
         self.setLayout(defaultLayout)
 
-    def change_task_type(self, new_type: type[TaskBaseClass]):
-        # Purge all non-core configuration options from the job profile
-        self._bound_config.purge_child_configs()
-
-        # Re-initialize the task-specific GUI for this new task type
-        self.init_task_gui(new_type)
-
-    def init_task_gui(self, task_type: type[TaskBaseClass]):
+    def initTaskGUI(self):
         """
         Update the task-specific GUI layout to use a given task's layout
         If none is available, use the default instead.
         """
-        # Make sure there's actually a config to manage
-        task_config = task_type.init_config(self._bound_config)
+        # Check if there's a config to generate a GUI for
+        task_config = self.wizard().task_config
         if task_config is None:
             self.resetToDefaultLayout()
             return

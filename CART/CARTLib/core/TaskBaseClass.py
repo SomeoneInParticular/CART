@@ -152,13 +152,14 @@ class TaskBaseClass(ABC, Generic[D]):
         )
 
     @classmethod
-    def init_config(cls, job_config: JobProfileConfig) -> DictBackedConfig:
+    def init_config(cls, job_config: JobProfileConfig) -> Optional[DictBackedConfig]:
         """
-        Initialize a config instance to manage configurable settings for a Task
-        instance. If None is returned, CART will not properly clear any changes
-        you make to the Job profile if/when the user changes a Job's task.
-        Likewise, if the returned config instance does not provide a QT layout
-        with its "
+        Initialize a config instance to manage configurable settings for a Task.
+
+        If this returns None, or the resulting config does not re-implement the
+        'generateGUILayout' function, the user will not be presented with
+        any task-specific configuration options during job creation and/or
+        cohort editing.
         """
         return None
 
