@@ -168,12 +168,6 @@ class JobSetupWizard(qt.QWizard):
         self.addPage(self._settingsPage)
         self.addPage(self.conclusionPage())
 
-    def _initFields(self):
-        # TODO: Remove these, have the pages directly modify the config
-        # Initialize the selected task's GUI
-        task_type = CART_TASK_REGISTRY.get(self.config.task)
-        self._settingsPage.init_task_gui(task_type)
-
     ## Page Management ##
     @staticmethod
     def introPage():
