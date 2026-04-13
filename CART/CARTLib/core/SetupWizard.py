@@ -777,10 +777,9 @@ class _DataSelectionPage(qt.QWizardPage):
         layout.addRow(cohortPreviewWidget)
 
         # Update its reference task, if the provided config already had one
-        if config.task:
-            task_ref = CART_TASK_REGISTRY.get(config.task)
-            if task_ref is not None:
-                self.changePreviewTask(task_ref)
+        task_ref = CART_TASK_REGISTRY.get(config.task)
+        if task_ref is not None:
+            self.changePreviewTask(config.task)
 
         ## Connections ##
         @qt.Slot(str)
