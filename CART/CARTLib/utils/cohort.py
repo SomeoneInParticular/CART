@@ -57,9 +57,27 @@ class CohortModel(CSVBackedTableModel):
         use_sidecar: bool = True,
         parent: qt.QObject = None
     ):
+        """
+        Constructor
+
+        :param csv_path: The file this model should save to (and load from, if it already exists).
+        :param data_path: Where this cohort should look when trying to find resource files.
+        :param editable: Whether this cohort can be edited by its views.
+        :param reference_task: A task type this cohort should reference when generating "pretty" columns.
+        :param use_sidecar: Whether to generator (and reference, if it already exists) a JSON sidecar file.
+            If false, the cohort's resource and case maps will NOT be preserved across loads!
+        :param parent: The parent widget for QT hierarchy management.
+        """
         # Disable editing explicitly if no data path is provided
         if data_path is None:
             editable = False
+
+        # Track the data path and reference task for later
+        self.data_path = data_path
+        self.reference_task = reference_task
+
+        # Track whether to user a sidecar before initializing (which will attempt to load it)
+        self.use_sidecar = use_sidecar
 
         super().__init__(csv_path, editable, parent)
 
@@ -68,21 +86,8 @@ class CohortModel(CSVBackedTableModel):
             if not self._move_uid_to_index():
                 raise ValueError("No UID column found, cannot set up Cohort model!")
 
-        # Track the data path and reference task for later
-        self.data_path = data_path
-        self.reference_task = reference_task
-
         # Track whenever anything about this model changes!
         self.connectChangeEvents()
-
-        # Load (or initialize) our sidecar data
-        self.use_sidecar = use_sidecar
-        if use_sidecar:
-            self._load_sidecar()
-        else:
-            # If no sidecar is to be used, start again from scratch
-            self._case_map: CaseMap = dict()
-            self._resource_map: FilterMap = dict()
 
         # Set ourselves to "not changed"
         self.has_changed = False
@@ -427,8 +432,9 @@ class CohortModel(CSVBackedTableModel):
         if self.has_changed:
             # Save the CSV (super-class delegate)
             super().save()
-            # Save the sidecar as well
-            self._save_sidecar()
+            # Save the sidecar as well, if requested
+            if self.use_sidecar:
+                self._save_sidecar()
             # Mark ourselves as unchanged
             self.has_changed = False
 
@@ -448,8 +454,9 @@ class CohortModel(CSVBackedTableModel):
     def load(self):
         # Load the CSV contents
         super().load()
-        # Load the sidecar contents as well
-        self._load_sidecar()
+        # Load the sidecar contents as well if requested
+        if self.use_sidecar:
+            self._load_sidecar()
         # Mark ourselves as unchanged
         self.has_changed = False
 
@@ -644,7 +651,15 @@ class CohortTableView(qt.QTableView):
     Generally, however, you should use CohortTableWidget (below) instead.
     """
 
-    def __init__(self, parent: qt.QObject = None):
+    def __init__(
+        self,
+        parent: qt.QObject = None
+    ):
+        """
+        Constructor
+
+        :param parent: The parent widget for QT hierarchy management.
+        """
         super().__init__(parent)
 
         # Change the layout to be more sensible
@@ -707,7 +722,17 @@ class CohortTableWidget(CSVBackedTableWidget):
     CohortTableView instead.
     """
 
-    def __init__(self, model: CohortModel, parent: qt.QWidget = None):
+    def __init__(
+        self,
+        model: CohortModel,
+        parent: qt.QWidget = None,
+    ):
+        """
+        Constructor
+
+        :param model: The cohort model to view within this widget.
+        :param parent: The parent widget for QT hierarchy management.
+        """
         super().__init__(model, parent)
 
         # Swap to our (contex-menu providing) table view class.
@@ -1085,7 +1110,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         if not cohort.is_editable():
             raise ValueError("Cannot edit a un-editable Cohort!")
 
-        # Backing cohort manager
+        # Backing cohort model
         self._cohort = cohort
 
         # Track the previous resource's details (if any)
