@@ -743,7 +743,7 @@ class _DataSelectionPage(qt.QWizardPage):
         editCohortButton.setToolTip(
             _(
                 "Edit the selected selected cohort file. "
-                "Changes are not saved until you explicitly request them."
+                "Changes are not saved to file you confirm them."
             )
         )
 
@@ -891,16 +891,24 @@ class _DataSelectionPage(qt.QWizardPage):
         selected_task = CART_TASK_REGISTRY.get(task_name)
         if selected_task is None:
             raise ValueError(f"Cannot load task {task_name}, has not been registered!")
-        dialog = CohortEditorDialog.from_paths(
-            self.cohort_path, self.data_path, reference_task=selected_task
-        )
-        # Refresh the preview if the dialogue succeeded in changing something
-        if dialog.exec():
-            self._cohortPreviewWidget.refresh()
-            if self._cohortPreviewWidget.currentWidget() == self._cohortPreviewWidget.tableView:
-                self._cohortPreviewWidget.model.load()
-        # Disconnect it from everything, no matter what the user did.
-        dialog.disconnectAll()
+        # Re-use the same backing cohort model
+        cohort_model: CohortModel = self._cohortPreviewWidget.model
+        # Temporarily make the model editable (if it wasn't already)
+        with cohort_model.temporarily_editable():
+            try:
+                # Generate our editor dialogue using the model
+                dialog = CohortEditorDialog(
+                    cohort_model,
+                    self.wizard().task_config,
+                    self
+                )
+                # If the user rejects the changes, or backs out, restore the model's state from file
+                if not dialog.exec():
+                    cohort_model.load()
+                    self._cohortPreviewWidget.refresh()
+            finally:
+                # Disconnect the dialogue from everything, no matter what the user did.
+                dialog.disconnectAll()
 
     def isComplete(self):
         to_check = [self.data_path, self.output_path, self.cohort_path]

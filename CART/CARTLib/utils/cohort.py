@@ -1,7 +1,9 @@
+import copy
 import csv
 import json
 import logging
 import os
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Protocol, TYPE_CHECKING
 
@@ -12,6 +14,7 @@ import ctk
 import qt
 from slicer.i18n import tr as _
 
+from .config import DictBackedConfig
 from .widgets import (
     CSVBackedTableModel,
     CSVBackedTableWidget,
@@ -495,6 +498,15 @@ class CohortModel(CSVBackedTableModel):
         self._resource_map = {k: v for k, v in filter_data.items()}
 
     ## Utilities ##
+    @contextmanager
+    def temporarily_editable(self):
+        if self.is_editable():
+            yield
+        else:
+            self.set_editable(True)
+            yield
+            self.set_editable(False)
+
     def csv_to_original(self, csv_label: str) -> Optional[str]:
         # Return the "original" name (provided by the user) for this resource
         resource = self.resource_map.get(csv_label)
@@ -713,7 +725,8 @@ class CohortTableView(qt.QTableView):
     def __del__(self):
         # Disconnect change events; PythonQT isn't smart enough to clean up
         #  self-referential actions it seems.
-        self.model().disconnectChangeEvents()
+        if self.model() is not None:
+            self.model().disconnectChangeEvents()
 
 
 class CohortTableWidget(CSVBackedTableWidget):
@@ -894,11 +907,11 @@ class CohortEditorDialog(qt.QDialog):
         cohort: CohortModel,
         parent: qt.QObject = None,
     ):
-        super().__init__(parent)
-
         # If the cohort is not editable, reject attempts to edit it
         if not cohort.is_editable():
             raise ValueError("Cannot edit a un-editable Cohort!")
+
+        super().__init__(parent)
 
         # QT is astonishingly shit at handling itself, so we need to track
         #  connections to disconnect later
@@ -1063,25 +1076,13 @@ class CohortEditorDialog(qt.QDialog):
             reply = qt.QMessageBox.question(
                 self,
                 "Are you sure?",
-                "You have unsaved changes. Do you want to close anyways?",
+                "If you close now, any changes made will be lost. Do you want to proceed?",
                 qt.QMessageBox.Yes | qt.QMessageBox.No,
                 qt.QMessageBox.No,
             )
             return reply == qt.QMessageBox.Yes
         # Otherwise always proceed (as there's nothing to be lost)
         return True
-
-    @classmethod
-    def from_paths(
-        cls,
-        csv_path: Path,
-        data_path: Path,
-        editable: bool = True,
-        reference_task: "type[TaskBaseClass]" = None,
-    ):
-        # Generate the cohort manager using the provided paths
-        cohort = CohortModel(csv_path, data_path, editable, reference_task)
-        return cls(cohort)
 
     def disconnectAll(self):
         for v in self._to_disconnect:
