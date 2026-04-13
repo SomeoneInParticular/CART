@@ -125,12 +125,17 @@ class CARTSetupWizard(qt.QWizard):
 
 class JobSetupWizard(qt.QWizard):
     def __init__(
-        self, parent, taken_names: Iterable[str] = None, config: JobProfileConfig = None
+        self,
+        parent: qt.QWidget,
+        taken_names: Iterable[str] = None,
+        config: JobProfileConfig = None
     ):
         """
         Wizard for setting up a Job for use within CART.
 
-        :param parent: Parent QT Widget
+        :param parent: Parent QT Widget.
+        :param taken_names: Names which cannot be used by this job
+            (usually because they are used by other registered jobs).
         :param config: Reference job config to update. If none is provided,
             a new config instance will be made, and need to be saved.
         """
@@ -152,10 +157,9 @@ class JobSetupWizard(qt.QWizard):
 
         # Generate and track the task-specific config, if there is one
         self.task_config: Optional[DictBackedConfig] = None
-        if self.config.task is not None:
-            task_type = CART_TASK_REGISTRY.get(self.config.task)
-            if task_type is not None:
-                self.task_config = task_type.init_config(config)
+        task_type = CART_TASK_REGISTRY.get(self.config.task)
+        if task_type is not None:
+            self.task_config = task_type.init_config(config)
 
         # Workarounds for fields not playing nicely w/ CTK widgets
         self._taskPage = _TaskDefinitionPage(self.config, taken_names)
@@ -326,11 +330,17 @@ class JobSetupWizard(qt.QWizard):
             event.ignore()
 
     def save_config(self, logic: "CARTLogic") -> JobProfileConfig:
+        """
+        Save our currently managed config instances, using the CARTLogic
+        instance passed to us.
+        """
         # If the job's name has changed, purge the prior config entry
         if self._prior_name != self.config.name:
             logic.delete_job_config(self._prior_name)
 
-        # Save the new config to file
+        # Save our managed configuration file's changes
+        if self.task_config is not None:
+            self.task_config.save()
         self.config.save()
 
         # Register the new job
@@ -598,6 +608,12 @@ class _DataSelectionPage(qt.QWizardPage):
         config: JobProfileConfig,
         parent: JobSetupWizard = None
     ):
+        """
+        Constructor
+
+        :param config: The job profile config this page should reference.
+        :param parent: The parent widget for QT hierarchy management.
+        """
         super().__init__(parent)
 
         ## Basic Attributes ##
