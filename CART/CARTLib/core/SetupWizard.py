@@ -124,6 +124,10 @@ class CARTSetupWizard(qt.QWizard):
 
 
 class JobSetupWizard(qt.QWizard):
+
+    # Signal to emit when our task's configuration has been changed
+    taskConfigChanged = qt.Signal(str)
+
     def __init__(
         self,
         parent: qt.QWidget,
@@ -177,6 +181,13 @@ class JobSetupWizard(qt.QWizard):
 
         # Try to initialize the task page's GUI immediately
         self._settingsPage.initTaskGUI()
+
+        # Connect signals
+        self._taskPage.taskChanged.connect(self.onTaskChanged)
+        self.taskConfigChanged.connect(self._dataPage.changePreviewTask)
+        self.taskConfigChanged.connect(
+            lambda __: self._settingsPage.initTaskGUI()
+        )
 
     ## Page Management ##
     def introPage(self):
@@ -282,7 +293,8 @@ class JobSetupWizard(qt.QWizard):
         self._dataPage.cohort_path = new_path
 
     ## Utilities ##
-    def taskChanged(self, new_label: str):
+    @qt.Slot(str)
+    def onTaskChanged(self, new_label: str):
         # Confirm the new task type is properly registered with CART
         new_type = CART_TASK_REGISTRY.get(new_label, None)
         if not new_type:
@@ -297,9 +309,8 @@ class JobSetupWizard(qt.QWizard):
         # Create a new task config instance for our own reference
         self.task_config = new_type.init_config(self.config)
 
-        # Update the rest of the Wizard to reflect the new task
-        self._dataPage.changePreviewTask(new_type)
-        self._settingsPage.initTaskGUI()
+        # Emit the "job config changed" signal
+        self.taskConfigChanged(new_label)
 
     def confirmDiscardChanges(self):
         # If no changes have been made, allow closing as-is
@@ -320,11 +331,13 @@ class JobSetupWizard(qt.QWizard):
     def reject(self):
         # Only reject if the user confirms discarding unsaved changes
         if self.confirmDiscardChanges():
+            self.disconnectAll()
             qt.QWizard.reject(self)
 
     # noinspection PyMethodOverriding
     def closeEvent(self, event: qt.QCloseEvent = None):
         if self.confirmDiscardChanges():
+            self.disconnectAll()
             event.accept()
         else:
             event.ignore()
@@ -347,6 +360,11 @@ class JobSetupWizard(qt.QWizard):
         logic.register_job_config(self.config)
 
         return self.config
+
+    def disconnectAll(self):
+        # Disconnect all signals within this wizard
+        self.taskConfigChanged.disconnect()
+        self._taskPage.taskChanged.disconnect()
 
 
 ## Wizard Pages ##
@@ -408,6 +426,9 @@ class _ProfileWizardPage(qt.QWizardPage):
 
 
 class _TaskDefinitionPage(qt.QWizardPage):
+
+    # Signal, emitted when the select task changes
+    taskChanged = qt.Signal(str)
 
     def __init__(
         self,
@@ -543,8 +564,8 @@ class _TaskDefinitionPage(qt.QWizardPage):
                 config.task = new_task
                 taskDescriptionWidget.setMarkdown(task.description())
 
-            # Notify our wizard to run the corresponding changes downwind
-            self.wizard().taskChanged(new_task)
+            # Emit our taskChanged signal
+            self.taskChanged(new_task)
 
             # Signal that the completion state may have changed
             self.completeChanged()
@@ -833,7 +854,11 @@ class _DataSelectionPage(qt.QWizardPage):
         self._cohortFileSelector.currentPath = path_str
 
     ## Utilities ##
-    def changePreviewTask(self, new_type: type[TaskBaseClass]):
+    @qt.Slot(str)
+    def changePreviewTask(self, new_label: str):
+        # Get the corresponding type from CART's registry
+        new_type = CART_TASK_REGISTRY.get(new_label, None)
+
         # Update the preview widget's reference task to use the new type
         self._cohortPreviewWidget.tableView.model().reference_task = new_type
 
