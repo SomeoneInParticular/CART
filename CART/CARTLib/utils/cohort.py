@@ -893,6 +893,7 @@ class NewCohortDialog(qt.QDialog):
         )
 
 
+# TODO: Switch to SmartClosingDialog
 class CohortEditorDialog(qt.QDialog):
     """
     GUI Dialog for editing a given cohort file.
@@ -905,6 +906,7 @@ class CohortEditorDialog(qt.QDialog):
     def __init__(
         self,
         cohort: CohortModel,
+        config: DictBackedConfig,
         parent: qt.QObject = None,
     ):
         # If the cohort is not editable, reject attempts to edit it
@@ -919,6 +921,11 @@ class CohortEditorDialog(qt.QDialog):
 
         # Backing cohort manager
         self._cohort = cohort
+
+        # Track a parent-less copy of the config (parent-less to prevent changes propagating upwards)
+        self._original_config = config
+        self._task_config = copy.deepcopy(config)
+        self._task_config.parent_config = None
 
         # Initial setup
         self.setWindowTitle(_("Cohort Editor"))
@@ -951,6 +958,10 @@ class CohortEditorDialog(qt.QDialog):
             elif button_role == qt.QDialogButtonBox.AcceptRole:
                 # Only save changes to the cohort when confirmed!
                 self._cohort.save()
+                # Update our original config w/ any changes made to our modified config
+                self._original_config.backing_dict = self._task_config.backing_dict
+                self._original_config.has_changed = True
+                # Accept and close
                 self.accept()
             else:
                 raise ValueError("Pressed a button with an invalid role!")
@@ -1095,6 +1106,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         self,
         cohort: CohortModel,
         resource_name: str = None,
+        task_config: "Optional[DictBackedConfig]" = None,
         parent: qt.QObject = None,
     ):
         """
@@ -1103,13 +1115,17 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         :param cohort: The Cohort to apply the edits to
         :param resource_name: The name of the resource (within the cohort CSV) to edit.
             If None, will create a resource with the user specified name instead.
+        :param task_config: A (parent-less!) task config that the resource this dialog
+            is managing should reference and modify.
         :param parent: Parent widget, as required by QT.
         """
-        super().__init__(parent)
-
         # If the cohort is not editable, reject attempts to edit it
         if not cohort.is_editable():
             raise ValueError("Cannot edit a un-editable Cohort!")
+
+        # Initial setup
+        super().__init__(parent)
+        self.setSizePolicy(qt.QSizePolicy.Preferred, qt.QSizePolicy.Minimum)
 
         # Backing cohort model
         self._cohort = cohort
@@ -1119,6 +1135,9 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         self._prior_resource = None
         if resource_name is not None:
             self._prior_resource = cohort.resource_map.get(resource_name)
+
+        # Track the task config for later
+        self.task_config = task_config
 
         # Cached map of the resource types for this provided task
         duf = cohort.reference_task.getDataUnitFactory()
@@ -1190,6 +1209,12 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Field type selection GUI
         self._generate_field_type_gui(layout)
 
+        # Container widget to hold the resource-specific task GUI
+        self.taskConfigBox: qt.QWidget = qt.QWidget(self)
+        self.rebuild_task_config_gui()
+        self.resourceTypeSelector.currentIndexChanged.connect(self.rebuild_task_config_gui)
+        layout.addRow(self.taskConfigBox)
+
         # Ok/Cancel Buttons
         buttonBox = qt.QDialogButtonBox()
         buttonBox.setStandardButtons(
@@ -1207,8 +1232,12 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
                     self.accept()
             else:
                 raise ValueError("Pressed a button with an invalid role!")
-
         buttonBox.clicked.connect(onButtonClicked)
+
+        # Add it to the layout w/ a spacer to force it to the bottom
+        stretch = qt.QWidget(self)
+        stretch.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
+        layout.addWidget(stretch)
         layout.addWidget(buttonBox)
 
     def _generate_field_type_gui(self, layout: "qt.QFormLayout"):
@@ -1282,6 +1311,29 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
                     resourceTypeSelector.setCurrentText(prior_type.pretty_name)
         else:
             resourceTypeSelector.setCurrentIndex(-1)
+
+    def rebuild_task_config_gui(self):
+        # If we don't have a valid resource type, or no GUI exists for it, hide our config GUI
+        if (
+            self.resource_type is None
+            or (config_layout := self.resource_type.buildConfigGUI(self.task_config))
+            is None
+        ):
+            # Hide the widget
+            self.taskConfigBox.setVisible(False)
+        # Otherwise, replace the previous GUI layout with the corresponding one for this new resource
+        else:
+            # Make the configuration box visible and expand it, if it was not already
+            self.taskConfigBox.setVisible(True)
+
+            # Replace the layout in the dropdown w/ this new one
+            if self.taskConfigBox.layout() is not None:
+                tmp = qt.QWidget(None)
+                tmp.setLayout(self.taskConfigBox.layout())
+                del tmp
+
+            # Use our new layout in its place
+            self.taskConfigBox.setLayout(config_layout)
 
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed

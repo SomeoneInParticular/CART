@@ -3,10 +3,11 @@ from datetime import datetime
 import json
 from functools import singledispatch
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any, Optional, TYPE_CHECKING
 
 import numpy as np
 
+import qt
 import slicer
 import vtk
 from slicer.i18n import tr as _
@@ -14,6 +15,12 @@ from slicer.i18n import tr as _
 from CARTLib.core.DataUnitBase import DataUnitBase, ResourceType
 from CARTLib.utils.config import MasterProfileConfig
 from CARTLib.core.LayoutManagement import Orientation, LayoutHandler
+
+if TYPE_CHECKING:
+    # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
+    # isn't the same as PyQT5 itself), but it's a LOT better than constant
+    # cross-referencing
+    import PyQt5.Qt as qt
 
 
 ## LOADING ##
@@ -897,6 +904,13 @@ class VolumeResource(ResourceType):
     def is_type(cls, csv_label: str) -> bool:
         return "_volume" in csv_label
 
+    @classmethod
+    def buildConfigGUI(cls, task_config: "DictBackedConfig") -> "Optional[qt.QLayout]":
+        """
+        Required to be implemented for this class to act like a flyweight,
+        even though it doesn't do anything.
+        """
+        return None
 
 class SegmentationResource(ResourceType):
 
@@ -918,6 +932,18 @@ class SegmentationResource(ResourceType):
     def is_type(cls, csv_label: str) -> bool:
         return "_segmentation" in csv_label
 
+    @classmethod
+    def buildConfigGUI(cls, task_config: "DictBackedConfig") -> "Optional[qt.QLayout]":
+        """
+        Required to be implemented for this class to act like a flyweight,
+        even though it doesn't do anything.
+        """
+        # TODO: Actually implement this
+        layout = qt.QFormLayout(None)
+        label1 = qt.QLabel("Foo")
+        label2 = qt.QLabel("Bar")
+        layout.addRow(label1, label2)
+        return layout
 
 class MarkupResource(ResourceType):
 
@@ -941,6 +967,13 @@ class MarkupResource(ResourceType):
     def is_type(cls, csv_label: str) -> bool:
         return "_markup" in csv_label
 
+    @classmethod
+    def buildConfigGUI(cls, task_config: "DictBackedConfig") -> "Optional[qt.QLayout]":
+        """
+        Required to be implemented for this class to act like a flyweight,
+        even though it doesn't do anything.
+        """
+        return None
 
 ## "Standard" Data Unit ##
 class CARTStandardUnit(DataUnitBase):

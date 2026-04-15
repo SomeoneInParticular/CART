@@ -29,14 +29,14 @@ class DictBackedConfig(ABC):
     CONFIG_KEY = None
 
     def __init__(
-            self,
-            parent_config: Optional["DictBackedConfig"] = None,
-            config_key_override: Optional[str] = None
+        self,
+        parent_config: "Optional[DictBackedConfig]" = None,
+        config_key_override: Optional[str] = None
     ):
         # Track the parent config
-        self.parent_config: "DictBackedConfig" = parent_config
+        self.parent_config: "Optional[DictBackedConfig]" = parent_config
 
-        # If a config label was provided, use it instead of our classmethod
+        # If a config label was provided," use it instead of our classmethod
         if config_key_override:
             self.config_label = config_key_override
         else:
