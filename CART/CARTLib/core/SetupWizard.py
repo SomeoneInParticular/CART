@@ -784,10 +784,10 @@ class _DataSelectionPage(qt.QWizardPage):
         ## Connections ##
         @qt.Slot(str)
         def onDataPathChanged(new_txt: str):
-            # Enable the "create" button if our conditions are met now
-            createNewButton.setEnabled(shouldEnableCreate())
             # Update the data path to match our new value
             config.data_path = Path(new_txt)
+            # Enable the "create" button if our conditions are met now
+            createNewButton.setEnabled(shouldEnableCreate())
             # Denote that the completion state has likely changed
             self.completeChanged()
         dataPathEntry.textChanged.connect(onDataPathChanged)
@@ -800,13 +800,15 @@ class _DataSelectionPage(qt.QWizardPage):
 
         @qt.Slot(str)
         def onCohortPathChanged(new_txt: str):
-            # Enable the "edit" button if there is now text
-            editCohortButton.setEnabled(shouldEnabledEdit())
             # Preview the provided cohort file, if it exists
             if new_txt != "":
                 cohortPreviewWidget.backing_csv = Path(new_txt)
             else:
                 cohortPreviewWidget.backing_csv = None
+            # Track the new path for later
+            config.cohort_path = Path(new_txt)
+            # Enable the "edit" button if there is now text
+            editCohortButton.setEnabled(shouldEnabledEdit())
             # Mark that the completion state has likely changed
             self.completeChanged()
 
