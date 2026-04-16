@@ -1,5 +1,6 @@
 import json
 from abc import ABC, abstractmethod, ABCMeta
+from functools import cached_property
 from pathlib import Path
 import re
 from typing import Generic, Optional, TypeVar, Callable, TYPE_CHECKING
@@ -319,7 +320,7 @@ class ConfigDialog(qt.QDialog, ABC, Generic[DICT_CONFIG_TYPE], metaclass=_ABCQDi
         event.accept()
 
 
-## Backing Config Managers ##
+## Primary Config Managers ##
 class MasterProfileConfig(DictBackedConfig):
     ## Attributes ##
     AUTHOR_KEY = "author"
@@ -613,3 +614,38 @@ class JobProfileConfig(DictBackedConfig):
         self.file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.file, 'w') as fp:
             json.dump(self.backing_dict, fp, indent=2)
+
+
+## Utility Config managers ##
+class ResourceSpecificConfig(DictBackedConfig):
+    """
+    Configuration instance for managing resource-specific configuration options;
+    using this will help "separate" them from your task's more global configuration
+    settings.
+
+    If you use any of CART's default resource types, their configuration options are
+    stored within the dictionary managed by this config as well. See `data.ResourceType`
+    and its CART-provided subclasses for further details.
+    """
+    @classmethod
+    def default_config_label(cls) -> str:
+        return "resource_specific"
+
+    def drop_resource_config(self, resource_id: str) -> Optional[dict]:
+        """
+        Delete configuration options associated with the specified resource ID.
+
+        :return: The data dropped from the backing dict for reference.
+        """
+        return self.backing_dict.pop(resource_id, None)
+
+    def rename_resource(self, old_id: str, new_id: str) -> Optional[dict]:
+        """
+        Move the configuration options associated with one resource ID to another.
+
+        :return: The data moved, if any.
+        """
+        old_data = self.drop_resource_config(old_id)
+        if old_data is not None:
+            self.backing_dict[new_id] = old_data
+        return old_data

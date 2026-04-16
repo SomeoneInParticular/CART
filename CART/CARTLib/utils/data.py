@@ -13,8 +13,12 @@ import vtk
 from slicer.i18n import tr as _
 
 from CARTLib.core.DataUnitBase import DataUnitBase, ResourceType
-from CARTLib.utils.config import MasterProfileConfig, DictBackedConfig
 from CARTLib.core.LayoutManagement import Orientation, LayoutHandler
+from CARTLib.utils.config import (
+    DictBackedConfig,
+    MasterProfileConfig,
+    ResourceSpecificConfig,
+)
 
 if TYPE_CHECKING:
     # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
@@ -881,7 +885,7 @@ def parse_markups(case_data, data_path) -> tuple[list[str], dict[str, Path]]:
     return markup_keys, valid_markup_paths
 
 
-## "Standard" Resource Types ##
+## "Standard" Resource Types + Configs ##
 class VolumeResource(ResourceType):
 
     id = "volume"
@@ -913,6 +917,7 @@ class VolumeResource(ResourceType):
         even though it doesn't do anything.
         """
         return None
+
 
 class SegmentationConfig(DictBackedConfig):
     @classmethod
@@ -958,9 +963,11 @@ class SegmentationResource(ResourceType):
         Required to be implemented for this class to act like a flyweight,
         even though it doesn't do anything.
         """
-        # TODO: Nest this within another config for better delineation
-        # Initialize the nested configuration
-        resource_config = SegmentationConfig(task_config, resource_id)
+        # Initialize the backing config instance to better isolate these options from the "global" ones
+        resource_handling_config = ResourceSpecificConfig(task_config)
+
+        # Initialize the resource-specific config instance
+        resource_config = SegmentationConfig(resource_handling_config, resource_id)
 
         # TODO: Expand this further
         # Initialize a layout which wraps it

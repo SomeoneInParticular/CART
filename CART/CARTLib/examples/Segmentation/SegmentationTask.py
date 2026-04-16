@@ -6,7 +6,7 @@ import qt
 
 from CARTLib.core.TaskBaseClass import TaskBaseClass
 from CARTLib.core.DataUnitBase import DataUnitFactory
-from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig, DictBackedConfig
+from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig, ResourceSpecificConfig
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import showErrorPrompt
 
@@ -116,16 +116,15 @@ class SegmentationTask(
 
     @classmethod
     def drop_resource_config(cls, resource_id: str, task_config: SegmentationConfig):
-        # TODO: Nest this within another config for better delineation
-        task_config.backing_dict.pop(resource_id, None)
-        pass
+        # Use our resource-specific config manager to ensure standardization
+        resource_config = ResourceSpecificConfig(task_config)
+        resource_config.drop_resource_config(resource_id)
 
     @classmethod
     def rename_resource_config(cls, old_id: str, new_id: str, task_config: SegmentationConfig):
-        # TODO: Handle this with a nested config for better delineation
-        contents = task_config.backing_dict.pop(old_id, None)
-        if contents is not None:
-            task_config.backing_dict[new_id] = contents
+        # Use our resource-specific config manager to ensure standardization
+        resource_config = ResourceSpecificConfig(task_config)
+        resource_config.rename_resource(old_id, new_id)
 
     @property
     def should_interpolate(self):
