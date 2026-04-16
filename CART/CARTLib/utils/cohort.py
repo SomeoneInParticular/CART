@@ -1247,8 +1247,8 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
                 self.reject()
             elif button_role == qt.QDialogButtonBox.AcceptRole:
                 # Attempt to apply the requested changes before closing
-                self.apply_changes()
-                self.accept()
+                if self.apply_changes():
+                    self.accept()
             else:
                 raise ValueError("Pressed a button with an invalid role!")
         buttonBox.clicked.connect(onButtonClicked)
