@@ -1348,12 +1348,13 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         base_str = self.nameField.text.strip()
         csv_str = self.resource_type.format_for_csv(base_str)
         pretty_str = self.resource_type.format_for_gui(base_str)
-        if self._prior_resource is None and csv_str in self._cohort.resource_map.keys():
+        if csv_str != self._prior_resource_name and csv_str in self._cohort.resource_map.keys():
             # If it does, show an error and return "False" (no changes made)
             qt.QMessageBox.critical(
                 None,
                 "Invalid Resource Name",
-                f"'{pretty_str}' already exists; please change this resources name or type to make it unique.",
+                f"'Resource of name {pretty_str}' ({csv_str}) already exists; "
+                f"please change this resource's name or type to make it unique.",
                 qt.QMessageBox.Ok,
             )
             return False
