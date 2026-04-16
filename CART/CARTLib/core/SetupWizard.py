@@ -328,6 +328,13 @@ class JobSetupWizard(qt.QWizard):
         return response == qt.QMessageBox.Yes
 
     @qt.Slot()
+    def accept(self):
+        # Disconnect everything properly
+        self.disconnectAll()
+        # Proceed
+        qt.QWizard.accept(self)
+
+    @qt.Slot()
     def reject(self):
         # Only reject if the user confirms discarding unsaved changes
         if self.confirmDiscardChanges():
