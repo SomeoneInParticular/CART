@@ -109,11 +109,24 @@ class SegmentationTask(
     def getDataUnitFactory(cls) -> DataUnitFactory:
         return SegmentationUnit
 
+    ## Configurable Settings ##
     @classmethod
-    def init_config(cls, job_config: JobProfileConfig) -> DictBackedConfig:
+    def init_config(cls, job_config: JobProfileConfig) -> SegmentationConfig:
         return SegmentationConfig(job_config)
 
-    ## Configurable Settings ##
+    @classmethod
+    def drop_resource_config(cls, resource_id: str, task_config: SegmentationConfig):
+        # TODO: Nest this within another config for better delineation
+        task_config.backing_dict.pop(resource_id, None)
+        pass
+
+    @classmethod
+    def rename_resource_config(cls, old_id: str, new_id: str, task_config: SegmentationConfig):
+        # TODO: Handle this with a nested config for better delineation
+        contents = task_config.backing_dict.pop(old_id, None)
+        if contents is not None:
+            task_config.backing_dict[new_id] = contents
+
     @property
     def should_interpolate(self):
         return self.local_config.should_interpolate

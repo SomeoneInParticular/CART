@@ -1151,12 +1151,12 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
 
         # Track the previous resource's details (if any)
         self._prior_resource_name = resource_name
-        self._prior_resource = None
-        if resource_name is not None:
-            self._prior_resource = cohort.resource_map.get(resource_name)
+        self._active_resource_name = resource_name
+        self._prior_resource = cohort.resource_map.get(resource_name)
 
         # Track the task config for later
         self.task_config = task_config
+        self.task_config_copy = copy.deepcopy(task_config)
 
         # Cached map of the resource types for this provided task
         duf = cohort.reference_task.getDataUnitFactory()
@@ -1230,8 +1230,8 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
 
         # Container widget to hold the resource-specific task GUI
         self.taskConfigBox: qt.QWidget = qt.QWidget(self)
-        self.rebuild_task_config_gui()
-        self.resourceTypeSelector.currentIndexChanged.connect(self.rebuild_task_config_gui)
+        self._initTaskConfigGUI()
+        self.resourceTypeSelector.currentIndexChanged.connect(self._rebuildTaskConfigGUI)
         layout.addRow(self.taskConfigBox)
 
         # Ok/Cancel Buttons
@@ -1247,8 +1247,8 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
                 self.reject()
             elif button_role == qt.QDialogButtonBox.AcceptRole:
                 # Attempt to apply the requested changes before closing
-                if self.apply_changes():
-                    self.accept()
+                self.apply_changes()
+                self.accept()
             else:
                 raise ValueError("Pressed a button with an invalid role!")
         buttonBox.clicked.connect(onButtonClicked)
@@ -1331,28 +1331,57 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         else:
             resourceTypeSelector.setCurrentIndex(-1)
 
-    def rebuild_task_config_gui(self):
-        # If we don't have a valid resource type, or no GUI exists for it, hide our config GUI
-        if (
-            self.resource_type is None
-            or (config_layout := self.resource_type.buildConfigGUI(self.task_config))
-            is None
-        ):
-            # Hide the widget
-            self.taskConfigBox.setVisible(False)
-        # Otherwise, replace the previous GUI layout with the corresponding one for this new resource
-        else:
-            # Make the configuration box visible and expand it, if it was not already
-            self.taskConfigBox.setVisible(True)
+    ## Resource-Specific Config Handling ##
+    DUMMY_RESOURCE_NAME = "__dummy"
 
-            # Replace the layout in the dropdown w/ this new one
+    def _initTaskConfigGUI(self):
+        # If we don't have a valid resource type, hide the config GUI
+        if self.resource_type is None:
+            self.taskConfigBox.setVisible(False)
+            return
+
+        # If the resource lacks a valid GUI, also hide the config and end
+        config_layout = self.resource_type.buildConfigGUI(self.task_config_copy, self._active_resource_name)
+        if config_layout is None:
+            self.taskConfigBox.setVisible(False)
+            return
+
+        # Make the configuration box visible
+        self.taskConfigBox.setVisible(True)
+
+        # Use the config layout as our new GUI
+        self.taskConfigBox.setLayout(config_layout)
+
+    def _rebuildTaskConfigGUI(self):
+        # If the currently selected resource type is invalid, just hide the GUI
+        if self.resource_type is None:
+            self.taskConfigBox.setVisible(False)
+            return
+
+        # Have the task delete the previous resource's configuration settings
+        self._cohort.reference_task.drop_resource_config(
+            self._active_resource_name, self.task_config_copy
+        )
+
+        # Try to initialize a new config GUI for the current resource type under a "dummy" name
+        config_layout = self.resource_type.buildConfigGUI(
+            self.task_config_copy, self.DUMMY_RESOURCE_NAME
+        )
+
+        # Update the "active" label to match
+        self._active_resource_name = self.DUMMY_RESOURCE_NAME
+
+        # If there isn't one, just hide the GUI
+        if config_layout is None:
+            self.taskConfigBox.setVisible(False)
+        # Otherwise, replace the GUI layout and show the result
+        else:
             if self.taskConfigBox.layout() is not None:
                 tmp = qt.QWidget(None)
                 tmp.setLayout(self.taskConfigBox.layout())
                 del tmp
-
-            # Use our new layout in its place
             self.taskConfigBox.setLayout(config_layout)
+            self.taskConfigBox.setVisible(True)
 
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed
@@ -1374,8 +1403,17 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
             )
             return False
 
+        # Update the cohort's contents
+        self._apply_cohort_changes(base_str, csv_str)
+
+        # Update the task config as well
+        self._apply_config_changes(csv_str)
+
+        # Signal that everything ran successfully
+        return True
+
+    def _apply_cohort_changes(self, base_str: str, csv_str: str):
         # Parse the contents of our GUI elements, stripping leading/trailing whitespace
-        # TODO: Replace "pretty string" with the resource type ID after other uses have been handled
         filter_entry: dict = {
             CohortModel.ORIGINAL_NAME_KEY: base_str,
             CohortModel.RESOURCE_TYPE_KEY: self.resource_type.id,
@@ -1402,9 +1440,16 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Update cohort to use the new filter
         self._cohort.set_resource_data(csv_str, filter_entry)
 
-        # Signal that everything ran successfully
-        return True
+    def _apply_config_changes(self, csv_str: str):
+        # Have the task move active configuration settings to the current resource's name
+        self._cohort.reference_task.rename_resource_config(
+            self._active_resource_name, csv_str, self.task_config_copy
+        )
 
+        # Transfer any changes made to the task config copy to the "real" config
+        self.task_config.backing_dict = self.task_config_copy.backing_dict
+
+    ## Properties ##
     @property
     def resource_type(self) -> "Optional[ResourceType]":
         current_text = self.resourceTypeSelector.currentText.strip()

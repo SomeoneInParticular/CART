@@ -13,7 +13,7 @@ import vtk
 from slicer.i18n import tr as _
 
 from CARTLib.core.DataUnitBase import DataUnitBase, ResourceType
-from CARTLib.utils.config import MasterProfileConfig
+from CARTLib.utils.config import MasterProfileConfig, DictBackedConfig
 from CARTLib.core.LayoutManagement import Orientation, LayoutHandler
 
 if TYPE_CHECKING:
@@ -905,12 +905,30 @@ class VolumeResource(ResourceType):
         return "_volume" in csv_label
 
     @classmethod
-    def buildConfigGUI(cls, task_config: "DictBackedConfig") -> "Optional[qt.QLayout]":
+    def buildConfigGUI(
+        cls, task_config: "DictBackedConfig", resource_id: Optional[str] = None
+    ) -> "Optional[qt.QLayout]":
         """
         Required to be implemented for this class to act like a flyweight,
         even though it doesn't do anything.
         """
         return None
+
+class SegmentationConfig(DictBackedConfig):
+    @classmethod
+    def default_config_label(cls) -> str:
+        raise ValueError("You should use `config_key_override` instead!")
+
+    HIDE_ON_LOAD_KEY = "hide_on_load"
+
+    @property
+    def hide_on_load(self) -> bool:
+        return self.get_or_default(self.HIDE_ON_LOAD_KEY, False)
+
+    @hide_on_load.setter
+    def hide_on_load(self, new_val: bool):
+        self.backing_dict[self.HIDE_ON_LOAD_KEY] = new_val
+
 
 class SegmentationResource(ResourceType):
 
@@ -933,17 +951,33 @@ class SegmentationResource(ResourceType):
         return "_segmentation" in csv_label
 
     @classmethod
-    def buildConfigGUI(cls, task_config: "DictBackedConfig") -> "Optional[qt.QLayout]":
+    def buildConfigGUI(
+        cls, task_config: "DictBackedConfig", resource_id: Optional[str] = None
+    ) -> "Optional[qt.QLayout]":
         """
         Required to be implemented for this class to act like a flyweight,
         even though it doesn't do anything.
         """
-        # TODO: Actually implement this
+        # TODO: Nest this within another config for better delineation
+        # Initialize the nested configuration
+        resource_config = SegmentationConfig(task_config, resource_id)
+
+        # TODO: Expand this further
+        # Initialize a layout which wraps it
         layout = qt.QFormLayout(None)
-        label1 = qt.QLabel("Foo")
-        label2 = qt.QLabel("Bar")
-        layout.addRow(label1, label2)
+        hideOnLoadCheckbox = qt.QCheckBox()
+        hideOneLoadLabel = qt.QLabel(_("Hide On Load"))
+        hideOnLoadCheckbox.setChecked(resource_config.hide_on_load)
+
+        @qt.Slot()
+        def hideOnLoadToggled():
+            resource_config.hide_on_load = hideOnLoadCheckbox.isChecked()
+
+        hideOnLoadCheckbox.toggled.connect(hideOnLoadToggled)
+
+        layout.addRow(hideOneLoadLabel, hideOnLoadCheckbox)
         return layout
+
 
 class MarkupResource(ResourceType):
 
@@ -968,12 +1002,15 @@ class MarkupResource(ResourceType):
         return "_markup" in csv_label
 
     @classmethod
-    def buildConfigGUI(cls, task_config: "DictBackedConfig") -> "Optional[qt.QLayout]":
+    def buildConfigGUI(
+        cls, task_config: "DictBackedConfig", resource_id: Optional[str] = None
+    ) -> "Optional[qt.QLayout]":
         """
         Required to be implemented for this class to act like a flyweight,
         even though it doesn't do anything.
         """
         return None
+
 
 ## "Standard" Data Unit ##
 class CARTStandardUnit(DataUnitBase):

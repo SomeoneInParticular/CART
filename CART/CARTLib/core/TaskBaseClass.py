@@ -122,8 +122,10 @@ class TaskBaseClass(ABC, Generic[D]):
             f"'{cls.__name__}' has no description; you should remind the developer to provide one!"
         )
 
+    TaskConfig = TypeVar("TaskConfig", bound=DictBackedConfig)
+
     @classmethod
-    def init_config(cls, job_config: JobProfileConfig) -> Optional[DictBackedConfig]:
+    def init_config(cls, job_config: JobProfileConfig) -> TaskConfig:
         """
         Initialize a config instance to manage configurable settings for a Task.
 
@@ -133,6 +135,24 @@ class TaskBaseClass(ABC, Generic[D]):
         cohort editing.
         """
         return None
+
+    @classmethod
+    def drop_resource_config(cls, resource_id: str, task_config: TaskConfig):
+        """
+        Remove any configuration options for the provided resource ID
+        with the provided configuration.
+
+        The configuration object will be of the same type as that created in
+        `init_config` prior; use it as you see fit.
+        """
+        pass
+
+    @classmethod
+    def rename_resource_config(cls, old_id: str, new_id: str, task_config: TaskConfig):
+        """
+        Move the configuration options stored for one resource to another.
+        """
+        pass
 
     ## Instance Methods ##
     def save_on_iter(self) -> Optional[str]:
