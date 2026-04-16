@@ -669,6 +669,7 @@ class CohortTableView(qt.QTableView):
 
     def __init__(
         self,
+        task_config: DictBackedConfig = None,
         parent: qt.QObject = None
     ):
         """
@@ -677,6 +678,9 @@ class CohortTableView(qt.QTableView):
         :param parent: The parent widget for QT hierarchy management.
         """
         super().__init__(parent)
+
+        # Track the task config for later
+        self.task_config = task_config
 
         # Change the layout to be more sensible
         self.horizontalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
@@ -718,11 +722,14 @@ class CohortTableView(qt.QTableView):
         model: CohortModel = self.model()
         col_id = model.header[idx.column()]
         col_pretty = model.csv_to_pretty(col_id)
+        task_config = self.task_config
 
         # Modification action
         editAction = menu.addAction(_(f"Modify {col_pretty}"))
         def _modifyColumn():
-            dialog = ResourceEditorDialogue(model, col_id)
+            dialog = ResourceEditorDialogue(
+                cohort=model, resource_name=col_id, task_config=task_config
+            )
             dialog.exec()
         editAction.triggered.connect(_modifyColumn)
 
@@ -742,6 +749,7 @@ class CohortTableWidget(CSVBackedTableWidget):
     def __init__(
         self,
         model: CohortModel,
+        task_config: Optional[DictBackedConfig] = None,
         parent: qt.QWidget = None,
     ):
         """
@@ -753,7 +761,7 @@ class CohortTableWidget(CSVBackedTableWidget):
         super().__init__(model, parent)
 
         # Swap to our (contex-menu providing) table view class.
-        self.tableView = CohortTableView()
+        self.tableView = CohortTableView(task_config=task_config)
         self.tableView.setModel(model)
         self.refresh()
 
@@ -910,7 +918,7 @@ class CohortEditorDialog(qt.QDialog):
     def __init__(
         self,
         cohort: CohortModel,
-        config: DictBackedConfig,
+        task_config: DictBackedConfig,
         parent: qt.QObject = None,
     ):
         # If the cohort is not editable, reject attempts to edit it
@@ -926,9 +934,10 @@ class CohortEditorDialog(qt.QDialog):
         # Backing cohort manager
         self._cohort = cohort
 
-        # Track a parent-less copy of the config (parent-less to prevent changes propagating upwards)
-        self._original_config = config
-        self._task_config = copy.deepcopy(config)
+        # Track a parent-less copy of the config
+        # (parent-less to prevent changes propagating upwards prematurely)
+        self._original_task_config = task_config
+        self._task_config = copy.deepcopy(task_config)
         self._task_config.parent_config = None
 
         # Initial setup
@@ -937,7 +946,7 @@ class CohortEditorDialog(qt.QDialog):
         layout = qt.QVBoxLayout(self)
 
         # Main table widget
-        cohortWidget = CohortTableWidget(self._cohort)
+        cohortWidget = CohortTableWidget(self._cohort, self._task_config)
         cohortWidget.setFrameShape(qt.QFrame.Panel)
         cohortWidget.setFrameShadow(qt.QFrame.Sunken)
         cohortWidget.setLineWidth(3)
@@ -963,8 +972,8 @@ class CohortEditorDialog(qt.QDialog):
                 # Only save changes to the cohort when confirmed!
                 self._cohort.save()
                 # Update our original config w/ any changes made to our modified config
-                self._original_config.backing_dict = self._task_config.backing_dict
-                self._original_config.has_changed = True
+                self._original_task_config.backing_dict = self._task_config.backing_dict
+                self._original_task_config.has_changed = True
                 # Accept and close
                 self.accept()
             else:
@@ -1005,7 +1014,9 @@ class CohortEditorDialog(qt.QDialog):
 
         @qt.Slot(None)
         def newResourceClicked():
-            dialog = ResourceEditorDialogue(self._cohort)
+            dialog = ResourceEditorDialogue(
+                cohort=self._cohort, task_config=self._task_config
+            )
             if dialog.exec():
                 # Without this, the cells rapidly bloat for some reason
                 cohortWidget.tableView.resizeColumnsToContents()
