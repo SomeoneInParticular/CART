@@ -4,9 +4,9 @@ from typing import Optional, TYPE_CHECKING
 
 import qt
 
-from CARTLib.core.TaskBaseClass import TaskBaseClass
+from CARTLib.core.TaskBaseClass import CARTTask
 from CARTLib.core.DataUnitBase import DataUnitFactory
-from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig, ResourceSpecificConfig
+from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
 from CARTLib.utils.task import cart_task
 from CARTLib.utils.widgets import showErrorPrompt
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 @cart_task("Segmentation")
 class SegmentationTask(
-    TaskBaseClass[SegmentationUnit]
+    CARTTask[SegmentationUnit]
 ):
 
     README_PATH = Path(__file__).parent / "README.md"
@@ -113,18 +113,6 @@ class SegmentationTask(
     @classmethod
     def init_config(cls, job_config: JobProfileConfig) -> SegmentationConfig:
         return SegmentationConfig(job_config)
-
-    @classmethod
-    def drop_resource_config(cls, resource_id: str, task_config: SegmentationConfig):
-        # Use our resource-specific config manager to ensure standardization
-        resource_config = ResourceSpecificConfig(task_config)
-        resource_config.drop_resource_config(resource_id)
-
-    @classmethod
-    def rename_resource_config(cls, old_id: str, new_id: str, task_config: SegmentationConfig):
-        # Use our resource-specific config manager to ensure standardization
-        resource_config = ResourceSpecificConfig(task_config)
-        resource_config.rename_resource(old_id, new_id)
 
     @property
     def should_interpolate(self):
