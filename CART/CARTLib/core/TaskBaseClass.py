@@ -111,35 +111,6 @@ class TaskBaseClass(ABC, Generic[D]):
 
     ## Class Methods ##
     @classmethod
-    def format_feature_label_for_type(
-        cls, initial_label: str, data_unit_factory_type: str, feature_type: str
-    ):
-        """
-        Should reformat the "initial" label provided to be recognized as the
-        specified feature type when provided to the specified data unit factory.
-
-        The data unit type will always be one specified by `getDataUnitFactories`,
-        and the feature type will always be one specified by `feature_types` for
-        said data unit factory.
-
-        For example, if we use the following feature types for `feature_types` prior:
-
-        ```
-        {
-            "Volume": "An anatomical volume you want to view. Must have 'volume' in its name.",
-            "Segmentation: "A segmentation label to overlay on viewed volumes. Must have 'segmentataion' in its name"
-        }
-        ```
-
-        An initial label of "T2w" for a "Volume" type could be returned as "volume_T2w";
-        if it were a "Segmentation" type instead, it could be "segmentation_T2w" instead.
-
-        If this is not overridden in a subclass, only the bare-minimum processing
-        (replacing commas with underscores) is applied.
-        """
-        return initial_label.replace(",", "_")
-
-    @classmethod
     def description(cls):
         """
         A description for this task, detailing what it should be used for, as well as
