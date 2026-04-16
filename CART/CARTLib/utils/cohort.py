@@ -1171,7 +1171,13 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         self.setMinimumSize(500, self.minimumHeight)
         layout = qt.QFormLayout(self)
 
-        # The resource name itself (prior to formatting)
+        # Warning to notify the user; managed by the resource-type GUI (below)
+        self.warningLabel = qt.QLabel()
+
+        ## Field Selection GUI ##
+        self._generateResourceTypeGUI(layout)
+
+        ## Field Name GUI ##
         nameLabel = qt.QLabel(_("Resource Name:"))
         nameField = qt.QLineEdit()
         if resource_name:
@@ -1187,7 +1193,10 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         nameField.textChanged.connect(self.mark_changed)
         self.nameField = nameField
 
-        # Other input fields
+        # Place the warning label (if any) here.
+        layout.addRow(self.warningLabel)
+
+        ## Include/Exclude Fields ##
         includeLabel = qt.QLabel(_("Include:"))
         includeField = qt.QLineEdit()
         if resource_name:
@@ -1225,9 +1234,6 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         includeField.textChanged.connect(self.mark_changed)
         excludeField.textChanged.connect(self.mark_changed)
 
-        # Field type selection GUI
-        self._generate_field_type_gui(layout)
-
         # Container widget to hold the resource-specific task GUI
         self.taskConfigBox: qt.QWidget = qt.QWidget(self)
         self._initTaskConfigGUI()
@@ -1253,13 +1259,13 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
                 raise ValueError("Pressed a button with an invalid role!")
         buttonBox.clicked.connect(onButtonClicked)
 
-        # Add it to the layout w/ a spacer to force it to the bottom
+        # Add it to the layout w/ a spacer to force them to the bottom
         stretch = qt.QWidget(self)
         stretch.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
         layout.addWidget(stretch)
         layout.addWidget(buttonBox)
 
-    def _generate_field_type_gui(self, layout: "qt.QFormLayout"):
+    def _generateResourceTypeGUI(self, layout: "qt.QFormLayout"):
         # Resource type selector and description
         resourceTypeLabel = qt.QLabel(_("Resource Type:"))
         resourceTypeSelector = qt.QComboBox(None)
@@ -1292,15 +1298,24 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         resourceTypeDescriptionBoxLayout.addWidget(resourceTypeDescription)
 
         @qt.Slot(str)
-        def syncDescriptionText(__: str):
+        def onResourceTypeChanged(__: str):
             new_type = self.resource_type
             if new_type is None:
+                # Update our description text to become our default widget
                 resourceTypeDescription.setText(default_description)
+                # Hide the warning label
+                self.warningLabel.setVisible(False)
             else:
+                # Update our description text to match
                 resourceTypeDescription.setText(new_type.description)
+                # Update the warning label to match
+                should_show = new_type.user_warning is not None
+                if should_show:
+                    self.warningLabel.setText(new_type.user_warning)
+                self.warningLabel.setVisible(should_show)
             self.mark_changed()
 
-        resourceTypeSelector.currentIndexChanged.connect(syncDescriptionText)
+        resourceTypeSelector.currentIndexChanged.connect(onResourceTypeChanged)
 
         # Track the resource selector for later
         self.resourceTypeSelector = resourceTypeSelector

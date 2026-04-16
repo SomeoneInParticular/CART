@@ -1,18 +1,36 @@
 from pathlib import Path
 
 import slicer
+from CARTLib.core.DataUnitBase import ResourceType
+from slicer.i18n import tr as _
 
 from CARTLib.utils.data import (
     CARTStandardUnit,
+    MarkupResource, SegmentationResource, VolumeResource,
     create_empty_segmentation_node,
     load_segmentation,
 )
+
+
+class EditableSegmentationResource(SegmentationResource):
+
+    id = "editable_segmentation"
+    pretty_name = "To-Edit Segmentation"
+    user_warning = _("⚠ The resource name will be used as a suffix in the saved file! ⚠")
+
 
 class SegmentationUnit(CARTStandardUnit):
     """
     DataUnit for the segmentation task. Extends the CART
     Standard Unit to support custom segmentations.
     """
+
+    # Replace the default segmentation resource w/ our custom sub-types
+    RESOURCE_TYPES = {
+        VolumeResource.id: VolumeResource,
+        EditableSegmentationResource.id: EditableSegmentationResource,
+        MarkupResource.id: MarkupResource
+    }
 
     def __init__(
         self,
@@ -129,3 +147,8 @@ class SegmentationUnit(CARTStandardUnit):
                 c_idx += 1
             self.segmentation_nodes[key] = node
             self.resources[key] = node
+
+    @classmethod
+    def resource_types(cls) -> dict[str, ResourceType]:
+        # Replace the "default" se
+        return cls.RESOURCE_TYPES

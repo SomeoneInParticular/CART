@@ -30,6 +30,8 @@ class ResourceType(Protocol):
     description: str = _(
         "No description for this resource type was provided!"
     )
+    # Warning which should be presented to the user when this data type is being editted
+    user_warning: Optional[str] = None
 
     @abstractmethod
     def format_for_csv(self, resource_name: str) -> str:
