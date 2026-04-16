@@ -79,6 +79,10 @@ class CohortModel(CSVBackedTableModel):
         self.data_path = data_path
         self.reference_task = reference_task
 
+        # Initialize blank placeholders
+        self._case_map = dict()
+        self._resource_map = dict()
+
         # Track whether to user a sidecar before initializing (which will attempt to load it)
         self.use_sidecar = use_sidecar
 
@@ -129,7 +133,7 @@ class CohortModel(CSVBackedTableModel):
         row_data = [["uid"], *[[k] for k in case_map.keys()]]
         with open(csv_path, "w") as fp:
             csv.writer(fp).writerows(row_data)
-        # Generate a new cohort instance, backed by this new CSV file and w/ a blank side-care
+        # Generate a new cohort instance, backed by this new CSV file and w/ a blank side-car
         cohort = cls(csv_path, data_path, editable, reference_task, False)
         cohort.use_sidecar = use_sidecar
         # Manually update its case map to match
