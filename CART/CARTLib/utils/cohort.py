@@ -730,7 +730,11 @@ class CohortTableView(qt.QTableView):
             dialog = ResourceEditorDialogue(
                 cohort=model, resource_name=col_id, task_config=task_config
             )
-            dialog.exec()
+            if dialog.exec():
+                # Without this, the cells rapidly bloat for some reason
+                self.resizeColumnsToContents()
+                self.resizeRowsToContents()
+
         editAction.triggered.connect(_modifyColumn)
 
     def __del__(self):
