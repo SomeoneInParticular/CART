@@ -1273,11 +1273,14 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
                 raise ValueError("Pressed a button with an invalid role!")
         buttonBox.clicked.connect(onButtonClicked)
 
-        # Add it to the layout w/ a spacer to force them to the bottom
+        # Add it to the layout w/ a stretch to force them to the bottom
         stretch = qt.QWidget(self)
         stretch.setSizePolicy(qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding)
         layout.addWidget(stretch)
         layout.addWidget(buttonBox)
+
+        # Minimize ourselves to the minimum size vertically initially
+        self.resize(self.width, self.minimumHeight)
 
     def _generateResourceTypeGUI(self, layout: "qt.QFormLayout"):
         # Resource type selector and description
@@ -1299,35 +1302,54 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Add it to the overall layout
         layout.addRow(resourceTypeLabel, resourceTypeSelector)
 
-        # Description for the selected resource to help inform the user
-        resourceTypeDescriptionBox = ctk.ctkCollapsibleGroupBox()
+        ## Type Description Widget ##
+        resourceTypeDescriptionBox: qt.QWidget = ctk.ctkCollapsibleGroupBox()
         resourceTypeDescriptionBox.setTitle(_("Type Description"))
         resourceTypeDescriptionBoxLayout = qt.QVBoxLayout()
         resourceTypeDescriptionBox.setLayout(resourceTypeDescriptionBoxLayout)
+        # Allow the container to be if desired by the user
+        resourceTypeDescriptionBox.setSizePolicy(
+            qt.QSizePolicy.Expanding, qt.QSizePolicy.Preferred
+        )
+
+        # The description-handling widget itself
         default_description = _(
             "A description of the selected resource type will appear here"
         )
-        resourceTypeDescription = qt.QLabel(default_description)
-        resourceTypeDescription.setWordWrap(True)
+        resourceTypeDescription = qt.QTextBrowser(self)
+        resourceTypeDescription.setOpenExternalLinks(True)
+        # Align text to the upper-left
+        resourceTypeDescription.setAlignment(qt.Qt.AlignLeft | qt.Qt.AlignTop)
+        # Make it read-only
+        resourceTypeDescription.setReadOnly(True)
+        # Make it expand to be as large as it needs to be vertically, but not more
+        resourceTypeDescription.setSizePolicy(
+            qt.QSizePolicy.Expanding, qt.QSizePolicy.Preferred
+        )
+        # Add it to our layout
         resourceTypeDescriptionBoxLayout.addWidget(resourceTypeDescription)
 
         @qt.Slot(str)
         def onResourceTypeChanged(__: str):
+            # Get the current resource type
             new_type = self.resource_type
             if new_type is None:
                 # Update our description text to become our default widget
-                resourceTypeDescription.setText(default_description)
+                resourceTypeDescription.setMarkdown(default_description)
                 # Hide the warning label
                 self.warningLabel.setVisible(False)
             else:
                 # Update our description text to match
-                resourceTypeDescription.setText(new_type.description)
+                resourceTypeDescription.setMarkdown(new_type.description)
                 # Update the warning label to match
                 should_show = new_type.user_warning is not None
                 if should_show:
                     self.warningLabel.setText(new_type.user_warning)
                 self.warningLabel.setVisible(should_show)
+            # Mark ourselves as changed
             self.mark_changed()
+            # Resize ourselves to account for any GUI changes if possible
+            self.resize(self.width, self.minimumHeight)
 
         resourceTypeSelector.currentIndexChanged.connect(onResourceTypeChanged)
 

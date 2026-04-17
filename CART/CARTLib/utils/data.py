@@ -3,7 +3,7 @@ from datetime import datetime
 import json
 from functools import singledispatch
 from pathlib import Path
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional, Protocol, TYPE_CHECKING
 
 import numpy as np
 
@@ -886,27 +886,33 @@ def parse_markups(case_data, data_path) -> tuple[list[str], dict[str, Path]]:
 
 
 ## "Standard" Resource Types + Configs ##
-class VolumeResource(ResourceType):
+class SimpleResource(ResourceType, Protocol):
+    """
+    Simple resource class which implements several of the abstract methods
+    class methods, allowing the class itself to act as a flyweight object.
+    """
+    @classmethod
+    def format_for_csv(cls, resource_name: str) -> str:
+        if cls.id in resource_name:
+            return resource_name
+        return f"{resource_name}_{cls.id}"
+
+    @classmethod
+    def format_for_gui(cls, resource_name: str) -> str:
+        return f"{resource_name} ({cls.pretty_name})"
+
+    @classmethod
+    def is_type(cls, csv_label: str) -> bool:
+        return cls.id in csv_label
+
+
+class VolumeResource(SimpleResource):
 
     id = "volume"
     pretty_name = "Volume"
     description = _(
         "An anatomical volume to load and view for each case.",
     )
-
-    @classmethod
-    def format_for_csv(cls, resource_name: str) -> str:
-        if "_volume" in resource_name:
-            return resource_name
-        return f"{resource_name}_volume"
-
-    @classmethod
-    def format_for_gui(cls, resource_name: str) -> str:
-        return f"{resource_name} [Volume]"
-
-    @classmethod
-    def is_type(cls, csv_label: str) -> bool:
-        return "_volume" in csv_label
 
     @classmethod
     def buildConfigGUI(
@@ -935,25 +941,11 @@ class SegmentationConfig(DictBackedConfig):
         self.backing_dict[self.HIDE_ON_LOAD_KEY] = new_val
 
 
-class SegmentationResource(ResourceType):
+class SegmentationResource(SimpleResource):
 
     id = "segmentation"
     pretty_name = "Segmentation"
     description = _("A segmentation label to overlay on viewed volumes.")
-
-    @classmethod
-    def format_for_csv(cls, resource_name: str) -> str:
-        if "_segmentation" in resource_name:
-            return resource_name
-        return f"{resource_name}_segmentation"
-
-    @classmethod
-    def format_for_gui(cls, resource_name: str) -> str:
-        return f"{resource_name} [Segmentation]"
-
-    @classmethod
-    def is_type(cls, csv_label: str) -> bool:
-        return "_segmentation" in csv_label
 
     @classmethod
     def buildConfigGUI(
@@ -986,27 +978,13 @@ class SegmentationResource(ResourceType):
         return layout
 
 
-class MarkupResource(ResourceType):
+class MarkupResource(SimpleResource):
 
     id = "markup"
     pretty_name = "Markup"
     description = _(
         "A set of markups to display over viewed volumes."
     )
-
-    @classmethod
-    def format_for_csv(cls, resource_name: str) -> str:
-        if "_markup" in resource_name:
-            return resource_name
-        return f"{resource_name}_markup"
-
-    @classmethod
-    def format_for_gui(cls, resource_name: str) -> str:
-        return f"{resource_name} [Markup]"
-
-    @classmethod
-    def is_type(cls, csv_label: str) -> bool:
-        return "_markup" in csv_label
 
     @classmethod
     def buildConfigGUI(

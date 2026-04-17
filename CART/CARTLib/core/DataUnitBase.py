@@ -26,7 +26,7 @@ class ResourceType(Protocol):
     id: str
     # How to display this type to the user (within GUIS)
     pretty_name: str
-    # A human-readable description for this resource type
+    # A human-readable description for this resource type; can use Markdown formatting.
     description: str = _(
         "No description for this resource type was provided!"
     )
