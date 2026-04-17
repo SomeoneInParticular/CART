@@ -905,6 +905,8 @@ class _DataSelectionPage(qt.QWizardPage):
         # Temporarily make the model editable (if it wasn't already)
         with cohort_model.temporarily_editable():
             try:
+                # Update the cohort's reference data path to our current data path
+                cohort_model.data_path = self.data_path
                 # Generate our editor dialogue using the model
                 dialog = CohortEditorDialog(
                     cohort_model,

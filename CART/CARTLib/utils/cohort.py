@@ -76,7 +76,7 @@ class CohortModel(CSVBackedTableModel):
             editable = False
 
         # Track the data path and reference task for later
-        self.data_path = data_path
+        self._data_path = data_path
         self.reference_task = reference_task
 
         # Initialize blank placeholders
@@ -311,6 +311,17 @@ class CohortModel(CSVBackedTableModel):
 
     ## Data Management ##
     @property
+    def data_path(self) -> Optional[Path]:
+        return self._data_path
+
+    @data_path.setter
+    def data_path(self, new_path: Path):
+        if new_path is None or not new_path.is_dir():
+            self._data_path = None
+        else:
+            self._data_path = new_path
+
+    @property
     def csv_data(self) -> "Optional[npt.NDArray]":
         if self._csv_data is None:
             return None
@@ -373,6 +384,10 @@ class CohortModel(CSVBackedTableModel):
     def find_first_valid_file(
         self, search_paths: list[Path], filters: dict
     ) -> Optional[Path]:
+        # If we don't have a data path to search within, return nothing
+        if self.data_path is None:
+            return None
+
         # Isolate the filters from one another
         include_values = filters[self.FILTER_INCLUDE_KEY]
         exclude_values = filters[self.FILTER_EXCLUDE_KEY]
@@ -655,7 +670,9 @@ def cohort_from_generator(
     # Build the case map from the generator
     case_map = generator(data_path)
     # Create the cohort model from that
-    cohort = CohortModel.from_case_map(cohort_path, data_path, case_map)
+    cohort = CohortModel.from_case_map(
+        csv_path=cohort_path, data_path=data_path, case_map=case_map
+    )
     return cohort
 
 
@@ -776,9 +793,6 @@ class CohortTableWidget(CSVBackedTableWidget):
         data_path: Optional[Path] = None,
         editable: bool = True
     ):
-        # Explicitly disable editing if no data path was provided
-        if data_path is None:
-            editable = False
         model = CohortModel(csv_path, data_path, editable=editable)
         return cls(model)
 
