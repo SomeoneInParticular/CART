@@ -136,17 +136,6 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
     Configuration manager for a specific segmentation resource, tuned for this task.
     """
 
-    SHOULD_SAVE_KEY = "should_save"
-
-    @property
-    def should_save(self) -> bool:
-        # Whether this segmentation should save itself when the case it's part of does
-        return self.get_or_default(self.SHOULD_SAVE_KEY, True)
-
-    @should_save.setter
-    def should_save(self, new_val: bool):
-        self.backing_dict[self.SHOULD_SAVE_KEY] = new_val
-
     SEGMENTS_KEY = "segments"
 
     @property

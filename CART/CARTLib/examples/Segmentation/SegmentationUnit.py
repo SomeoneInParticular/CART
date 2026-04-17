@@ -15,7 +15,7 @@ from CARTLib.utils.data import (
     load_segmentation,
 )
 
-from SegmentationConfig import ExtendedSegmentationResourceConfig
+from SegmentationConfig import ExtendedSegmentationResourceConfig, SegmentationConfig
 
 ## Type Utils ##
 if TYPE_CHECKING:
@@ -57,6 +57,13 @@ class EditableSegmentationResource(SegmentationResource):
         resource_config.buildSegmentTableGUI(layout)
 
         return layout
+
+    @classmethod
+    def get_short_name(cls, resource_id: str):
+        id_str = f"_{cls.id}"
+        if not resource_id.endswith(id_str):
+            return resource_id
+        return resource_id.replace(id_str, "")
 
 
 class ReferenceSegmentationResource(SegmentationResource):
@@ -111,6 +118,109 @@ class SegmentationUnit(CARTStandardUnit):
 
         # Subset of segmentation nodes marked "custom"
         self._custom_segmentations = dict()
+
+    def apply_segmentation_configs(self, task_config: SegmentationConfig):
+        """
+        Apply the user-specified configuration options to the segmentations managed by
+        this unit. This includes;
+
+        * Renaming and recoloring existing segments
+        * Creating missing segmentations (and segments)
+        * Tracking the segmentations which should be saved
+        """
+        resource_config_manager = ResourceSpecificConfig(task_config)
+        for k in resource_config_manager.backing_dict.keys():
+            # Skip over non-segmentation resources
+            if not SegmentationResource.is_type(k):
+                continue
+            # If there's no config options for this resource, proceed w/o doing anything
+            if resource_config_manager.backing_dict.get(k) is None:
+                continue
+            # Updated/add the segmentation corresponding to this resource's configuration settings
+            segmentation_config = ExtendedSegmentationResourceConfig(resource_config_manager, k)
+            segmentation_node = self.segmentation_nodes.get(k)
+
+            # If there isn't already a segmentation node for a to-be-edited segmentation, create one
+            should_edit = EditableSegmentationResource.is_type(k)
+            if should_edit and segmentation_node is None:
+                self._create_new_segmentation(k)
+
+            # Iterate through our segment config and apply them whenever we have a match
+            segmentation = segmentation_node.GetSegmentation()
+            missing_segments = list()
+            for segment_config in segmentation_config.segments:
+                seg_val = segment_config.get(
+                    ExtendedSegmentationResourceConfig.VALUE_KEY
+                )
+                seg_color = segment_config.get(
+                    ExtendedSegmentationResourceConfig.COLOR_KEY
+                )
+                seg_name = segment_config.get(
+                    ExtendedSegmentationResourceConfig.NAME_KEY
+                )
+
+                # Try and find the segment w/ the matching value
+                was_found = False
+                for segment in map(
+                    lambda i: segmentation.GetNthSegment(i),
+                    range(segmentation.GetNumberOfSegments()),
+                ):
+                    # If we did, update the segment's settings to match and finish the loop
+                    if segment.GetLabelValue() == seg_val:
+                        # Set its name to match
+                        segment.SetName(seg_name)
+
+                        # Set its color to match
+                        rgb_string = seg_color.lstrip("#")
+                        rgb = (int(rgb_string[i : i + 2], 16) / 255 for i in (0, 2, 4))
+                        segment.SetColor(*rgb)
+
+                        # End the loop early, marking this segment config as having been found
+                        was_found = True
+                        continue
+
+                # If we never found a matching segment, track it for later
+                if not was_found:
+                    missing_segments.append(segment_config)
+
+            # Create any missing segments
+            for segment_config in missing_segments:
+                seg_val = segment_config.get(
+                    ExtendedSegmentationResourceConfig.VALUE_KEY
+                )
+                seg_color = segment_config.get(
+                    ExtendedSegmentationResourceConfig.COLOR_KEY
+                )
+                seg_name = segment_config.get(
+                    ExtendedSegmentationResourceConfig.NAME_KEY
+                )
+
+                # Generate a new empty segment to hold everything in
+                segment_id = segmentation.AddEmptySegment("", seg_name)
+                segment = segmentation.GetSegment(segment_id)
+
+                # Set its color to match
+                rgb_string = seg_color.lstrip("#")
+                rgb = (int(rgb_string[i : i + 2], 16) / 255 for i in (0, 2, 4))
+                segment.SetColor(*rgb)
+
+                # Set its label value
+                segment.SetLabelValue(seg_val)
+
+
+    def _create_new_segmentation(self, name: str):
+        # Create the new node
+        new_node = create_empty_segmentation_node(
+            name,
+            reference_volume=self.primary_volume_node,
+            scene=self.scene,
+        )
+
+        # Track it for later reference
+        self.segmentation_keys.append(name)
+        self.segmentation_nodes[name] = new_node
+
+        # TODO Add it to this unit's subject as well
 
     @property
     def custom_segmentations(self):
@@ -219,5 +329,5 @@ class SegmentationUnit(CARTStandardUnit):
 
     @classmethod
     def resource_types(cls) -> "dict[str, ResourceType]":
-        # Replace the "default" se
+        # Use our custom resource types
         return cls.RESOURCE_TYPES

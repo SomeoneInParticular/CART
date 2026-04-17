@@ -53,37 +53,6 @@ class SegmentationGUI:
         # Initialize the layout we'll insert everything into
         formLayout = qt.QFormLayout(None)
 
-        # "Edits to Save" selector
-        editsToSaveLabel = qt.QLabel(_("Edits to Save: "))
-        editsToSaveSelector = ctk.ctkCheckableComboBox()
-        editsToSaveToolTip = _(
-            "Only edits made to the segmentations selected here will be saved; "
-            "all others can be viewed and modified, but their edits will NOT be saved!"
-        )
-        editsToSaveLabel.setToolTip(editsToSaveToolTip)
-        editsToSaveSelector.setToolTip(editsToSaveToolTip)
-        for i, k in enumerate(self.bound_task.segmentation_features):
-            editsToSaveSelector.addItem(k)
-            # Sync the check-state
-            checkModel = editsToSaveSelector.checkableModel()
-            idx = checkModel.index(i, 0)
-            # KO: PythonQT is not forthcoming about where the "real" enum is,
-            #  so we hard code it here. If you find the enum, please fix this garbage.
-            checked = (k in self.bound_task.segmentations_to_save) * 2
-            editsToSaveSelector.setCheckState(idx, checked)
-
-        # When the selection changes, update our logic to match
-        def selectionChanged():
-            checkedSegments = [
-                editsToSaveSelector.itemText(i.row())
-                for i in editsToSaveSelector.checkedIndexes()
-            ]
-            self.bound_task.segmentations_to_save = checkedSegments
-        editsToSaveSelector.checkedIndexesChanged.connect(selectionChanged)
-
-        # Add them to the layout
-        formLayout.addRow(editsToSaveLabel, editsToSaveSelector)
-
         # Save timer; prevents spam-saving to disk every time the text is edited
         saveDelayTimer = qt.QTimer(None)
         saveDelayTimer.setSingleShot(True)
@@ -179,42 +148,6 @@ class SegmentationGUI:
         )
         onSelectedSegmentationChanged()
 
-        # Add Custom Button
-        # TODO: Move this to an on-init prompt instead
-        addButton = qt.QPushButton("Add Custom Segmentation")
-        def addCustomSeg():
-            # Prompt the user with details
-            ref_uid = (
-                "sub-abc123"
-                if self.bound_task.data_unit is None
-                else self.bound_task.data_unit.uid
-            )
-
-            # Build the placeholder character set
-            placeholderMap = FilePathFormatter.build_default_placeholder_map(
-                uid=ref_uid,
-                job_name=self.bound_task.job_profile.name
-            )
-            # Prompt the user with details
-            # TODO; make the file extension configurable
-            prompt = CustomSegmentationDialog(
-                placeholder_map=placeholderMap,
-                task_config=self.bound_task.local_config,
-                root_path=self.bound_task.job_profile.output_path,
-                extension=".nii.gz",
-                initial_path_str=self.bound_task.default_custom_output_path
-            )
-            # If the user confirms the changes, add the custom seg.
-            if prompt.exec():
-                # Register the new custom segmentation
-                self.bound_task.new_custom_segmentation(prompt.name, prompt.save_path, prompt.color_hex)
-        addButton.clicked.connect(addCustomSeg)
-        formLayout.addRow(addButton)
-
-        # Options panel
-        optionsPanel = self._buildOptionsPanel()
-        formLayout.addRow(optionsPanel)
-
         return formLayout
 
     def _buildOptionsPanel(self) -> ctk.ctkCollapsibleGroupBox:
@@ -275,10 +208,8 @@ class SegmentationGUI:
 
     def onSavePrompt(
         self,
-        saved_edited: dict[str, str],
-        saved_customs: dict[str, str],
-        error_edited: dict[str, str],
-        error_customs: dict[str, str],
+        saved: dict[str, str],
+        failed: dict[str, str]
     ):
         """
         Show the user a prompt notifying them that the data unit was saved.
@@ -291,12 +222,8 @@ class SegmentationGUI:
         msgBox.setStandardButtons(qt.QMessageBox.Ok)
 
         # Build the "main" user message
-        no_saved_edited = len(saved_edited)
-        no_saved_customs = len(saved_customs)
-        no_error_edited = len(error_edited)
-        no_error_customs = len(error_customs)
-        successes = no_saved_edited + no_saved_customs
-        failures = no_error_edited + no_error_customs
+        successes = len(saved)
+        failures = len(failed)
         msg = f"Saved data unit {self.bound_task.data_unit.uid}! {successes} segmentations were saved"
         if failures > 0:
             msg += f", {failures} segmentations were not"
@@ -306,28 +233,16 @@ class SegmentationGUI:
         # Detailed text w/ save paths + error causes
         bullet_txt = "\n  ○ "
         detailed_text_cmps = []
-        if no_saved_edited > 0:
-            saved_custom_txt = f"Saved the following edited segmentations:"
+        if successes > 0:
+            saved_custom_txt = f"Saved the following segmentations:"
             saved_custom_txt = bullet_txt.join([
-                saved_custom_txt, *[f"{k}: {v}" for k, v in saved_edited.items()]
+                saved_custom_txt, *[f"{k}: {v}" for k, v in saved.items()]
             ])
             detailed_text_cmps.append(saved_custom_txt)
-        if no_saved_customs > 0:
-            saved_custom_txt = f"Saved the following custom segmentations:"
+        if failures > 0:
+            saved_custom_txt = f"Failed to save the following segmentations:"
             saved_custom_txt = bullet_txt.join([
-                saved_custom_txt, *[f"{k}: {v}" for k, v in saved_customs.items()]
-            ])
-            detailed_text_cmps.append(saved_custom_txt)
-        if no_error_edited > 0:
-            saved_custom_txt = f"Did not save the following edited segmentations:"
-            saved_custom_txt = bullet_txt.join([
-                saved_custom_txt, *[f"{k}: {v}" for k, v in error_edited.items()]
-            ])
-            detailed_text_cmps.append(saved_custom_txt)
-        if no_error_customs > 0:
-            saved_custom_txt = f"Did not save the following custom segmentations:"
-            saved_custom_txt = bullet_txt.join([
-                saved_custom_txt, *[f"{k}: {v}" for k, v in error_customs.items()]
+                saved_custom_txt, *[f"{k}: {v}" for k, v in failed.items()]
             ])
             detailed_text_cmps.append(saved_custom_txt)
         separator = "\n" + "=" * 40 + "\n"

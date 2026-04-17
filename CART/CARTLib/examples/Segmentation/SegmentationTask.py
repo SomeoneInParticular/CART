@@ -80,24 +80,24 @@ class SegmentationTask(
     def receive(self, data_unit: SegmentationUnit):
         self._data_unit = data_unit
 
+        # Apply our configuration options to the data unit
+        data_unit.apply_segmentation_configs(self.local_config)
+
         # Change the interpolation settings to match current setting
         self.apply_interp()
 
         # Ensure all segments are visible
         self.show_all_segments()
 
-        # Hide "to-be-edited" segments, if requested
-        if self.hide_editable_on_start:
-            self.hide_editable_segments()
-
-        # Add any custom segmentations configured by the user to the unit
-        self._init_custom_segmentations()
+        # Hide segments the user requested be hidden on load
+        # TODO
 
         # If we have a GUI, refresh it
         if self.gui:
             self.gui.refresh()
 
     def save(self) -> Optional[str]:
+        # Try to save the data unit
         if not self.data_unit:
             self.logger.error("Could not save, no data unit has been loaded!")
         result_packet = self.io.save_unit(self.data_unit)
@@ -147,17 +147,6 @@ class SegmentationTask(
             display_node = segment_node.GetDisplayNode()
             display_node.SetAllSegmentsVisibility(True)
 
-    def hide_editable_segments(self):
-        if not self.data_unit:
-            return
-        for k in self.segmentations_to_save:
-            segment_node = self.data_unit.segmentation_nodes.get(k)
-            if not segment_node:
-                print(f"No segment node for {k}")
-                continue
-            display_node = segment_node.GetDisplayNode()
-            display_node.SetAllSegmentsVisibility(False)
-
     @property
     def save_blank_segments(self) -> bool:
         return self.local_config.save_blank_segmentations
@@ -165,48 +154,6 @@ class SegmentationTask(
     @save_blank_segments.setter
     def save_blank_segments(self, new_val: bool):
         self.local_config.save_blank_segmentations = new_val
-        self.local_config.save()
-
-    @property
-    def custom_segmentations(self) -> dict[str, dict]:
-        return self.local_config.custom_segmentations
-
-    def new_custom_segmentation(self, new_name: str, output_str: str, color_hex: str):
-        """
-        Register a new custom segmentation. Adds a (blank) segmentation
-        with the corresponding name to the current data unit as well.
-
-        :param new_name: The name the segmentation should have
-        :param output_str: The output path, pre-contextual formatting
-        :param color_hex: The color the segmentation should be, in hex format
-        """
-
-        # Add it to our configuration
-        self.local_config.add_custom_segmentation(new_name, output_str, color_hex)
-        self.local_config.save()
-
-        # If this is a new custom segmentation for the data unit, add it as well
-        if self.data_unit and new_name not in self.data_unit.custom_segmentations.keys():
-            try:
-                # Generate the new node
-                new_node = self.data_unit.add_custom_segmentation(new_name, color_hex)
-
-                # If we have a GUI, update it
-                if self.gui:
-                    self.gui.refresh()
-                    self.gui.selectSegmentationNode(new_node)
-            except Exception as e:
-                self.logger.error(traceback.format_exc())
-                if self.gui:
-                    showErrorPrompt(str(e), None)
-
-    @property
-    def segmentations_to_save(self) -> list[str]:
-        return self.local_config.segmentations_to_save
-
-    @segmentations_to_save.setter
-    def segmentations_to_save(self, new_segs: list[str]):
-        self.local_config.segmentations_to_save = new_segs
         self.local_config.save()
 
     @property
@@ -226,37 +173,6 @@ class SegmentationTask(
     def default_custom_output_path(self, new_val: str):
         self.local_config.default_custom_output_path = new_val
         self.local_config.save()
-
-    ## Segmentation Management ##
-    def _init_custom_segmentations(self):
-        """
-        Add a custom segmentation to the data unit
-        """
-        # If we don't have a data unit, end here w/ an error
-        if not self.data_unit:
-            msg = "Cannot add custom segmentation; no data unit has been loaded!"
-            self.logger.error(msg)
-            if self.gui:
-                showErrorPrompt(msg, None)
-
-        # Add each custom segmentation in turn
-        for name, sub_vals in self.custom_segmentations.items():
-            try:
-                color_hex = sub_vals.get(self.local_config.CUSTOM_SEG_COLOR_KEY)
-                self.data_unit.add_custom_segmentation(name, color_hex)
-                if self.gui:
-                    self.gui.refresh()
-            # Skip duplicate key errors in this case
-            except ValueError as e:
-                if "already exists" in str(e):
-                    continue
-                raise e
-            # All other errors should end the loop and notify the user
-            except Exception as e:
-                self.logger.error(traceback.format_exc())
-                if self.gui:
-                    showErrorPrompt(str(e), None)
-                return
 
     def enter(self):
         if self.gui:
