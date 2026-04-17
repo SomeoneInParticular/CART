@@ -1439,8 +1439,34 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         if not self._has_changed:
             return True
 
-        # Make sure a resource of this name doesn't already exist
+        # TODO: Move the following checks to be run dynamically, disabling the "OK" button
+        #  until they are resolved.
+
+        # Confirm the user has selected a valid resource type
+        if self.resource_type is None:
+            # If not, show an error and return "False" (no changes made)
+            qt.QMessageBox.critical(
+                None,
+                _("Invalid resource type"),
+                _("You have either not selected a resource type, or the selected resource type is invalid. "
+                  "Please select a (new) resource type before continuing."),
+                qt.QMessageBox.Ok,
+            )
+            return False
+
+        # Make sure the user has actually given a proper name
         base_str = self.nameField.text.strip()
+        if base_str == "":
+            # If not, show an error and return "False" (no changes made)
+            qt.QMessageBox.critical(
+                None,
+                _("No Name Given"),
+                _("You did not give this resource a name; please do so before proceeding."),
+                qt.QMessageBox.Ok,
+            )
+            return False
+
+        # Make sure a resource of this name doesn't already exist
         csv_str = self.resource_type.format_for_csv(base_str)
         pretty_str = self.resource_type.format_for_gui(base_str)
         if csv_str != self._prior_resource_name and csv_str in self._cohort.resource_map.keys():
