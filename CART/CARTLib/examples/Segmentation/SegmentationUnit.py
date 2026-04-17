@@ -15,12 +15,13 @@ from CARTLib.utils.data import (
     load_segmentation,
 )
 
-from SegmentationConfig import ExtendedSegmentationResourceConfig, SegmentationConfig
+from SegmentationConfig import ExtendedSegmentationResourceConfig
 
 ## Type Utils ##
 if TYPE_CHECKING:
     # Avoid potential cyclic imports
     from CARTLib.core.DataUnitBase import ResourceType
+    from SegmentationConfig import SegmentationConfig
 
     # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
     # isn't the same as PyQT5 itself), but it's a LOT better than constant
@@ -119,7 +120,7 @@ class SegmentationUnit(CARTStandardUnit):
         # Subset of segmentation nodes marked "custom"
         self._custom_segmentations = dict()
 
-    def apply_segmentation_configs(self, task_config: SegmentationConfig):
+    def apply_segmentation_configs(self, task_config: "SegmentationConfig"):
         """
         Apply the user-specified configuration options to the segmentations managed by
         this unit. This includes;
@@ -206,7 +207,6 @@ class SegmentationUnit(CARTStandardUnit):
 
                 # Set its label value
                 segment.SetLabelValue(seg_val)
-
 
     def _create_new_segmentation(self, name: str):
         # Create the new node
