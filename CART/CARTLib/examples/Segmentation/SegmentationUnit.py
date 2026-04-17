@@ -1,22 +1,90 @@
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 
+import qt
 import slicer
-from CARTLib.core.DataUnitBase import ResourceType
 from slicer.i18n import tr as _
 
+from CARTLib.utils.config import ResourceSpecificConfig
 from CARTLib.utils.data import (
     CARTStandardUnit,
-    MarkupResource, SegmentationResource, VolumeResource,
+    MarkupResource,
+    SegmentationResource,
+    VolumeResource,
     create_empty_segmentation_node,
     load_segmentation,
 )
 
+from SegmentationConfig import ExtendedSegmentationResourceConfig
 
+## Type Utils ##
+if TYPE_CHECKING:
+    # Avoid potential cyclic imports
+    from CARTLib.core.DataUnitBase import ResourceType
+
+    # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
+    # isn't the same as PyQT5 itself), but it's a LOT better than constant
+    # cross-referencing
+    import PyQt5.Qt as qt
+
+
+## Resource-Specific Elements ##
 class EditableSegmentationResource(SegmentationResource):
 
-    id = "editable_segmentation"
+    id = "segmentation_editable"
     pretty_name = "To-Edit Segmentation"
     user_warning = _("⚠ The resource name will be used as a suffix in the saved file! ⚠")
+    description = _(
+        "A discrete (integer) segmentation of anatomy you want to load and edit for a given case. "
+        "If a case is missing this resource, a blank segmentation will be created instead "
+        "(which you can then edit). Can support multiple segmentations within a single file, "
+        "as long as each has a unique 'final' integer value. "
+        "\n\n"
+        "Any changes made to this resource will be saved when the case is saved. "
+        "You can customize the values the label(s) will have using the GUI below. "
+        "Please define it to the best of your ability."
+    )
+
+    @classmethod
+    def buildConfigGUI(
+        cls, task_config: "DictBackedConfig", resource_id: Optional[str] = None
+    ) -> "Optional[qt.QLayout]":
+        # Initialize the layout as before
+        layout = super().buildConfigGUI(task_config, resource_id)
+
+        # Add an QTableWidget to display the segments associated w/ this resource
+        resource_config = ExtendedSegmentationResourceConfig(ResourceSpecificConfig(task_config), resource_id)
+        resource_config.buildSegmentTableGUI(layout)
+
+        return layout
+
+
+class ReferenceSegmentationResource(SegmentationResource):
+
+    id = "segmentation_view_only"
+    pretty_name = "To-View Segmentation"
+    description = _(
+        "A discrete (integer) segmentation of anatomy you want to load for reference. "
+        "Nothing is done if a case is missing this resource; it is simply skipped over. "
+        "\n\n"
+        "While you can edit this segmentation in Slicer if you so choose, "
+        "any changes made will **NOT** be saved when the case is saved."
+    )
+
+    @classmethod
+    def buildConfigGUI(
+        cls, task_config: "DictBackedConfig", resource_id: Optional[str] = None
+    ) -> "Optional[qt.QLayout]":
+        # Initialize the layout as before
+        layout = super().buildConfigGUI(task_config, resource_id)
+
+        # Add an QTableWidget to display the segments associated w/ this resource
+        resource_config = ExtendedSegmentationResourceConfig(
+            ResourceSpecificConfig(task_config), resource_id
+        )
+        resource_config.buildSegmentTableGUI(layout)
+
+        return layout
 
 
 class SegmentationUnit(CARTStandardUnit):
@@ -25,10 +93,11 @@ class SegmentationUnit(CARTStandardUnit):
     Standard Unit to support custom segmentations.
     """
 
-    # Replace the default segmentation resource w/ our custom sub-types
+    # Replace the default segmentation resource w/ our custom subtypes
     RESOURCE_TYPES = {
         VolumeResource.id: VolumeResource,
         EditableSegmentationResource.id: EditableSegmentationResource,
+        ReferenceSegmentationResource.id: ReferenceSegmentationResource,
         MarkupResource.id: MarkupResource
     }
 
@@ -149,6 +218,6 @@ class SegmentationUnit(CARTStandardUnit):
             self.resources[key] = node
 
     @classmethod
-    def resource_types(cls) -> dict[str, ResourceType]:
+    def resource_types(cls) -> "dict[str, ResourceType]":
         # Replace the "default" se
         return cls.RESOURCE_TYPES

@@ -925,7 +925,7 @@ class VolumeResource(SimpleResource):
         return None
 
 
-class SegmentationConfig(DictBackedConfig):
+class SegmentationResourceConfig(DictBackedConfig):
     @classmethod
     def default_config_label(cls) -> str:
         raise ValueError("You should use `config_key_override` instead!")
@@ -959,9 +959,8 @@ class SegmentationResource(SimpleResource):
         resource_handling_config = ResourceSpecificConfig(task_config)
 
         # Initialize the resource-specific config instance
-        resource_config = SegmentationConfig(resource_handling_config, resource_id)
+        resource_config = SegmentationResourceConfig(resource_handling_config, resource_id)
 
-        # TODO: Expand this further
         # Initialize a layout which wraps it
         layout = qt.QFormLayout(None)
         hideOnLoadCheckbox = qt.QCheckBox()
