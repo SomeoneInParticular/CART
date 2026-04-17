@@ -5,7 +5,6 @@ import ctk
 import qt
 from slicer.i18n import tr as _
 
-from CARTLib.core.TaskBaseClass import TaskBaseClass
 from CARTLib.utils import CART_PATH
 from CARTLib.utils.cohort import (
     cohort_from_generator,
