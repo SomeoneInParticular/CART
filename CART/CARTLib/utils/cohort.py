@@ -1290,6 +1290,9 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         resourceTypeSelector.setToolTip(resourceTypeToolTip)
         layout.addRow(resourceTypeLabel, resourceTypeSelector)
 
+        # Default the resource type selector to select no type
+        resourceTypeSelector.setCurrentIndex(-1)
+
         # Add it to the overall layout
         layout.addRow(resourceTypeLabel, resourceTypeSelector)
 
@@ -1361,17 +1364,13 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Match the selected resource type to the previous resource type (if possible)
         if self._prior_resource is not None:
             prior_type_id = self._prior_resource.get(self._cohort.RESOURCE_TYPE_KEY)
-            if prior_type_id is None:
-                resourceTypeSelector.setCurrentIndex(-1)
-            else:
+            if prior_type_id is not None:
                 duf = self._cohort.reference_task.getDataUnitFactory()
                 prior_type = duf.resource_types().get(prior_type_id)
-                if prior_type is None:
-                    resourceTypeSelector.setCurrentIndex(-1)
-                else:
+                if prior_type is not None:
                     resourceTypeSelector.setCurrentText(prior_type.pretty_name)
-        else:
-            resourceTypeSelector.setCurrentIndex(-1)
+                    # Reset our change state to prevent an erroneous "Unsaved Changes" pop-up
+                    self._has_changed = False
 
     ## Resource-Specific Config Handling ##
     DUMMY_RESOURCE_NAME = "__dummy"
