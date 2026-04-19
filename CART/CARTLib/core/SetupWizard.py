@@ -906,22 +906,18 @@ class _DataSelectionPage(qt.QWizardPage):
         cohort_model: CohortModel = self._cohortPreviewWidget.model
         # Temporarily make the model editable (if it wasn't already)
         with cohort_model.temporarily_editable():
-            try:
-                # Update the cohort's reference data path to our current data path
-                cohort_model.data_path = self.data_path
-                # Generate our editor dialogue using the model
-                dialog = CohortEditorDialog(
-                    cohort_model,
-                    self.wizard().task_config,
-                    self
-                )
-                # If the user rejects the changes, or backs out, restore the model's state from file
-                if not dialog.exec():
-                    cohort_model.load()
-                    self._cohortPreviewWidget.refresh()
-            finally:
-                # Disconnect the dialogue from everything, no matter what the user did.
-                dialog.disconnectAll()
+            # Update the cohort's reference data path to our current data path
+            cohort_model.data_path = self.data_path
+            # Generate our editor dialogue using the model
+            dialog = CohortEditorDialog(
+                cohort_model,
+                self.wizard().task_config,
+                self
+            )
+            # If the user rejects the changes, or backs out, restore the model's state from file
+            if not dialog.exec():
+                cohort_model.load()
+                self._cohortPreviewWidget.refresh()
 
     def isComplete(self):
         to_check = [self.data_path, self.output_path, self.cohort_path]

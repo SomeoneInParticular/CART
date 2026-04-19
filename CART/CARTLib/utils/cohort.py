@@ -925,8 +925,7 @@ class NewCohortDialog(ChangeTrackingDialogue):
         )
 
 
-# TODO: Switch to SmartClosingDialog
-class CohortEditorDialog(qt.QDialog):
+class CohortEditorDialog(ChangeTrackingDialogue):
     """
     GUI Dialog for editing a given cohort file.
 
@@ -985,9 +984,7 @@ class CohortEditorDialog(qt.QDialog):
         def onButtonClicked(button: qt.QPushButton):
             button_role = buttonBox.buttonRole(button)
             if button_role == qt.QDialogButtonBox.RejectRole:
-                # Confirm the user wants to reject any changes first
-                if self.confirmReject():
-                    self.reject()
+                self.reject()
             elif button_role == qt.QDialogButtonBox.AcceptRole:
                 # Only save changes to the cohort when confirmed!
                 self._cohort.save()
@@ -1108,29 +1105,14 @@ class CohortEditorDialog(qt.QDialog):
         buttonPanel.addWidget(dropResourcesButton, 1, 1)
         layout.addLayout(buttonPanel)
 
-    def closeEvent(self, event):
-        # Confirm that the user wants to reject any changes they made first
-        if self.confirmReject():
-            event.accept()
-        # Otherwise, boot them back
-        else:
-            event.ignore()
+    @property
+    def has_changed(self):
+        return super().has_changed or self._cohort.has_changed
 
-    def confirmReject(self) -> bool:
-        # If we have changed anything, confirm we want to exit first
-        if self._cohort.has_changed:
-            reply = qt.QMessageBox.question(
-                self,
-                "Are you sure?",
-                "If you close now, any changes made will be lost. Do you want to proceed?",
-                qt.QMessageBox.Yes | qt.QMessageBox.No,
-                qt.QMessageBox.No,
-            )
-            return reply == qt.QMessageBox.Yes
-        # Otherwise always proceed (as there's nothing to be lost)
-        return True
-
-    def disconnectAll(self):
+    def _disconnectAll(self):
+        # Why does the SmartClosingDialogue functionality cause
+        # a memory leak w/ its default approach in this context?
+        # Who the fuck knows!
         for v in self._to_disconnect:
             v.disconnect()
 
@@ -1438,7 +1420,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
 
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed
-        if not self._has_changed:
+        if not self.has_changed:
             return True
 
         # TODO: Move the following checks to be run dynamically, disabling the "OK" button
@@ -1675,7 +1657,7 @@ class CaseEditorDialog(ChangeTrackingDialogue):
 
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed
-        if not self._has_changed:
+        if not self.has_changed:
             return True
 
         # Make sure a case with this name doesn't already exist

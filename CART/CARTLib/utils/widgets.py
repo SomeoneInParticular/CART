@@ -100,9 +100,14 @@ class ChangeTrackingDialogue(SmartClosingDialogue):
         # Mark this dialogue has having been changed
         self._has_changed = True
 
+    @property
+    def has_changed(self):
+        # Made a property so subclasses can override it
+        return self._has_changed
+
     def _confirmDiscardingUnsavedChanges(self) -> bool:
         # If we don't have unsaved changes, assume the user confirms
-        if not self._has_changed:
+        if not self.has_changed:
             return True
         # Confirm w/ the user if they want to discard the unsaved changes
         msg = qt.QMessageBox()
