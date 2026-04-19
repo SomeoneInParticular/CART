@@ -884,6 +884,9 @@ class _DataSelectionPage(qt.QWizardPage):
         cohort = cohort_from_generator(
             dialog.cohort_file, self.data_path, dialog.current_generator
         )
+        # Immediately disconnect all of its signals to avoid a memory leak
+        cohort.disconnectChangeEvents()
+
         # Update the cohort's reference task to match ours
         task_id = self.wizard().selected_task
         cohort.reference_task = CART_TASK_REGISTRY.get(task_id, None)
