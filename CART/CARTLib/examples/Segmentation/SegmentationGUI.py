@@ -1,14 +1,10 @@
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-import ctk
 import qt
 from slicer.i18n import tr as _
 
-from CARTLib.utils.formatting import FilePathFormatter, FilePathEditorWidget
+from CARTLib.utils.formatting import FilePathFormatter
 from CARTLib.utils.widgets import CARTSegmentationEditorWidget
-
-from SegmentationConfig import SegmentationConfig
 
 if TYPE_CHECKING:
     # Provide some type references for QT, even if they're perfect

@@ -6,8 +6,6 @@ from typing import Optional, TYPE_CHECKING, Tuple, Callable
 
 import qt
 import slicer.util
-import vtk
-from slicer import vtkMRMLScalarVolumeNode
 from slicer.ScriptedLoadableModule import *
 from slicer.i18n import tr as _
 from slicer.util import VTKObservationMixin
@@ -19,6 +17,12 @@ from CARTLib.core.SetupWizard import CARTSetupWizard, JobSetupWizard
 from CARTLib.utils import CART_PATH, CART_VERSION
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
+
+# These become available when Slicer initializes
+# noinspection PyUnresolvedReferences
+import vtk
+# noinspection PyUnresolvedReferences
+from slicer import vtkMRMLScalarVolumeNode
 
 if TYPE_CHECKING:
     import PyQt5.Qt as qt

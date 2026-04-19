@@ -9,7 +9,6 @@ import numpy as np
 
 import qt
 import slicer
-import vtk
 from slicer.i18n import tr as _
 
 from CARTLib.core.DataUnitBase import DataUnitBase, ResourceType
@@ -19,6 +18,10 @@ from CARTLib.utils.config import (
     MasterProfileConfig,
     ResourceSpecificConfig,
 )
+
+# These become available when Slicer initializes
+# noinspection PyUnresolvedReferences
+import vtk
 
 if TYPE_CHECKING:
     # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl

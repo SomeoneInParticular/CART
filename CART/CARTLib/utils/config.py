@@ -1,6 +1,5 @@
 import json
 from abc import ABC, abstractmethod, ABCMeta
-from functools import cached_property
 from pathlib import Path
 import re
 from typing import Generic, Optional, TypeVar, Callable, TYPE_CHECKING

@@ -1,4 +1,3 @@
-import traceback
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
@@ -8,7 +7,6 @@ from CARTLib.core.TaskBaseClass import CARTTask
 from CARTLib.core.DataUnitBase import DataUnitFactory
 from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
 from CARTLib.utils.task import cart_task
-from CARTLib.utils.widgets import showErrorPrompt
 
 from SegmentationConfig import SegmentationConfig
 from SegmentationGUI import SegmentationGUI
