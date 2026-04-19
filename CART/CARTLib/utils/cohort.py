@@ -813,6 +813,9 @@ class NewCohortDialog(ChangeTrackingDialogue):
         self.setWindowTitle(_("New Cohort"))
         layout = qt.QFormLayout(self)
 
+        # Make ourselves wider initially so the placeholder text is more clear
+        self.resize(400, self.minimumHeight)
+
         # Name to give the cohort
         cohortNameLabel = qt.QLabel(_("File: "))
         cohortFileEdit = CARTPathLineEdit()
