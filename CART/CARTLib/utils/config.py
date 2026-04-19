@@ -361,16 +361,25 @@ class MasterProfileConfig(DictBackedConfig):
         return job_map
 
     def register_new_job(self, job_config: "JobProfileConfig"):
-        # Register the new job
+        """
+        Registers a new job for use by CART. The job's index will be
+        placed at the top of the job list automatically, making the
+        job list automatically sort itself in order of how recently
+        they were used.
+        """
+
+        # Initialize the keys
         k = job_config.name
         p = str(job_config.file.resolve())
-        job_map = self.get_or_default(self.REGISTERED_JOB_KEY, {})
-        job_map[k] = p
-        # Mark ourselves as being changed
-        self.has_changed = True
+
+        # Insert our new job
+        self.registered_jobs[k] = p
+
+        # Move the new job to the front; this also marks ourselves as being changed
+        self.set_last_job(k)
 
     @property
-    def last_job(self) -> Optional[tuple[str, Path]]:
+    def last_job(self) -> Optional[tuple[str, str]]:
         """
         Returns the name and path to the job last used, as detailed within this config.
         """
