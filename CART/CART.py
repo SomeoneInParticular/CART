@@ -188,10 +188,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         layout.addWidget(editProfileButton)
 
         # Connections
-        def editProfilePressed():
-            self.runProfileEdit()
-
-        editProfileButton.pressed.connect(editProfilePressed)
+        editProfileButton.pressed.connect(self.runProfileEdit)
 
         # Setup and return
         self.userText = userText
@@ -207,6 +204,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         jobSelectorComboBoxLabel = qt.QLabel(_("Please Select or Create a Job:"))
         jobSelectorComboBox = qt.QComboBox(None)
 
+        # Ensure the job selection dropdown is properly updated upon request
+        @qt.Slot()
         def updateJobSelector():
             jobSelectorComboBox.clear()
             jobSelectorComboBox.addItems(self.logic.registered_jobs_names)
@@ -230,36 +229,20 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         newButton = qt.QPushButton(_("New"))
         newButton.setToolTip(_("Create a new Job"))
 
-        def newButtonClicked():
-            # Run the new job creation wizard.
-            self.runNewJobSetup()
-
-        newButton.clicked.connect(newButtonClicked)
+        newButton.clicked.connect(self.runNewJobSetup)
         buttonPanelLayout.addWidget(newButton)
 
         # "Edit" button
         editButton = qt.QPushButton(_("Edit"))
         editButton.setToolTip(_("Edit the Job's configuration"))
 
-        def onJobEdit():
-            currentJob: str = jobSelectorComboBox.currentText
-            jobPath = self.logic.registered_jobs.get(currentJob, None)
-            # If the specified job's config is missing, ask if they want to re-create it!
-            if jobPath is None:
-                # If they don't, end here
-                if self._jobMissingPrompt() != qt.QMessageBox.Yes:
-                    return
-                # Create a new config w/ the same name
-                jobConfig = JobProfileConfig()
-                jobConfig.name = currentJob
-            # Otherwise, load the previous job's configuration
-            else:
-                jobConfig = JobProfileConfig(file_path=Path(jobPath))
-                jobConfig.reload()
-            # Have the user edit the job
-            self.runJobEdit(jobConfig)
+        @qt.Slot()
+        def editButtonClicked():
+            # Edit the job currently selected by the dropdown
+            job_name: str = jobSelectorComboBox.currentText.strip()
+            self.editJob(job_name)
 
-        editButton.clicked.connect(onJobEdit)
+        editButton.clicked.connect(editButtonClicked)
         buttonPanelLayout.addWidget(editButton)
         self.onJobListChanged.append(
             lambda: editButton.setEnabled(jobSelectorComboBox.isEnabled())
@@ -269,6 +252,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         deleteButton = qt.QPushButton(_("Delete"))
         deleteButton.setToolTip(_("Delete the Job configuration"))
 
+        @qt.Slot()
         def onJobDelete():
             self.logic.delete_job_config(jobSelectorComboBox.currentText)
             self.jobListChanged()
@@ -283,6 +267,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         startButton = qt.QPushButton("Start")
         startButton.setToolTip(_("Start CART!"))
 
+        @qt.Slot()
         def onStartClicked():
             if jobSelectorComboBox.isEnabled():
                 self.start(jobSelectorComboBox.currentText)
@@ -417,7 +402,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     ## Connections ##
     def start(self, job_name=None):
-        # If this is the first time CART has been run, ask to initialize firest
+        # Check if a user profile exists, prompting the user to create one if not.
         if not self.logic.has_run_before():
             if self._noProfileFoundPrompt() != qt.QMessageBox.Yes:
                 return
@@ -430,16 +415,12 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             job_name = self.runNewJobSetup()
             if job_name is None:
                 return
-        # or, if the job is corrupted (somehow), ask to re-build it
-        elif self.logic.registered_jobs[job_name] is None:
-            if self._jobMissingPrompt() != qt.QMessageBox.Yes:
+        # If the corresponding job path doesn't exist on file, prompt the user to "edit" the job instead.
+        job_path = self.logic.registered_jobs.get(job_name, None)
+        if job_path is None or not Path(job_path).exists():
+            # If the user backs out of re-creating the new job, end here
+            if not self.editJob(job_name):
                 return
-            config = JobProfileConfig()
-            config.name = job_name
-            job_name = self.runJobEdit(config)
-            if not job_name:
-                return
-            job_name = config.name
         # Finally, initialize the job
         self.initJob(job_name)
 
@@ -523,13 +504,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         )
 
     @staticmethod
-    def _jobMissingPrompt():
-        return qt.QMessageBox.question(
+    def _jobMissingPrompt(job_name: str):
+        return qt.QMessageBox.warning(
             None,
-            _("Job Cannot be Found"),
+            _(f"Job '{job_name}' Not Found"),
             _(
-                "It seems the requested job's configuration was deleted or is unavailable; "
-                "would you like to create a new job instead?"
+                f"The configuration for {job_name} was deleted or is unavailable; "
+                "would you like to create a new job of the same name instead?"
             ),
             qt.QMessageBox.Yes | qt.QMessageBox.No,
             qt.QMessageBox.Yes,
@@ -552,6 +533,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             return True
         return False
 
+    @qt.Slot()
     def runProfileEdit(self) -> bool:
         profileWizard = CARTSetupWizard(None, self.logic.master_profile_config)
         result = profileWizard.exec()
@@ -561,14 +543,16 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             return True
         return False
 
+    @qt.Slot()
     def runNewJobSetup(self) -> Optional[str]:
         """
         Run CART job creation, prompting the user to provide the following:
-            * The data they want to use, and where to save the results
-            * The task they want to run
-            * How they want to iterate through the data (the "cohort")
+            * The data they want to use, and where to save the results.
+            * The task they want to run.
+            * How they want to iterate through the data (the "cohort").
+            * Relevant configurations for each of the previous options.
 
-        :return: The name of the new job; None if the setup was terminated
+        :return: The name of the new job; None if the setup was terminated.
         """
 
         jobSetupWizard = JobSetupWizard(
@@ -583,25 +567,38 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             return new_config.name
         return None
 
-    def runJobEdit(self, config: JobProfileConfig = None) -> bool:
+    def editJob(self, job_name: str) -> bool:
         """
-        Edits an existing job in-place. Re-uses the job creation wizard,
-        skipping the introduction page and filling every field with
-        the previous job's values (if present).
+        Begin editing the job with the provided name. If no such job exists,
+        the user will be prompted to create a job of the same name instead.
 
-        :return: If the edit was successful or not.
+        :return: True if the job was successfully edited, False otherwise.
         """
+        job_path = self.logic.registered_jobs.get(job_name, None)
+        # If the specified job's path is missing, ask if they want to re-create it!
+        if job_path is None or not Path(job_path).exists():
+            # If they don't, end here
+            if self._jobMissingPrompt(job_name) != qt.QMessageBox.Yes:
+                return False
+            # Create a new config w/ the same name
+            job_config = JobProfileConfig()
+            job_config.name = job_name
+        # Otherwise, load the previous job's configuration
+        else:
+            job_config = JobProfileConfig(file_path=Path(job_path))
+            job_config.reload()
 
+        # Initialize the wizard which will walk the user through the edits.
         jobSetupWizard = JobSetupWizard(
-            None, taken_names=self.logic.registered_jobs.keys(), config=config
+            None, taken_names=self.logic.registered_jobs.keys(), config=job_config
         )
-        result = jobSetupWizard.exec()
 
-        # If we got an "accept" signal, create the job config and exit
-        if result == qt.QDialog.Accepted:
-            new_config = jobSetupWizard.save_config(self.logic)
+        # If we got an "accept" signal, register the changes and return True
+        if jobSetupWizard.exec() == qt.QDialog.Accepted:
+            jobSetupWizard.save_config(self.logic)
             self.jobListChanged()
             return True
+        # Otherwise the user backed out, return False
         return False
 
     ## Job Management ##
@@ -612,7 +609,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Update the GUI to match
         self.logic.init_task_gui(self.taskSubWidget)
 
-        # Expand the task widget's container, if any
+        # Swap to the "job" widget container, if any
         self.mainWidget.setCurrentIndex(self.jobWidgetIndex)
 
         # "Emit" the job-changed signal
