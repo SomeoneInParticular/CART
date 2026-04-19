@@ -964,8 +964,10 @@ class CohortEditorDialog(ChangeTrackingDialogue):
 
         # Initial setup
         self.setWindowTitle(_("Cohort Editor"))
-        self.setMinimumSize(900, 700)
         layout = qt.QVBoxLayout(self)
+
+        # Initially expand ourselves to make the contents clearer
+        self.resize(900, 700)
 
         # Main table widget
         cohortWidget = CohortTableWidget(self._cohort, self._task_config)
@@ -1169,7 +1171,9 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
             self.setWindowTitle(_(f"Editing Resource '{pretty_name}'"))
         else:
             self.setWindowTitle(_("Add New Resource"))
-        self.setMinimumSize(500, self.minimumHeight)
+
+        # Initially widen to show more of the contents
+        self.resize(500, self.minimumHeight)
         layout = qt.QFormLayout(self)
 
         # Warning to notify the user; managed by the resource-type GUI (below)
@@ -1561,8 +1565,10 @@ class CaseEditorDialog(ChangeTrackingDialogue):
             self.setWindowTitle(_(f"Editing Case '{case_id}'"))
         else:
             self.setWindowTitle(_("Add New Case"))
-        self.setMinimumSize(500, self.minimumHeight)
         layout = qt.QFormLayout(self)
+
+        # Initially widen to show more of the contents
+        self.resize(500, self.minimumHeight)
 
         # Name Field
         nameLabel = qt.QLabel(_("Case Name:"))
