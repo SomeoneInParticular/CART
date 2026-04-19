@@ -798,7 +798,7 @@ class CohortTableWidget(CSVBackedTableWidget):
 
 
 ## Related Dialogues ##
-class NewCohortDialog(qt.QDialog):
+class NewCohortDialog(ChangeTrackingDialogue):
     def __init__(
         self,
         data_path: Path,
@@ -876,6 +876,7 @@ class NewCohortDialog(qt.QDialog):
         def onCohortChanged(new_txt: str):
             # Disable the button if the file changed
             self.validate()
+            self.mark_changed()
 
         cohortFileEdit.textChanged.connect(onCohortChanged)
 
@@ -885,6 +886,7 @@ class NewCohortDialog(qt.QDialog):
             new_description = GENERATOR_DESCRIPTIONS.get(new_txt, _("Missing description for this case generator!"))
             cohortTypeDescription.setText(new_description)
             self.validate()
+            self.mark_changed()
 
         cohortTypeComboBox.currentTextChanged.connect(onCohortTypeChanged)
 
