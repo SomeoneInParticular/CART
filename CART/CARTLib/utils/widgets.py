@@ -71,7 +71,7 @@ class SmartClosingDialogue(qt.QDialog):
             for signal in filter(lambda x: type(x) == qt.Signal, w_dir):
                 signal.disconnect()
 
-    @qt.Slot()
+    @qt.Slot(int)
     def done(self, val: int):
         self._disconnectAll()
         qt.QDialog.done(self, val)
