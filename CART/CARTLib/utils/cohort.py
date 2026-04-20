@@ -704,6 +704,11 @@ class CohortTableView(qt.QTableView):
         self.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
         self.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
 
+    @property
+    def selectedItemsChanged(self):
+        # Alias for the underlying selection model's "selection changed" object
+        return self.selectionModel().selectionChanged
+
     def contextMenuEvent(self, event: "qt.QContextMenuEvent"):
         # If the table we're viewing isn't editable, skip
         if not self.model().is_editable():
@@ -795,6 +800,11 @@ class CohortTableWidget(CSVBackedTableWidget):
     ):
         model = CohortModel(csv_path, data_path, editable=editable)
         return cls(model)
+
+    @property
+    def selectedItemsChanged(self) -> qt.Signal:
+        # Alias for our managed table's "selectedItemsChanged" signal
+        return self.tableView.selectedItemsChanged
 
 
 ## Related Dialogues ##
@@ -975,6 +985,7 @@ class CohortEditorDialog(ChangeTrackingDialogue):
         cohortWidget.setFrameShadow(qt.QFrame.Sunken)
         cohortWidget.setLineWidth(3)
         layout.addWidget(cohortWidget)
+        self.cohortWidget = cohortWidget
 
         # Cohort Management Buttons
         self._addButtons(layout, cohortWidget)
@@ -1064,6 +1075,8 @@ class CohortEditorDialog(ChangeTrackingDialogue):
 
         dropResourcesButton.clicked.connect(dropResourcesClicked)
         self._to_disconnect.append(dropResourcesButton.clicked)
+        # We never have elements selected initially
+        dropResourcesButton.setEnabled(False)
         resourceLayout.addWidget(dropResourcesButton)
 
         ## Case (Row) Specific ##
@@ -1123,7 +1136,18 @@ class CohortEditorDialog(ChangeTrackingDialogue):
                 self._cohort.drop_cases(case_names)
         dropCasesButton.clicked.connect(dropCasesClicked)
         self._to_disconnect.append(dropCasesButton.clicked)
+        # We never have elements selected initially
+        dropCasesButton.setEnabled(False)
         caseLayout.addWidget(dropCasesButton)
+
+        ## Global Connections ##
+        @qt.Slot(qt.QItemSelection, qt.QItemSelection)
+        def updateButtonsEnabled(selected: qt.QItemSelection, __: qt.QItemSelection):
+            should_enable = len(selected.indexes()) > 0
+            dropResourcesButton.setEnabled(should_enable)
+            dropCasesButton.setEnabled(should_enable)
+
+        self.cohortWidget.selectedItemsChanged.connect(updateButtonsEnabled)
 
     @property
     def has_changed(self):
