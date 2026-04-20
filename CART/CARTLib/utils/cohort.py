@@ -704,11 +704,37 @@ class CohortTableView(qt.QTableView):
         self.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
         self.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
 
+        # Hook up our connections
+        self.verticalHeader().sectionDoubleClicked.connect(self._caseLabelDoubleClicked)
+        self.horizontalHeader().sectionDoubleClicked.connect(self._resourceLabelDoubleClicked)
+
     @property
     def selectedItemsChanged(self):
         # Alias for the underlying selection model's "selection changed" object
         return self.selectionModel().selectionChanged
 
+    ## Double-click Actions
+    @qt.Slot(int)
+    def _caseLabelDoubleClicked(self, idx: int):
+        # If the table we're viewing isn't editable, do nothing
+        m: "CohortModel" = self.model()
+        if not m.is_editable():
+            return
+        # Prompt the user to edit the corresponding case
+        row_id = m.indices[idx]
+        self._caseEditorPrompt(row_id)
+
+    @qt.Slot(int)
+    def _resourceLabelDoubleClicked(self, idx: int):
+        # If the table we're viewing isn't editable, do nothing
+        m: "CohortModel" = self.model()
+        if not m.is_editable():
+            return
+        # Prompt the user to edit the corresponding resource
+        col_id = m.header[idx]
+        self._resourceEditorPrompt(col_id)
+
+    ## Context (Right-Click) Actions ##
     def contextMenuEvent(self, event: "qt.QContextMenuEvent"):
         # If the table we're viewing isn't editable, skip
         if not self.model().is_editable():
@@ -722,43 +748,48 @@ class CohortTableView(qt.QTableView):
 
         # Otherwise, build a menu of actions to do
         menu = qt.QMenu(self)
-        self.installRowActions(menu, idx)
-        self.installColActions(menu, idx)
+        self._installRowActions(menu, idx)
+        self._installColActions(menu, idx)
 
         # Show it to the user
         menu.popup(self.viewport().mapToGlobal(pos))
 
-    def installRowActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
-        # Get the case label for ease-of-use
+    def _installRowActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
+        # Get the case to generate the object for
         row_id = self.model().indices[idx.row()]
 
         # Modification action
         editAction = menu.addAction(_(f"Modify {row_id}"))
-        def _modifyRow():
-            dialog = CaseEditorDialog(self.model(), row_id)
-            dialog.exec()
-        editAction.triggered.connect(_modifyRow)
+        editAction.triggered.connect(lambda: self._caseEditorPrompt(row_id))
 
-    def installColActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
+    def _installColActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
         # Get the case label for ease-of-use
         model: CohortModel = self.model()
         col_id = model.header[idx.column()]
         col_pretty = model.csv_to_pretty(col_id)
-        task_config = self.task_config
 
         # Modification action
         editAction = menu.addAction(_(f"Modify {col_pretty}"))
-        def _modifyColumn():
-            dialog = ResourceEditorDialogue(
-                cohort=model, resource_name=col_id, task_config=task_config
-            )
-            if dialog.exec():
-                # Without this, the cells rapidly bloat for some reason
-                self.resizeColumnsToContents()
-                self.resizeRowsToContents()
+        editAction.triggered.connect(lambda: self._resourceEditorPrompt(col_id))
 
-        editAction.triggered.connect(_modifyColumn)
+    ## Other Utilities ##
+    def _caseEditorPrompt(self, row_id):
+        dialog = CaseEditorDialog(self.model(), row_id)
+        if dialog.exec():
+            # Without this, the cells rapidly bloat for some reason
+            self.resizeColumnsToContents()
+            self.resizeRowsToContents()
 
+    def _resourceEditorPrompt(self, col_id):
+        dialog = ResourceEditorDialogue(
+            cohort=self.model(), resource_name=col_id, task_config=self.task_config
+        )
+        if dialog.exec():
+            # Without this, the cells rapidly bloat for some reason
+            self.resizeColumnsToContents()
+            self.resizeRowsToContents()
+
+    ## Dunders ##
     def __del__(self):
         # Disconnect change events; PythonQT isn't smart enough to clean up
         #  self-referential actions it seems.
