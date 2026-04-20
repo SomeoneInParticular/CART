@@ -988,7 +988,7 @@ class CohortEditorDialog(ChangeTrackingDialogue):
         self.cohortWidget = cohortWidget
 
         # Cohort Management Buttons
-        self._addButtons(layout, cohortWidget)
+        self._addButtons(layout)
 
         # Ok/Cancel Buttons
         buttonBox = qt.QDialogButtonBox()
@@ -1016,7 +1016,7 @@ class CohortEditorDialog(ChangeTrackingDialogue):
         self._to_disconnect.append(buttonBox.clicked)
         layout.addWidget(buttonBox)
 
-    def _addButtons(self, layout: "qt.QVBoxLayout", cohortWidget: "CohortTableWidget"):
+    def _addButtons(self, layout: "qt.QVBoxLayout"):
         ## Resource (Column) Specific ##
         resourceContainer = ctk.ctkCollapsibleGroupBox()
         resourceContainer.setTitle(_("Resource (Column) Operations"))
@@ -1031,17 +1031,8 @@ class CohortEditorDialog(ChangeTrackingDialogue):
                 "will be automatically populated wherever possible."
             )
         )
-        @qt.Slot(None)
-        def newResourceClicked():
-            dialog = ResourceEditorDialogue(
-                cohort=self._cohort, task_config=self._task_config
-            )
-            if dialog.exec():
-                # Without this, the cells rapidly bloat for some reason
-                cohortWidget.tableView.resizeColumnsToContents()
-                cohortWidget.tableView.resizeRowsToContents()
 
-        newResourceButton.clicked.connect(newResourceClicked)
+        newResourceButton.clicked.connect(self._addNewResource)
         self._to_disconnect.append(newResourceButton.clicked)
         resourceLayout.addWidget(newResourceButton)
 
@@ -1051,29 +1042,7 @@ class CohortEditorDialog(ChangeTrackingDialogue):
               "THIS CANNOT BE UNDONE!")
         )
 
-        @qt.Slot(None)
-        def dropResourcesClicked():
-            # Prompt the user to confirm this is what they want to do
-            msg = qt.QMessageBox()
-            msg.setWindowTitle("Are you sure?")
-            resource_names = list(
-                {
-                    self._cohort.header[idx.column()]
-                    for idx in cohortWidget.selectedIndices
-                }
-            )
-            resource_points = "\n".join(["  * " + c for c in resource_names])
-            msg.setText(
-                "You are about to delete the following resources:\n"
-                f"{resource_points}\n"
-                f"Are you sure?"
-            )
-            msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
-            # Only apply the deletion if confirmed by the user
-            if msg.exec() == qt.QMessageBox.Yes:
-                self._cohort.drop_filters(resource_names)
-
-        dropResourcesButton.clicked.connect(dropResourcesClicked)
+        dropResourcesButton.clicked.connect(self._dropSelectedResources)
         self._to_disconnect.append(dropResourcesButton.clicked)
         # We never have elements selected initially
         dropResourcesButton.setEnabled(False)
@@ -1094,15 +1063,7 @@ class CohortEditorDialog(ChangeTrackingDialogue):
                 "wherever possible."
             )
         )
-
-        @qt.Slot(None)
-        def newCaseClicked():
-            dialog = CaseEditorDialog(self._cohort)
-            if dialog.exec():
-                # Without this, the cells rapidly bloat for some reason
-                cohortWidget.tableView.resizeColumnsToContents()
-                cohortWidget.tableView.resizeRowsToContents()
-        newCaseButton.clicked.connect(newCaseClicked)
+        newCaseButton.clicked.connect(self._addNewCase)
         self._to_disconnect.append(newCaseButton.clicked)
         caseLayout.addWidget(newCaseButton)
 
@@ -1115,26 +1076,7 @@ class CohortEditorDialog(ChangeTrackingDialogue):
             )
         )
 
-        @qt.Slot(None)
-        def dropCasesClicked():
-            # Prompt the user to confirm this is what they want to do
-            msg = qt.QMessageBox()
-            msg.setWindowTitle("Are you sure?")
-            case_names = list({
-                self._cohort.indices[idx.row()]
-                for idx in cohortWidget.selectedIndices
-            })
-            case_points = "\n".join(["  * " + c for c in case_names])
-            msg.setText(
-                "You are about to delete the following cases:\n"
-                f"{case_points}\n"
-                f"Are you sure?"
-            )
-            msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
-            # Only apply the deletion if confirmed by the user
-            if msg.exec() == qt.QMessageBox.Yes:
-                self._cohort.drop_cases(case_names)
-        dropCasesButton.clicked.connect(dropCasesClicked)
+        dropCasesButton.clicked.connect(self._dropSelectedCases)
         self._to_disconnect.append(dropCasesButton.clicked)
         # We never have elements selected initially
         dropCasesButton.setEnabled(False)
@@ -1159,6 +1101,66 @@ class CohortEditorDialog(ChangeTrackingDialogue):
         # Who the fuck knows!
         for v in self._to_disconnect:
             v.disconnect()
+
+    def forceResize(self):
+        # Without this, the cells rapidly bloat after edits for some reason
+        self.cohortWidget.tableView.resizeColumnsToContents()
+        self.cohortWidget.tableView.resizeRowsToContents()
+
+    ## Slots ##
+    @qt.Slot()
+    def _addNewResource(self):
+        dialog = ResourceEditorDialogue(
+            cohort=self._cohort, task_config=self._task_config
+        )
+        if dialog.exec():
+            self.forceResize()
+
+    @qt.Slot()
+    def _dropSelectedResources(self):
+        # Prompt the user to confirm this is what they want to do
+        msg = qt.QMessageBox()
+        msg.setWindowTitle("Are you sure?")
+        resource_names = {
+            self._cohort.header[idx.column()]
+            for idx in self.cohortWidget.selectedIndices
+        }
+        resource_points = "\n".join(["  * " + c for c in resource_names])
+        msg.setText(
+            "You are about to delete the following resources:\n"
+            f"{resource_points}\n"
+            f"Are you sure?"
+        )
+        msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
+        # Only apply the deletion if confirmed by the user
+        if msg.exec() == qt.QMessageBox.Yes:
+            self._cohort.drop_filters(resource_names)
+
+    @qt.Slot()
+    def _addNewCase(self):
+        dialog = CaseEditorDialog(self._cohort)
+        if dialog.exec():
+            self.forceResize()
+
+    @qt.Slot()
+    def _dropSelectedCases(self):
+        # Prompt the user to confirm this is what they want to do
+        msg = qt.QMessageBox()
+        msg.setWindowTitle("Are you sure?")
+        case_names = {
+            self._cohort.indices[idx.row()]
+            for idx in self.cohortWidget.selectedIndices
+        }
+        case_points = "\n".join(["  * " + c for c in case_names])
+        msg.setText(
+            "You are about to delete the following cases:\n"
+            f"{case_points}\n"
+            f"Are you sure?"
+        )
+        msg.setStandardButtons(qt.QMessageBox.Yes | qt.QMessageBox.No)
+        # Only apply the deletion if confirmed by the user
+        if msg.exec() == qt.QMessageBox.Yes:
+            self._cohort.drop_cases(case_names)
 
 
 class ResourceEditorDialogue(ChangeTrackingDialogue):
