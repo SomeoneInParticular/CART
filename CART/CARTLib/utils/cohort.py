@@ -704,7 +704,11 @@ class CohortTableView(qt.QTableView):
         self.verticalHeader().setSectionResizeMode(qt.QHeaderView.ResizeToContents)
         self.setHorizontalScrollMode(qt.QAbstractItemView.ScrollPerPixel)
 
-        # Hook up our connections
+        # Delegate context menu creation (right-click) to our own custom functions instead
+        self.setContextMenuPolicy(qt.Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._presentCellContextMenu)
+
+        # Double-click connections
         self.verticalHeader().sectionDoubleClicked.connect(self._caseLabelDoubleClicked)
         self.horizontalHeader().sectionDoubleClicked.connect(self._resourceLabelDoubleClicked)
 
@@ -735,18 +739,18 @@ class CohortTableView(qt.QTableView):
         self._resourceEditorPrompt(col_id)
 
     ## Context (Right-Click) Actions ##
-    def contextMenuEvent(self, event: "qt.QContextMenuEvent"):
-        # If the table we're viewing isn't editable, skip
+    @qt.Slot(qt.QPoint)
+    def _presentCellContextMenu(self, pos: qt.QPoint):
+        # If our managed cohort isn't editable, terminate early
         if not self.model().is_editable():
             return
 
         # If the corresponding index is invalid, end here
-        pos = event.pos()
         idx = self.indexAt(pos)
         if not idx.isValid():
             return
 
-        # Otherwise, build a menu of actions to do
+        # Build the context menu
         menu = qt.QMenu(self)
         self._installRowActions(menu, idx)
         self._installColActions(menu, idx)
