@@ -832,12 +832,59 @@ class CohortTableView(qt.QTableView):
         editAction.triggered.connect(lambda: self._resourceEditorPrompt(col_id))
 
     ## Other Utilities ##
+    def editSelectedCase(self):
+        # Get the list of currently selected cases
+        selected_rows = {idx.row() for idx in self.selectionModel().selectedIndexes}
+        row_ids = [self.model().indices[i] for i in selected_rows]
+
+        # If the number of selected rows is one, just proceed to edit it
+        if len(row_ids) < 2:
+            self._caseEditorPrompt(row_ids[0])
+            return
+
+        # Otherwise, prompt the user to select one of the options first
+        dialog = qt.QInputDialog(self)
+        dialog.setWindowTitle(_("Multiple Cases Selected"))
+        dialog.setLabelText(_("Please Select a Case: "))
+        dialog.setComboBoxItems(row_ids)
+
+        # Only proceed to the editor if the
+        if dialog.exec() == qt.QDialog.Accepted:
+            row_id = dialog.textValue()
+            if row_id is not None:
+                self._caseEditorPrompt(row_id)
+
     def _caseEditorPrompt(self, row_id):
         dialog = CaseEditorDialog(self.model(), row_id)
         if dialog.exec():
             # Without this, the cells rapidly bloat for some reason
             self.resizeColumnsToContents()
             self.resizeRowsToContents()
+
+    def editSelectedResource(self):
+        # Get the list of currently selected resources
+        selected_columns = {idx.column() for idx in self.selectionModel().selectedIndexes}
+        col_ids = [self.model().header[i] for i in selected_columns]
+
+        # If the number of selected rows is one, just proceed to edit it
+        if len(col_ids) < 2:
+            self._resourceEditorPrompt(col_ids[0])
+            return
+
+        # Otherwise, prompt the user to select one of the options first
+        dialog = qt.QInputDialog(self)
+        dialog.setWindowTitle(_("Multiple Resources Selected"))
+        dialog.setLabelText(_("Please Select a Resource: "))
+        m: CohortModel = self.model()
+        pretty_map = {m.csv_to_pretty(c): c for c in col_ids}
+        dialog.setComboBoxItems(list(pretty_map.keys()))
+
+        # Only proceed to the editor if the
+        if dialog.exec() == qt.QDialog.Accepted:
+            selected_col = dialog.textValue()
+            col_id = pretty_map.get(selected_col)
+            if col_id is not None:
+                self._resourceEditorPrompt(col_id)
 
     def _resourceEditorPrompt(self, col_id):
         dialog = ResourceEditorDialogue(
@@ -1126,6 +1173,16 @@ class CohortEditorDialog(ChangeTrackingDialogue):
         self._to_disconnect.append(newResourceButton.clicked)
         resourceLayout.addWidget(newResourceButton)
 
+        # Edit
+        editResourceButton = qt.QPushButton(_("Edit"))
+
+        editResourceButton.clicked.connect(
+            lambda: self.cohortWidget.tableView.editSelectedResource()
+        )
+        self._to_disconnect.append(editResourceButton.clicked)
+        resourceLayout.addWidget(editResourceButton)
+
+        # Drop
         dropResourcesButton = qt.QPushButton(_("Delete"))
         dropResourcesButton.setToolTip(
             _("Remove the selected resource(s) from the cohort. "
@@ -1144,7 +1201,7 @@ class CohortEditorDialog(ChangeTrackingDialogue):
         caseLayout = qt.QHBoxLayout(caseContainer)
         layout.addWidget(caseContainer)
 
-        # Add Case (Row) Button
+        # Add
         newCaseButton = qt.QPushButton(_("New"))
         newCaseButton.setToolTip(
             _(
@@ -1157,7 +1214,16 @@ class CohortEditorDialog(ChangeTrackingDialogue):
         self._to_disconnect.append(newCaseButton.clicked)
         caseLayout.addWidget(newCaseButton)
 
-        # Drop Cases (Rows) Button
+        # Edit
+        editCaseButton = qt.QPushButton(_("Edit"))
+
+        editCaseButton.clicked.connect(
+            lambda: self.cohortWidget.tableView.editSelectedCase()
+        )
+        self._to_disconnect.append(editCaseButton.clicked)
+        caseLayout.addWidget(editCaseButton)
+
+        # Drop
         dropCasesButton = qt.QPushButton(_("Delete"))
         dropCasesButton.setToolTip(
             _(
