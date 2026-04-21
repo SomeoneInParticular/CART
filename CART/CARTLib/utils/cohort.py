@@ -708,9 +708,16 @@ class CohortTableView(qt.QTableView):
         self.setContextMenuPolicy(qt.Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._presentCellContextMenu)
 
-        # Double-click connections
-        self.verticalHeader().sectionDoubleClicked.connect(self._caseLabelDoubleClicked)
-        self.horizontalHeader().sectionDoubleClicked.connect(self._resourceLabelDoubleClicked)
+        # Header/Index Specific Connections
+        verticalHeader: qt.QHeaderView = self.verticalHeader()
+        verticalHeader.sectionDoubleClicked.connect(self._caseLabelDoubleClicked)
+        verticalHeader.setContextMenuPolicy(qt.Qt.CustomContextMenu)
+        verticalHeader.customContextMenuRequested.connect(self._presentIndexContextMenu)
+
+        horizontalHeader: qt.QHeaderView = self.horizontalHeader()
+        horizontalHeader.sectionDoubleClicked.connect(self._resourceLabelDoubleClicked)
+        horizontalHeader.setContextMenuPolicy(qt.Qt.CustomContextMenu)
+        horizontalHeader.customContextMenuRequested.connect(self._presentHeaderContextMenu)
 
     @property
     def selectedItemsChanged(self):
@@ -741,6 +748,9 @@ class CohortTableView(qt.QTableView):
     ## Context (Right-Click) Actions ##
     @qt.Slot(qt.QPoint)
     def _presentCellContextMenu(self, pos: qt.QPoint):
+        """
+        Create and display a context menu for the table's cell at the given position.
+        """
         # If our managed cohort isn't editable, terminate early
         if not self.model().is_editable():
             return
@@ -756,7 +766,52 @@ class CohortTableView(qt.QTableView):
         self._installColActions(menu, idx)
 
         # Show it to the user
+        # noinspection PyArgumentList
         menu.popup(self.viewport().mapToGlobal(pos))
+
+    def _presentIndexContextMenu(self, pos: qt.QPoint):
+        """
+        Create and display a context menu for the table index (row header) at the given position.
+        """
+
+        # If our managed cohort isn't editable, terminate early
+        if not self.model().is_editable():
+            return
+
+        # If the corresponding index is invalid, end here
+        idx: qt.QModelIndex = self.indexAt(pos)
+        if not idx.isValid():
+            return
+
+        # Install row actions only
+        menu = qt.QMenu(self)
+        self._installRowActions(menu, idx)
+
+        # Show it to the user
+        # noinspection PyArgumentList
+        menu.popup(self.verticalHeader().viewport().mapToGlobal(pos))
+
+    def _presentHeaderContextMenu(self, pos:qt.QPoint):
+        """
+        Create and display a context menu for the table's (column) header at the given position.
+        """
+
+        # If our managed cohort isn't editable, terminate early
+        if not self.model().is_editable():
+            return
+
+        # If the corresponding index is invalid, end here
+        idx: qt.QModelIndex = self.indexAt(pos)
+        if not idx.isValid():
+            return
+
+        # Install column actions only
+        menu = qt.QMenu(self)
+        self._installColActions(menu, idx)
+
+        # Show it to the user
+        # noinspection PyArgumentList
+        menu.popup(self.horizontalHeader().viewport().mapToGlobal(pos))
 
     def _installRowActions(self, menu: qt.QMenu, idx: qt.QModelIndex):
         # Get the case to generate the object for
