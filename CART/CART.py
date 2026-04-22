@@ -30,8 +30,6 @@ if TYPE_CHECKING:
 #
 # CART
 #
-
-
 class CART(ScriptedLoadableModule):
     """Uses ScriptedLoadableModule base class, available at:
     https://github.com/Slicer/Slicer/blob/main/Base/Python/slicer/ScriptedLoadableModule.py
@@ -110,12 +108,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Widget which holds the task-specific GUI elements
         self.taskSubWidget: qt.QWidget = None
 
-        # List of things to do when the job is changed
-        # TODO: Make this a proper QT signal, or something similar
-        self.onJobChanged: list[Callable[[str], None]] = list()
-
         # List of keyboard shortcuts to be installed/uninstalled within this widget
         self.keyboardShortcuts = []
+
+        # When the logic changes our active job, update ourselves to match
+        self.logic.jobChanged.connect(self._onJobChanged)
 
     def setup(self) -> None:
         """
@@ -335,13 +332,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         caseSelector = qt.QComboBox(None)
         caseSelector.currentIndexChanged.connect(self.logic.select_case)
 
-        def updateCaseOptions(__):
-            caseSelector.blockSignals(True)
-            caseSelector.clear()
-            caseSelector.addItems(self.logic.data_manager.valid_uids)
-            caseSelector.blockSignals(False)
-        self.onJobChanged.append(updateCaseOptions)
-
         # Add them each to the panel
         layout.addWidget(previousIncompleteButton, 1)
         layout.addWidget(previousButton, 1)
@@ -350,6 +340,14 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         layout.addWidget(nextIncompleteButton, 1)
 
         ## Logic Connections ##
+        @qt.Slot()
+        def updateCaseOptions():
+            caseSelector.blockSignals(True)
+            caseSelector.clear()
+            caseSelector.addItems(self.logic.data_manager.valid_uids)
+            caseSelector.blockSignals(False)
+        self.logic.jobChanged.connect(updateCaseOptions)
+
         @qt.Slot(int, int)
         def updatePriorButtons(__, ___):
             has_prior = self.logic.has_previous_case()
@@ -422,7 +420,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if not self.editJob(job_name):
                 return
         # Finally, initialize the job
-        self.initJob(job_name)
+        self.logic.set_active_job(job_name)
 
     def profileChanged(self):
         # Update the text in the profile to match the current config settings
@@ -556,24 +554,13 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         return False
 
     ## Job Management ##
-    def initJob(self, job_name: str):
-        # Initialize the job on the logic-side first
-        self.logic.set_active_job(job_name)
-
-        # Update the GUI to match
+    @qt.Slot(str)
+    def _onJobChanged(self):
+        # Initialize our GUI
         self.logic.init_task_gui(self.taskSubWidget)
 
-        # Swap to the "job" widget container, if any
+        # Swap to this new job widget
         self.mainWidget.setCurrentIndex(self.jobWidgetIndex)
-
-        # "Emit" the job-changed signal
-        self.jobChanged()
-
-    def jobChanged(self):
-        # I love QT signals not working!
-        job_name = self.logic.active_job_config.name
-        for f in self.onJobChanged:
-            f(job_name)
 
     ## Keyboard Shortcuts ##
     def installKeyboardShortcuts(self):
@@ -599,6 +586,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         Called when the application closes and this widget is about to be destroyed.
         """
         # Disconnect from the signals we hooked into so Slicer can close cleanly
+        self.logic.jobChanged.disconnect()
         self.logic.jobListChanged.disconnect()
         self.logic.caseChanged.disconnect()
 
@@ -622,12 +610,18 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 #
 # noinspection PyUnresolvedReferences
 class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
-    # Signal for when a given case (the first int) is changed to another (the second)
-    # The first int is -1 when no prior case exists (this is the first case loaded)
-    caseChanged = qt.Signal(int, int)
+
+    # Emitted when the active job has been changed;
+    # currently only happens once, when the first job is initialized.
+    jobChanged = qt.Signal()
+
     # Emitted when the list of jobs managed by CART has changed
     # (a job was added, removed, or renamed)
     jobListChanged = qt.Signal()
+
+    # Signal for when a given case (the first int) is changed to another (the second)
+    # The first int is -1 when no prior case exists (this is the first case loaded)
+    caseChanged = qt.Signal(int, int)
 
     def __init__(self):
         ScriptedLoadableModuleLogic.__init__(self)
@@ -749,6 +743,9 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         # Update the config to use this as our last job
         self.master_profile_config.set_last_job(job_name)
         self.master_profile_config.save()
+
+        # Emit our job changed signal
+        self.jobChanged()
 
     def register_job_config(self, job_config: JobProfileConfig):
         self.master_profile_config.register_new_job(job_config)
