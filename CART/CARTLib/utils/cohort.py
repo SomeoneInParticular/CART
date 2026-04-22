@@ -1623,7 +1623,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
 
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed
-        if not self.has_changed:
+        if not self.task_config_copy.has_changed:
             return True
 
         # TODO: Move the following checks to be run dynamically, disabling the "OK" button
