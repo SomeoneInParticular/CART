@@ -83,7 +83,4 @@ class SegmentationGUI:
         self._segmentEditorWidget.exit()
 
     def refresh(self):
-        self.editFileFormatter.update_placeholder(
-            FilePathFormatter.DEFAULT_UID_PLACEHOLDER, self.bound_task.data_unit.uid
-        )
         self._segmentEditorWidget.refresh()
