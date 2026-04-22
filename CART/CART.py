@@ -110,10 +110,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Widget which holds the task-specific GUI elements
         self.taskSubWidget: qt.QWidget = None
 
-        # List of things to do when the list of registered jobs changes
-        # TODO: Make this a proper QT signal, or something similar
-        self.onJobListChanged: list[Callable[[], None]] = list()
-
         # List of things to do when the job is changed
         # TODO: Make this a proper QT signal, or something similar
         self.onJobChanged: list[Callable[[str], None]] = list()
@@ -215,7 +211,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             else:
                 jobSelectorComboBox.setEnabled(False)
 
-        self.onJobListChanged.append(updateJobSelector)
+        # Ping to sync up immediately
+        updateJobSelector()
+        self.logic.jobListChanged.connect(updateJobSelector)
 
         layout.addWidget(jobSelectorComboBoxLabel)
         layout.addWidget(jobSelectorComboBox)
@@ -244,7 +242,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         editButton.clicked.connect(editButtonClicked)
         buttonPanelLayout.addWidget(editButton)
-        self.onJobListChanged.append(
+        self.logic.jobListChanged.connect(
             lambda: editButton.setEnabled(jobSelectorComboBox.isEnabled())
         )
 
@@ -255,11 +253,10 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         @qt.Slot()
         def onJobDelete():
             self.logic.delete_job_config(jobSelectorComboBox.currentText)
-            self.jobListChanged()
 
         deleteButton.clicked.connect(onJobDelete)
         buttonPanelLayout.addWidget(deleteButton)
-        self.onJobListChanged.append(
+        self.logic.jobListChanged.connect(
             lambda: deleteButton.setEnabled(jobSelectorComboBox.isEnabled())
         )
 
@@ -276,9 +273,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         startButton.clicked.connect(onStartClicked)
         layout.addWidget(startButton)
-
-        # "Emit" our signal to sync everything up
-        self.jobListChanged()
 
         return mainWidget
 
@@ -525,7 +519,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If we got an "accept" signal, create the job config and initialize it
         if result == qt.QDialog.Accepted:
             new_config = jobSetupWizard.save_config(self.logic)
-            self.jobListChanged()
             return new_config.name
         return None
 
@@ -558,7 +551,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # If we got an "accept" signal, register the changes and return True
         if jobSetupWizard.exec() == qt.QDialog.Accepted:
             jobSetupWizard.save_config(self.logic)
-            self.jobListChanged()
             return True
         # Otherwise the user backed out, return False
         return False
@@ -576,11 +568,6 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # "Emit" the job-changed signal
         self.jobChanged()
-
-    def jobListChanged(self):
-        # QT!!!!!!!!!!!!!!!
-        for f in self.onJobListChanged:
-            f()
 
     def jobChanged(self):
         # I love QT signals not working!
@@ -612,6 +599,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         Called when the application closes and this widget is about to be destroyed.
         """
         # Disconnect from the signals we hooked into so Slicer can close cleanly
+        self.logic.jobListChanged.disconnect()
         self.logic.caseChanged.disconnect()
 
     def enter(self):
@@ -637,6 +625,9 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
     # Signal for when a given case (the first int) is changed to another (the second)
     # The first int is -1 when no prior case exists (this is the first case loaded)
     caseChanged = qt.Signal(int, int)
+    # Emitted when the list of jobs managed by CART has changed
+    # (a job was added, removed, or renamed)
+    jobListChanged = qt.Signal()
 
     def __init__(self):
         ScriptedLoadableModuleLogic.__init__(self)
@@ -697,6 +688,8 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         # Save our master config to preserve the change
         self.master_profile_config.has_changed = True
         self.master_profile_config.save()
+        # Emit the appropriate signal
+        self.jobListChanged()
 
     def set_active_job(self, job_name: str):
         """
@@ -760,6 +753,8 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
     def register_job_config(self, job_config: JobProfileConfig):
         self.master_profile_config.register_new_job(job_config)
         self.master_profile_config.save()
+        # Emit the appropriate signal
+        self.jobListChanged()
 
     def has_run_before(self):
         # Just checks if we've defined an author before or not
