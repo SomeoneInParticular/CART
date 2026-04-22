@@ -156,7 +156,7 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
                 colorItem.flags() & ~qt.Qt.ItemIsEditable
             )
 
-            # Set the color backround + text color
+            # Set the color background + text color
             qColor = qt.QColor(color)
             colorItem.setBackground(qColor)
             # Make the text black or white depending on how bright the new color is
@@ -165,6 +165,7 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
             else:
                 colorItem.setForeground(qt.QBrush(qt.QColor("#FFFFFF")))
 
+            # Add it to the table
             table.setItem(idx, self.HEADER_MAP[self.NAME_KEY], nameItem)
             table.setItem(idx, self.HEADER_MAP[self.VALUE_KEY], valueItem)
             table.setItem(idx, self.HEADER_MAP[self.COLOR_KEY], colorItem)

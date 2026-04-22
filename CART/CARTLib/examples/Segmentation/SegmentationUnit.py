@@ -222,56 +222,6 @@ class SegmentationUnit(CARTStandardUnit):
 
         # TODO Add it to this unit's subject as well
 
-    @property
-    def custom_segmentations(self):
-        # Get only to avoid unintentional de-sync
-        return self._custom_segmentations
-
-    def add_custom_segmentation(self, name: str, color_hex: str):
-        """
-        Create a new "custom" segmentation for this data unit;
-        these segmentations allow users to "add" new elements
-        to the dataset.
-
-        :return: The newly created segmentation node.
-        """
-        formatted_name = f"{name} ({self.uid})"
-        if formatted_name in self._custom_segmentations.keys():
-            raise ValueError(
-                f"Cannot create custom segmentation '{name}'; "
-                "a segmentation with that name already exists!"
-            )
-
-        # Create and track the new segmentation node
-        new_node = None
-        try:
-            # Create the new node
-            new_node = create_empty_segmentation_node(
-                formatted_name,
-                reference_volume=self.primary_volume_node,
-                scene=self.scene,
-            )
-
-            # Add a new (blank) segment within the node for the user to edit
-            segmentation_node = new_node.GetSegmentation()
-            segment_id = segmentation_node.AddEmptySegment(name, "1")
-            segment = segmentation_node.GetSegment(segment_id)
-
-            # Set its color to match the one provided
-            rgb_string = color_hex.lstrip("#")
-            rgb = (int(rgb_string[i:i + 2], 16)/255 for i in (0, 2, 4))
-            segment.SetColor(*rgb)
-
-            # Track it for later reference
-            self.custom_segmentations[formatted_name] = new_node
-            self.segmentation_nodes[formatted_name] = new_node
-            return new_node
-        except Exception as e:
-            # If this fails at any point, clean up the unit from the scene
-            if new_node:
-                slicer.mrmlScene.RemoveNode(new_node)
-            raise e
-
     def _init_segmentation_nodes(self) -> None:
         """
         Modified version of the super-class, which "fills in" missing
