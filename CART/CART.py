@@ -954,54 +954,97 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             return False
         return self._data_manager.has_next_case()
 
-    def next_case(self):
-        if self._data_manager and self._data_manager.has_next_case():
-            # If this was somehow done without an active task, return
-            if self._task_instance is None:
-                return
-            # Iterate to the next data unit and update everything
-            # TODO: Restore configuration option for this
-            self._task_instance.save()
+    def next_case(self) -> bool:
+        # If we're in an invalid state, return False
+        if not (
+            self._data_manager
+            and self.has_next_case()
+            and self._task_instance is not None
+        ):
+            return False
+        # Tell the task to save its current unit
+        # TODO: Restore configuration option for this
+        self._task_instance.save()
+        # Iterate to the next data unit and proceed
+        old_idx = self._data_manager.current_case_index
+        try:
             new_unit = self._data_manager.next()
             self._task_instance.receive(new_unit)
+        except Exception as e:
+            # Roll back to the previous case if the task failed to the new unit
+            self.select_case(old_idx)
+            raise e
+        return True
 
-    def next_incomplete_case(self):
-        if self._data_manager and self._data_manager.has_next_case():
-            # If this was somehow done without an active task, return
-            if self._task_instance is None:
-                return
-            # Iterate to the next incomplete data unit and update everything
-            # TODO: Restore configuration option for this
-            self._task_instance.save()
+    def next_incomplete_case(self) -> False:
+        # If we're in an invalid state, return False
+        if not (
+            self._data_manager
+            and self._data_manager.has_next_case()
+            and self._task_instance is not None
+        ):
+            return False
+        # Tell the task to save its current unit
+        # TODO: Restore configuration option for this
+        self._task_instance.save()
+        # Iterate to the next incomplete data unit and proceed
+        old_idx = self._data_manager.current_case_index
+        try:
             new_unit = self._data_manager.next_incomplete(self._task_instance)
             self._task_instance.receive(new_unit)
+        except Exception as e:
+            # Roll back to the previous case if the task failed to the new unit
+            self.select_case(old_idx)
+            raise e
 
     def has_previous_case(self):
         if self._data_manager is None:
             return False
         return self._data_manager.has_previous_case()
 
-    def previous_case(self):
-        if self._data_manager and self._data_manager.has_previous_case():
-            # If this was somehow done without an active task, return
-            if self._task_instance is None:
-                return
-            # Iterate to the prior data unit and update everything
-            # TODO: Restore configuration option for this
-            self._task_instance.save()
+    def previous_case(self) -> bool:
+        # If we're in an invalid state, return False
+        if not (
+            self._data_manager
+            and self.has_previous_case()
+            and self._task_instance is not None
+        ):
+            return False
+        # Tell the task to save its current unit
+        # TODO: Restore configuration option for this
+        self._task_instance.save()
+        # Iterate to the previous data unit and proceed
+        old_idx = self._data_manager.current_case_index
+        try:
             new_unit = self._data_manager.previous()
             self._task_instance.receive(new_unit)
+        except Exception as e:
+            # Roll back to the previous case if the task failed to the new unit
+            self.select_case(old_idx)
+            raise e
+        return True
 
-    def previous_incomplete_case(self):
-        if self._data_manager and self._data_manager.has_previous_case():
-            # If this was somehow done without an active task, return
-            if self._task_instance is None:
-                return
-            # Iterate to the prior incomplete data unit and update everything
-            # TODO: Restore configuration option for this
-            self._task_instance.save()
+    def previous_incomplete_case(self) -> bool:
+        # If we're in an invalid state, return False
+        if not (
+            self._data_manager
+            and self.has_previous_case()
+            and self._task_instance is not None
+        ):
+            return False
+        # Tell the task to save its current unit
+        # TODO: Restore configuration option for this
+        self._task_instance.save()
+        # Iterate to the previous data unit and proceed
+        old_idx = self._data_manager.current_case_index
+        try:
             new_unit = self._data_manager.previous_incomplete(self._task_instance)
             self._task_instance.receive(new_unit)
+        except Exception as e:
+            # Roll back to the previous case if the task failed to the new unit
+            self.select_case(old_idx)
+            raise e
+        return True
 
     def select_case(self, idx: int):
         if self._data_manager and self._task_instance:
@@ -1011,8 +1054,14 @@ class CARTLogic(ScriptedLoadableModuleLogic):
             self._task_instance.receive(new_unit)
 
     def save_case(self):
-        if self._data_manager and self._task_instance:
-            self._task_instance.save()
+        # If we don't have what we need to save, raise an error
+        if self._task_instance is None:
+            raise ValueError("CART could not save; no task has been initialized!")
+        if self._data_manager is None:
+            raise ValueError(
+                "CART could not save; the data manager has not been initialized!"
+            )
+        self._task_instance.save()
 
     def refresh_layout(self):
         if self._data_manager is None:
