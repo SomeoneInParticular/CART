@@ -932,14 +932,14 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             raise e
         return True
 
-    def next_incomplete_case(self) -> False:
+    def next_incomplete_case(self):
         # If we're in an invalid state, return False
         if not (
             self._data_manager
             and self._data_manager.has_next_case()
             and self._task_instance is not None
         ):
-            return False
+            return
         # Tell the task to save its current unit
         # TODO: Restore configuration option for this
         self._task_instance.save()
