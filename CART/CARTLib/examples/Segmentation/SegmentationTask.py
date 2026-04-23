@@ -62,47 +62,6 @@ class SegmentationTask(
         # Get-only; use "receive" instead
         return self._data_unit
 
-    def setup(self, container: qt.QWidget):
-        """
-        Build the GUI's contents, returning the resulting layout for use.
-        """
-        self.logger.info("Setting up Segmentation Task!")
-
-        # Initialize the layout we'll insert everything into
-        self.gui = SegmentationGUI(self)
-        container.setLayout(self.gui.setup())
-        self.gui.enter()
-
-        self.logger.info("Segmentation Task set up successfully!")
-
-    def receive(self, data_unit: SegmentationUnit):
-        self._data_unit = data_unit
-
-        # Apply our configuration options to the data unit
-        data_unit.apply_segmentation_configs(self.local_config)
-
-        # Change the interpolation settings to match current setting
-        self.apply_interp()
-
-        # Ensure all segments are visible
-        self.show_all_segments()
-
-        # Hide segments the user requested be hidden on load
-        # TODO
-
-        # If we have a GUI, refresh it
-        if self.gui:
-            self.gui.refresh()
-
-    def save(self) -> Optional[str]:
-        # Try to save the data unit
-        if not self.data_unit:
-            self.logger.error("Could not save, no data unit has been loaded!")
-        result_packet = self.io.save_unit(self.data_unit)
-        # If we have an active GUI, prompt the user with the details
-        if self.gui:
-            self.gui.onSavePrompt(*result_packet)
-
     @classmethod
     def getDataUnitFactory(cls) -> DataUnitFactory:
         return SegmentationUnit
@@ -153,6 +112,52 @@ class SegmentationTask(
     def save_blank_segments(self, new_val: bool):
         self.local_config.save_blank_segmentations = new_val
         self.local_config.save()
+
+    ## State Management ##
+    def isTaskComplete(self, case_data: dict[str, str]) -> bool:
+        # Delegate to our IO manager
+        return self.io.is_case_done(case_data)
+
+    def save(self) -> Optional[str]:
+        # Try to save the data unit
+        if not self.data_unit:
+            self.logger.error("Could not save, no data unit has been loaded!")
+        result_packet = self.io.save_unit(self.data_unit)
+        # If we have an active GUI, prompt the user with the details
+        if self.gui:
+            self.gui.onSavePrompt(*result_packet)
+
+    def setup(self, container: qt.QWidget):
+        """
+        Build the GUI's contents, returning the resulting layout for use.
+        """
+        self.logger.info("Setting up Segmentation Task!")
+
+        # Initialize the layout we'll insert everything into
+        self.gui = SegmentationGUI(self)
+        container.setLayout(self.gui.setup())
+        self.gui.enter()
+
+        self.logger.info("Segmentation Task set up successfully!")
+
+    def receive(self, data_unit: SegmentationUnit):
+        self._data_unit = data_unit
+
+        # Apply our configuration options to the data unit
+        data_unit.apply_segmentation_configs(self.local_config)
+
+        # Change the interpolation settings to match current setting
+        self.apply_interp()
+
+        # Ensure all segments are visible
+        self.show_all_segments()
+
+        # Hide segments the user requested be hidden on load
+        # TODO
+
+        # If we have a GUI, refresh it
+        if self.gui:
+            self.gui.refresh()
 
     def enter(self):
         if self.gui:

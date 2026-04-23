@@ -32,83 +32,26 @@ class SegmentationIO:
     """
 
     ## LOGGING CONSTANTS ##
+    # Key Columns
     UID_KEY = "uid"
+    SEG_KEY = "segmentation_name"
+    # Value Columns
     AUTHOR_KEY = "author"
     TIMESTAMP_KEY = "timestamp"
-    INPUT_SEGMENTATION_KEY = "original_segmentation_path"
-    SEGMENTATION_PATH_KEY = "segmentation_path"
-    SIDECAR_PATH_KEY = "sidecar_path"
+    SAVED_KEY = "saved_segmentations"
+    FAILED_KEY = "failed_segmentations"
     VERSION_KEY = "version"
 
     HEADERS = [
         UID_KEY,
         AUTHOR_KEY,
         TIMESTAMP_KEY,
-        SEGMENTATION_PATH_KEY,
-        SIDECAR_PATH_KEY,
-        INPUT_SEGMENTATION_KEY,
+        SAVED_KEY,
+        FAILED_KEY,
         VERSION_KEY,
     ]
 
-    ## OUTPUT PARSING CONSTANTS ##
-    UID_PLACEHOLDER = "%u"
-    NAME_PLACEHOLDER = "%n"
-    FULLNAME_PLACEHOLDER = "%N"
-    JOBNAME_PLACEHOLDER = "%j"
-    FILENAME_PLACEHOLDER = "%f"
-
-    REPLACEMENT_MAP_DESCRIPTIONS = {
-        UID_PLACEHOLDER: "The UID of the case, as specified in the Cohort file.",
-        NAME_PLACEHOLDER: "The name of the segmentation, stripped of any 'Segmentation_' prefix.",
-        FULLNAME_PLACEHOLDER: "The name of the segmentation, with 'Segmentation_' prefixes retained.",
-        JOBNAME_PLACEHOLDER: "The name of the job, as defined during the job's initial creation.",
-        FILENAME_PLACEHOLDER: "The original filename (without its extensions). Only valid for segmentations loaded from a file.",
-    }
-
-    @classmethod
-    def build_placeholder_map(
-        cls,
-        uid: str = "sub-abc123",
-        segmentation_name: str = "Segmentation_Example",
-        job_name: str = "Job_Name",
-        file_name: str = None,
-    ) -> dict[str, str]:
-        short_name = segmentation_name
-        if short_name.lower().startswith("segmentation_"):
-            short_name = short_name[13:]
-
-        placeholder_map = {
-            cls.UID_PLACEHOLDER: uid,
-            cls.NAME_PLACEHOLDER: short_name,
-            cls.FULLNAME_PLACEHOLDER: segmentation_name,
-            cls.JOBNAME_PLACEHOLDER: job_name,
-        }
-        if file_name is not None:
-            placeholder_map[cls.FILENAME_PLACEHOLDER] = file_name.split('.')[0]
-        return placeholder_map
-
-    @classmethod
-    def format_output_str(
-        cls,
-        output_str: str,
-        placeholder_map: dict[str, str],
-        output_path: Path = Path("..."),
-    ) -> Optional[str]:
-        # Empty strings, and strings with trailing slashes, are invalid
-        if len(output_str) < 1 or (output_str[-1] in {"/", "\\"}):
-            return None
-
-        # Format the string
-        formatted_str = output_str
-        for k, v in placeholder_map.items():
-            formatted_str = formatted_str.replace(k, v)
-
-        # Prepend the "output_path" if this isn't an absolute path
-        if Path(formatted_str).is_absolute():
-            return formatted_str
-        else:
-            return str(output_path / formatted_str)
-
+    ## Constructor ##
     def __init__(self, master_config: MasterProfileConfig, job_config: JobProfileConfig, task_config: "SegmentationConfig"):
         self.master_config: MasterProfileConfig = master_config
         self.job_config: JobProfileConfig = job_config
@@ -117,14 +60,20 @@ class SegmentationIO:
         # Map of previous CSV log entries
         self._log_data: Optional[dict[tuple[str, str], dict[str, str]]] = None
 
+    ## Log Management ##
     @property
     def log_path(self) -> Path:
-        return self.job_config.output_path / f"{self.job_config.name}_log.csv"
+        """
+        Path to where the logs for this owning IO's Job should be saved.
+
+        Returns a TSV file which may or may not exist yet!
+        """
+        return self.job_config.output_path / f"{self.job_config.name}_log.tsv"
 
     @property
-    def log_data(self) -> Optional[dict[tuple[str, str], dict[str, str]]]:
+    def log_data(self) -> Optional[dict[str, dict[str, str]]]:
         """
-        The data currently stored within the CSV-based log file
+        The data currently stored within the TSV-based log file
 
         Get-only, as the log file and its contents are tightly bound to
         the output directory.
@@ -140,32 +89,76 @@ class SegmentationIO:
 
         # Otherwise, try to (re-)build the CSV log
         log_data = dict()
+        self._log_data = log_data
+
+        # If there's not existing TSV file to pull from, end here
+        if not self.log_path.exists():
+            return log_data
 
         # If the CSV file already exists, load its contents
-        if self.log_path.exists():
-            with open(self.csv_log_path, newline="") as csvfile:
-                reader = csv.DictReader(csvfile)
-                for i, row in enumerate(reader):
-                    # Confirm the row has a UID; if not, skip it
-                    uid = row.get(self.UID_KEY, None)
-                    if uid is None:
-                        logging.warning(
-                            f"Skipping entry #{i} in {self.csv_log_path}, lacked a valid UID."
-                        )
-                        continue
-                    # Likewise, skip entries without an author
-                    author = row.get(self.AUTHOR_KEY, None)
-                    if author is None:
-                        logging.warning(
-                            f"Skipping entry #{i} in {self.csv_log_path}, lacked a valid author."
-                        )
-                        continue
-                    # Update CSV log dictionary
-                    log_data[(uid, author)] = row
+        with open(self.log_path, newline="") as csvfile:
+            reader = csv.DictReader(csvfile, delimiter='\t')
+            for i, row in enumerate(reader):
+                # Confirm the row has a UID; if not, skip it
+                uid = row.get(self.UID_KEY, None)
+                if uid is None:
+                    logging.warning(
+                        f"Skipping entry #{i} in {self.log_path}, lacked a valid UID."
+                    )
+                    continue
+                # Update CSV log dictionary
+                log_data[uid] = row
 
         # Track and return the result
         self._log_data = log_data
         return log_data
+
+    ## Save/Load Management ##
+    def is_case_done(self, case: dict[str, str]):
+        """
+        Check whether the expected output files for the given case
+        exist or not.
+        """
+        # Get the UID key
+        uid = case.get(self.UID_KEY)
+
+        # If our log file doesn't have an entry, return None
+        log_entry = self.log_data.get(uid)
+        if log_entry is None:
+            return None
+
+        # Check if there were any failures last time
+        failed_keys = log_entry.get(self.FAILED_KEY)
+        if failed_keys != '':
+            failed_keys = failed_keys.split(", ")
+            if len(failed_keys) > 0:
+                return False
+
+        # Iterate through the saved keys and confirm they're there
+        saved_keys = log_entry.get(self.SAVED_KEY)
+        if saved_keys != "":
+            for seg_id in saved_keys.split(", "):
+                nifti_path, json_path = self._generate_output_paths_for(uid, seg_id)
+                if not nifti_path.exists() or not json_path.exists():
+                    return False
+
+        # TODO: Also check the case contents for missing files as a fallback
+        return True
+
+    def _generate_output_paths_for(self, uid: str, seg_id: str):
+        # TODO: Allow user-configurable file structure/format
+        # Get the "final" name for this segmentation
+        seg_name = EditableSegmentationResource.get_short_name(seg_id)
+
+        # Determine the output file destinations
+        stem_path = self.job_config.output_path / uid
+        file_name = f"{uid}_{seg_name}"
+
+        # Define the NIfTI + JSON file paths
+        nifti_path = stem_path / f"{file_name}.nii.gz"
+        json_path = stem_path / f"{file_name}.json"
+
+        return nifti_path, json_path
 
     def save_unit(self, unit: SegmentationUnit):
         # Save each segmentation that was marked as "to-edit" during Job config
@@ -182,6 +175,22 @@ class SegmentationIO:
                 saved[seg_id] = str(result)
             except Exception as e:
                 failed[seg_id] = str(e)
+        # Create a new log entry detailing these changes
+        log_entry = {
+            self.UID_KEY: unit.uid,
+            self.AUTHOR_KEY: self.master_config.author,
+            self.TIMESTAMP_KEY: datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            self.SAVED_KEY: ", ".join(saved.keys()),
+            self.FAILED_KEY: ", ".join(failed.keys()),
+            self.VERSION_KEY: VERSION,
+        }
+        self.log_data[unit.uid] = log_entry
+        # Save the updated log data to file
+        with open(self.log_path, mode='w') as fp:
+            writer = csv.DictWriter(fp, fieldnames=self.HEADERS, delimiter='\t')
+            writer.writeheader()
+            writer.writerows(self.log_data.values())
+        # Return the result for upstream use
         return saved, failed
 
     def _save_segmentation(
@@ -201,17 +210,10 @@ class SegmentationIO:
         :return: The output path of the MAIN (.nii.gz) saved file
         :raises ValueError: If the values provided would result in a corrupted save file.
         """
-        # Get the "final" name for this segmentation
-        seg_name = EditableSegmentationResource.get_short_name(seg_id)
-
-        # TODO: Toggle skipping blank segmentations
+        # TODO: Allow users to "skip" blank segmentations
 
         # Determine the output file destinations
-        stem_path = self.job_config.output_path / unit.uid
-        file_name = f"{unit.uid}_{seg_name}"
-
-        # TODO: Allow user-customizable file format
-        seg_out_path = stem_path / f"{file_name}.nii.gz"
+        nifti_path, json_path = self._generate_output_paths_for(unit.uid, seg_id)
 
         # Build the corresponding sidecar
         # TODO: Only create this if outputting to BIDS-like format
@@ -227,9 +229,10 @@ class SegmentationIO:
                 }
             ],
         }
-        json_path = stem_path / f"{file_name}.json"
 
-        # Save everything and report
-        save_segmentation_to_nifti(seg_node, unit.primary_volume_node, seg_out_path)
+        # Save everything
+        save_segmentation_to_nifti(seg_node, unit.primary_volume_node, nifti_path)
         save_json_sidecar(json_path, sidecar_data)
-        return seg_out_path.resolve()
+
+        # Report the output path for upstream use
+        return nifti_path.resolve()
