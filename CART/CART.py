@@ -2,8 +2,9 @@ import importlib
 import logging
 import sys
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING, Tuple, Callable
+from typing import Optional, TYPE_CHECKING, Tuple
 
+import ctk
 import qt
 import slicer.util
 from slicer.ScriptedLoadableModule import *
@@ -304,6 +305,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         buttonPanel = qt.QWidget(None)
         layout = qt.QHBoxLayout(buttonPanel)
 
+        # TODO: Replace these with custom icons to ensure standardization
+        UNKNOWN_ICON = buttonPanel.style().standardIcon(qt.QStyle.SP_FileIcon)
+        COMPLETED_ICON = buttonPanel.style().standardIcon(qt.QStyle.SP_DialogApplyButton)
+        FAILED_ICON = buttonPanel.style().standardIcon(qt.QStyle.SP_MessageBoxCritical)
+
         ## Previous Incomplete ##
         previousIncompleteButton = qt.QToolButton(None)
         previousIncompleteButton.setText("<<")
@@ -329,7 +335,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         nextIncompleteButton.clicked.connect(self.logic.next_incomplete_case)
 
         ## Case Viewer/Selector ##
-        caseSelector = qt.QComboBox(None)
+        caseSelector: qt.QComboBox = ctk.ctkComboBox(None)
         caseSelector.currentIndexChanged.connect(self.logic.select_case)
 
         # Add them each to the panel
@@ -342,10 +348,20 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         ## Logic Connections ##
         @qt.Slot()
         def updateCaseOptions():
+            # Block signals to prevent accidental cyclic chains
             caseSelector.blockSignals(True)
-            caseSelector.clear()
-            caseSelector.addItems(self.logic.data_manager.valid_uids)
-            caseSelector.blockSignals(False)
+            try:
+                caseSelector.clear()
+                for i, u in enumerate(self.logic.data_manager.valid_uids):
+                    caseSelector.addItem(u)
+                    if self.logic.is_case_completed(i):
+                        caseSelector.setItemIcon(i, COMPLETED_ICON)
+                    else:
+                        caseSelector.setItemIcon(i, UNKNOWN_ICON)
+
+            # Re-enable signals no matter what
+            finally:
+                caseSelector.blockSignals(False)
         self.logic.jobChanged.connect(updateCaseOptions)
 
         @qt.Slot(int, int)
@@ -366,8 +382,18 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         def syncCaseSelector(old_idx: int, new_idx: int):
             # Block signals to prevent it from causing an infinite loop
             caseSelector.blockSignals(True)
-            caseSelector.setCurrentIndex(new_idx)
-            caseSelector.blockSignals(False)
+            try:
+                # Update our case selector to match the newly chosen case
+                caseSelector.setCurrentIndex(new_idx)
+                # Update the previous case's state to match
+                if self.logic.is_case_completed(old_idx):
+                    caseSelector.setItemIcon(old_idx, COMPLETED_ICON)
+                else:
+                    # If the case failed to save (somehow) mark it as such!
+                    caseSelector.setItemIcon(old_idx, FAILED_ICON)
+            # Re-enable signals
+            finally:
+                caseSelector.blockSignals(False)
         self.logic.caseChanged.connect(syncCaseSelector)
 
         # Return the result
@@ -904,6 +930,15 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         self.caseChanged.emit(-1, self._data_manager.current_case_index)
 
     ## Case Management ##
+    def is_case_completed(self, idx: int) -> bool:
+        # Confirm we're in a valid state first; if not, the case is not complete
+        if self.data_manager is None or self._task_instance is None:
+            self.logger.warning("Could not check for case completion, CART has not initialized!")
+            return False
+        # Check if the selected case is completed or not
+        case = self.data_manager.case_data[idx]
+        return self._task_instance.isTaskComplete(case)
+
     def has_next_case(self):
         if self._data_manager is None:
             return False
