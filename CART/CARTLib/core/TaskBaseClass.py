@@ -177,17 +177,17 @@ class TaskBaseClass(ABC, Generic[D]):
         else:
             raise ValueError(f"An error occurred during saving: {save_result}")
 
-    def isTaskComplete(self, case_data: dict[str, str]) -> bool:
+    def isTaskComplete(self, case_data: dict[str, str]) -> Optional[bool]:
         """
         Checks whether a case has been completed or not. How you choose to
         determine this is up to you (probably based on whether appropriate
-        output exists).
+        output exists). Should return None if unsure (the default).
 
         This is used for a number of functions, namely:
           * Starting at the first case the user has yet to complete
           * Skipping over already completed cases
         """
-        return False
+        return None
 
     def cleanup(self):
         """

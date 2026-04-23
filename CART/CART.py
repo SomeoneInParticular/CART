@@ -386,10 +386,15 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 # Update our case selector to match the newly chosen case
                 caseSelector.setCurrentIndex(new_idx)
                 # Update the previous case's state to match
-                if self.logic.is_case_completed(old_idx):
+                case_completed = self.logic.is_case_completed(old_idx)
+                if case_completed:
+                    # True -> task saved correctly
                     caseSelector.setItemIcon(old_idx, COMPLETED_ICON)
+                elif case_completed is None:
+                    # None -> the task isn't sure (the default)
+                    caseSelector.setItemIcon(old_idx, UNKNOWN_ICON)
                 else:
-                    # If the case failed to save (somehow) mark it as such!
+                    # False -> a failure to save when the case swapped over
                     caseSelector.setItemIcon(old_idx, FAILED_ICON)
             # Re-enable signals
             finally:
