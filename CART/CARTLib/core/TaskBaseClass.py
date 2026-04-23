@@ -177,7 +177,7 @@ class TaskBaseClass(ABC, Generic[D]):
         else:
             raise ValueError(f"An error occurred during saving: {save_result}")
 
-    def isTaskComplete(self, case_data: dict[str:str]) -> bool:
+    def isTaskComplete(self, case_data: dict[str, str]) -> bool:
         """
         Checks whether a case has been completed or not. How you choose to
         determine this is up to you (probably based on whether appropriate
