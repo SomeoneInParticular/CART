@@ -258,7 +258,8 @@ class SegmentationUnit(CARTStandardUnit):
                 segmentation_node.AddEmptySegment("", "1")
 
             # Set the name of the node, and align it to our primary volume
-            node.SetName(f"{key} ({self.uid})")
+            pretty_name = EditableSegmentationResource.format_for_gui(key)
+            node.SetName(f"{pretty_name} [{self.uid}]")
             node.SetReferenceImageGeometryParameterFromVolumeNode(
                 self.primary_volume_node
             )
