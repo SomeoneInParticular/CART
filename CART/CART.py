@@ -346,6 +346,21 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         layout.addWidget(nextIncompleteButton, 1)
 
         ## Logic Connections ##
+        @qt.Slot(int)
+        def updateCaseIcon(idx: int):
+            # Update the previous case's state to match
+            case_completed = self.logic.is_case_completed(idx)
+            if case_completed:
+                # True -> task saved correctly
+                caseSelector.setItemIcon(idx, COMPLETED_ICON)
+            elif case_completed is None:
+                # None -> the task isn't sure (the default)
+                caseSelector.setItemIcon(idx, UNKNOWN_ICON)
+            else:
+                # False -> a failure to save when the case swapped over
+                caseSelector.setItemIcon(idx, FAILED_ICON)
+        self.logic.caseSaved.connect(updateCaseIcon)
+
         @qt.Slot()
         def updateCaseOptions():
             # Block signals to prevent accidental cyclic chains
@@ -355,16 +370,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 for i, u in enumerate(self.logic.data_manager.valid_uids):
                     caseSelector.addItem(u)
                     # Update the previous case's state to match
-                    case_completed = self.logic.is_case_completed(i)
-                    if case_completed:
-                        # True -> task saved correctly
-                        caseSelector.setItemIcon(i, COMPLETED_ICON)
-                    elif case_completed is None:
-                        # None -> the task isn't sure (the default)
-                        caseSelector.setItemIcon(i, UNKNOWN_ICON)
-                    else:
-                        # False -> a failure to save when the case swapped over
-                        caseSelector.setItemIcon(i, FAILED_ICON)
+                    updateCaseIcon(i)
 
             # Re-enable signals no matter what
             finally:
@@ -386,27 +392,16 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic.caseChanged.connect(updateNextButtons)
 
         @qt.Slot(int, int)
-        def syncCaseSelector(old_idx: int, new_idx: int):
+        def updateSelectedCase(__: int, new_idx: int):
             # Block signals to prevent it from causing an infinite loop
             caseSelector.blockSignals(True)
             try:
                 # Update our case selector to match the newly chosen case
                 caseSelector.setCurrentIndex(new_idx)
-                # Update the previous case's state to match
-                case_completed = self.logic.is_case_completed(old_idx)
-                if case_completed:
-                    # True -> task saved correctly
-                    caseSelector.setItemIcon(old_idx, COMPLETED_ICON)
-                elif case_completed is None:
-                    # None -> the task isn't sure (the default)
-                    caseSelector.setItemIcon(old_idx, UNKNOWN_ICON)
-                else:
-                    # False -> a failure to save when the case swapped over
-                    caseSelector.setItemIcon(old_idx, FAILED_ICON)
             # Re-enable signals
             finally:
                 caseSelector.blockSignals(False)
-        self.logic.caseChanged.connect(syncCaseSelector)
+        self.logic.caseChanged.connect(updateSelectedCase)
 
         # Return the result
         return buttonPanel
@@ -626,6 +621,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Disconnect from the signals we hooked into so Slicer can close cleanly
         self.logic.jobChanged.disconnect()
         self.logic.jobListChanged.disconnect()
+        self.logic.caseSaved.disconnect()
         self.logic.caseChanged.disconnect()
 
     def enter(self):
@@ -660,6 +656,9 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
     # Signal for when a given case (the first int) is changed to another (the second)
     # The first int is -1 when no prior case exists (this is the first case loaded)
     caseChanged = qt.Signal(int, int)
+
+    # Emitted when the case at a given index just tried to save
+    caseSaved = qt.Signal(int)
 
     def __init__(self):
         ScriptedLoadableModuleLogic.__init__(self)
@@ -966,7 +965,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             return False
         # Tell the task to save its current unit
         # TODO: Restore configuration option for this
-        self._task_instance.save()
+        self.save_case()
         # Iterate to the next data unit and proceed
         old_idx = self._data_manager.current_case_index
         try:
@@ -989,7 +988,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             return
         # Tell the task to save its current unit
         # TODO: Restore configuration option for this
-        self._task_instance.save()
+        self.save_case()
         # Iterate to the next incomplete data unit and proceed
         old_idx = self._data_manager.current_case_index
         try:
@@ -1016,7 +1015,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             return False
         # Tell the task to save its current unit
         # TODO: Restore configuration option for this
-        self._task_instance.save()
+        self.save_case()
         # Iterate to the previous data unit and proceed
         old_idx = self._data_manager.current_case_index
         try:
@@ -1039,7 +1038,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             return False
         # Tell the task to save its current unit
         # TODO: Restore configuration option for this
-        self._task_instance.save()
+        self.save_case()
         # Iterate to the previous data unit and proceed
         old_idx = self._data_manager.current_case_index
         try:
@@ -1060,7 +1059,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             raise ValueError("CART cannot change cases; there is no task to receive the new one!")
         # Auto-save
         # TODO: Restore configuration option for this
-        self._task_instance.save()
+        self.save_case()
         # Swap to the new unit
         prior_idx = self._data_manager.current_case_index
         new_unit = self._data_manager.select_unit_at(idx)
@@ -1068,14 +1067,17 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         self.caseChanged(prior_idx, idx)
 
     def save_case(self):
-        # If we don't have what we need to save, raise an error
-        if self._task_instance is None:
-            raise ValueError("CART could not save; no task has been initialized!")
-        if self._data_manager is None:
-            raise ValueError(
-                "CART could not save; the data manager has not been initialized!"
-            )
-        self._task_instance.save()
+        try:
+            # If we don't have what we need to save, raise an error
+            if self._task_instance is None:
+                raise ValueError("CART could not save; no task has been initialized!")
+            if self._data_manager is None:
+                raise ValueError(
+                    "CART could not save; the data manager has not been initialized!"
+                )
+            self._task_instance.save()
+        finally:
+            self.caseSaved(self.data_manager.current_case_index)
 
     def refresh_layout(self):
         if self._data_manager is None:
