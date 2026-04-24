@@ -961,7 +961,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         if not (
             self._data_manager
             and self.has_next_case()
-            and self._task_instance is not None
+            and self._task_instance
         ):
             return False
         # Tell the task to save its current unit
@@ -974,7 +974,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             self._task_instance.receive(new_unit)
             self.caseChanged(old_idx, self._data_manager.current_case_index)
         except Exception as e:
-            # Roll back to the previous case if the task failed to the new unit
+            # Roll back to the previous case if the task failed to receive the new unit
             self.select_case(old_idx)
             raise e
         return True
@@ -984,7 +984,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         if not (
             self._data_manager
             and self._data_manager.has_next_case()
-            and self._task_instance is not None
+            and self._task_instance
         ):
             return
         # Tell the task to save its current unit
@@ -997,7 +997,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             self._task_instance.receive(new_unit)
             self.caseChanged(old_idx, self._data_manager.current_case_index)
         except Exception as e:
-            # Roll back to the previous case if the task failed to the new unit
+            # Roll back to the previous case if the task failed to receive the new unit
             self.select_case(old_idx)
             raise e
 
@@ -1011,7 +1011,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         if not (
             self._data_manager
             and self.has_previous_case()
-            and self._task_instance is not None
+            and self._task_instance
         ):
             return False
         # Tell the task to save its current unit
@@ -1024,7 +1024,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             self._task_instance.receive(new_unit)
             self.caseChanged(old_idx, self._data_manager.current_case_index)
         except Exception as e:
-            # Roll back to the previous case if the task failed to the new unit
+            # Roll back to the previous case if the task failed to receive the new unit
             self.select_case(old_idx)
             raise e
         return True
@@ -1034,7 +1034,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         if not (
             self._data_manager
             and self.has_previous_case()
-            and self._task_instance is not None
+            and self._task_instance
         ):
             return False
         # Tell the task to save its current unit
@@ -1047,7 +1047,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             self._task_instance.receive(new_unit)
             self.caseChanged(old_idx, self._data_manager.current_case_index)
         except Exception as e:
-            # Roll back to the previous case if the task failed to the new unit
+            # Roll back to the previous case if the task failed to receive the new unit
             self.select_case(old_idx)
             raise e
         return True
