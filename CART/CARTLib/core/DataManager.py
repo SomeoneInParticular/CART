@@ -1,6 +1,6 @@
 import csv
 import logging
-from functools import lru_cache, cached_property
+from functools import cached_property
 from pathlib import Path
 from threading import RLock
 from typing import Optional, Callable
@@ -100,10 +100,11 @@ def dynamic_lru_cache_wrapper(func: Callable, maxsize: int, n_hashing_vars: int 
                 root = old_root[NEXT]
                 old_key = root[KEY]
                 # De-allocate the old root's contents so it can be garbage collected.
-                # NOTE: We don't do so with the RESULT key to prevent it from being
-                # garbage collected early. Doing so could run arbitrary code (via a
-                # __del__ dunder) which risks breaking things.
-                root[KEY] = None
+                # NOTE: We hold out the old result to prevent it from being garbage
+                # collected early. Doing so could run arbitrary code (via a __del__
+                # dunder, for example) which could break things.
+                result_holdout = root[RESULT]
+                root[KEY] = root[RESULT] = None
                 # Drop the corresponding element in our cache
                 del cache[old_key]
                 # Re-insert last to ensure everything is consistent before risking
@@ -326,7 +327,8 @@ class DataManager:
 
     def current_data_unit(self) -> DataUnitBase:
         """
-        Return the current DataUnit in the queue without changing the index.
+        Return the current DataUnit in the queue without changing the index or
+        re-focusing it.
         """
         return self._unit_at(self.current_case_index)
 
