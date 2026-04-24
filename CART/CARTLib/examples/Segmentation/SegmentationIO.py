@@ -145,6 +145,29 @@ class SegmentationIO:
         # TODO: Also check the case contents for missing files as a fallback
         return True
 
+    def get_saved_segmentation_paths(self, uid: str):
+        """
+        Get the case name -> output path map for this case
+        """
+        unit_data = self.log_data.get(uid, {})
+        saved_keys = unit_data.get(self.SAVED_KEY, '')
+
+        if saved_keys == '':
+            return {}
+
+        # Iteratively find each segment within the path
+        segmentation_paths = {}
+        for seg_name in saved_keys.split(", "):
+            # Find where the file should be, skipping it if one does not exist
+            nifti_file, __ = self._generate_output_paths_for(uid, seg_name)
+            if not nifti_file.is_file():
+                continue
+            # Track the file within the dictionary
+            segment_key = EditableSegmentationResource.format_for_csv(seg_name)
+            segmentation_paths[segment_key] = nifti_file
+
+        return segmentation_paths
+
     def _generate_output_paths_for(self, uid: str, seg_name: str):
         # TODO: Allow user-configurable file structure/format
 
@@ -235,36 +258,3 @@ class SegmentationIO:
 
         # Report the output path for upstream use
         return nifti_path.resolve()
-
-    def load_previous_outputs(self, unit: SegmentationUnit):
-        # Get the list of saved files to look for
-        unit_data = self.log_data.get(unit.uid)
-
-        # Do nothing if we (somehow) lack unit data for this
-        if unit_data is None:
-            return
-
-        saved_names = unit_data.get(self.SAVED_KEY)
-        # If there weren't any saved files, do nothing
-        if saved_names == '':
-            return
-
-        # Iteratively try and load each saved segmentation
-        for seg_name in saved_names.split(", "):
-            # Find where the file should be, skipping it if one does not exist
-            nifti_file, __ = self._generate_output_paths_for(unit.uid, seg_name)
-            if not nifti_file.is_file():
-                continue
-            # Load the corresponding segmentation into Slicer
-            new_node = load_segmentation(nifti_file)
-            pretty_name = EditableSegmentationResource.format_for_gui(seg_name)
-            new_node.SetName(f"{pretty_name} [{unit.uid}]")
-            new_node.SetReferenceImageGeometryParameterFromVolumeNode(
-                unit.primary_volume_node
-            )
-            # Delete the previous segmentation
-            node_key = EditableSegmentationResource.format_for_csv(seg_name)
-            old_node = unit.segmentation_nodes.pop(node_key)
-            unit.scene.RemoveNode(old_node)
-            # Insert our new node in its place
-            unit.segmentation_nodes[node_key] = new_node

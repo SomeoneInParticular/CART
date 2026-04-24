@@ -59,13 +59,6 @@ class EditableSegmentationResource(SegmentationResource):
 
         return layout
 
-    @classmethod
-    def get_short_name(cls, resource_id: str):
-        id_str = f"_{cls.id}"
-        if not resource_id.endswith(id_str):
-            return resource_id
-        return resource_id.replace(id_str, "")
-
 
 class ReferenceSegmentationResource(SegmentationResource):
 
@@ -113,12 +106,15 @@ class SegmentationUnit(CARTStandardUnit):
         self,
         case_data: dict[str, str],
         data_path: Path,
+        prior_data: dict = None,
         scene: slicer.vtkMRMLScene = slicer.mrmlScene,
     ) -> None:
-        super().__init__(case_data, data_path, scene)
+        # Replace entries in our case data w/ our custom overrides
+        if prior_data is not None:
+            for k, v in prior_data.items():
+                case_data[k] = v
 
-        # Subset of segmentation nodes marked "custom"
-        self._custom_segmentations = dict()
+        super().__init__(case_data, data_path, scene)
 
     def apply_segmentation_configs(self, task_config: "SegmentationConfig"):
         """
@@ -257,9 +253,16 @@ class SegmentationUnit(CARTStandardUnit):
                 segmentation_node = node.GetSegmentation()
                 segmentation_node.AddEmptySegment("", "1")
 
-            # Set the name of the node, and align it to our primary volume
-            pretty_name = EditableSegmentationResource.format_for_gui(key)
-            node.SetName(f"{pretty_name} [{self.uid}]")
+            # Determine the name this segmentation should have
+            if EditableSegmentationResource.is_type(key):
+                short_name = EditableSegmentationResource.get_short_name(key)
+                pretty_name = f"{short_name} (Editable) [{self.uid}]"
+            else:
+                short_name = ReferenceSegmentationResource.get_short_name(key)
+                pretty_name = f"{short_name} (Reference) [{self.uid}]"
+            node.SetName(pretty_name)
+
+            # Align it to our primary volume
             node.SetReferenceImageGeometryParameterFromVolumeNode(
                 self.primary_volume_node
             )

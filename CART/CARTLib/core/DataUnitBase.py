@@ -79,6 +79,7 @@ class DataUnitBase(ABC):
         self,
         case_data: dict[str, str],
         data_path: Path,
+        prior_data: dict = None,
         scene: slicer.vtkMRMLScene = slicer.mrmlScene,  # Scene is NOT optional.
         # Default scene is the global MRML scene, which is always available.
     ):
@@ -90,6 +91,8 @@ class DataUnitBase(ABC):
           Will always contain an "uid" entry; everything else is free-form
         :param data_path: A data path. Should be treated as the "working"
           directory for anything that needs to read from files on the disk.
+        :param prior_data: Data which should be used to load previously saved
+          results for this case, instead of loading "from scratch".
         :param scene: A MRML scene, where nodes should be inserted into and
           managed within when the unit is in focus (actively being worked on)
 
@@ -247,6 +250,7 @@ class DataUnitFactory(Protocol):
         self,
         case_data: dict[str, str],
         data_path: Path,
+        prior_data: dict = None,
         scene: Optional[slicer.vtkMRMLScene] = None,
     ) -> DataUnitBase:
         # The "constructor"

@@ -130,6 +130,10 @@ class SegmentationTask(
         if self.gui:
             self.gui.onSavePrompt(*result_packet)
 
+    def generate_prior_data_for(self, uid: str) -> Optional[dict]:
+        # Delegate to our IO instance
+        return self.io.get_saved_segmentation_paths(uid)
+
     def setup(self, container: qt.QWidget):
         """
         Build the GUI's contents, returning the resulting layout for use.
@@ -145,14 +149,6 @@ class SegmentationTask(
 
     def receive(self, data_unit: SegmentationUnit):
         self._data_unit = data_unit
-
-        # If this unit was pulled from cache, end here
-        # TODO: Check if this unit was pulled from cache
-
-        # If this data unit has previous results, load them
-        # TODO: Make this configurable
-        if self.io.is_case_done(data_unit.uid):
-            self.io.load_previous_outputs(data_unit)
 
         # Apply our configuration options to the data unit
         data_unit.apply_segmentation_configs(self.local_config)

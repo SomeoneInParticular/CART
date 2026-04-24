@@ -752,7 +752,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             )
         duf = new_task_cls.getDataUnitFactory()
 
-        # Initialize the data loader using the job's settings
+        # Initialize a new data manager
         data_manager = DataManager(
             cohort_file=job_profile.cohort_path,
             data_source=job_profile.data_path,
@@ -768,6 +768,10 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
 
         # Unload the previous task
         # TODO
+
+        # Set the data manager's reference task as this new task
+        # TODO: Skip this if the user doesn't want to load previous outputs
+        data_manager.reference_task = new_task
 
         # Install the new task and give it its first data unit!
         self._data_manager = data_manager

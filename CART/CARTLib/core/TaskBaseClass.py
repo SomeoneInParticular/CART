@@ -177,6 +177,22 @@ class TaskBaseClass(ABC, Generic[D]):
         else:
             raise ValueError(f"An error occurred during saving: {save_result}")
 
+    def generate_prior_data_for(self, uid: str) -> Optional[dict]:
+        """
+        Return a dictionary containing data required to re-load previous
+        outputs for a case.
+
+        This is ONLY run when all the following conditions are met:
+          * CART is configured by the user to load previous outputs.
+          * The case in question was marked as being previously run by the active task.
+          * The case is not already loaded (being actively used or in cache).
+
+        The resulting dictionary is then passed to the active data unit
+        factory, and can be used to change how the resulting data unit
+        is constructed. See DataUnitBase:__init__ for further details.
+        """
+        return None
+
     def isTaskComplete(self, case_data: dict[str, str]) -> Optional[bool]:
         """
         Checks whether a case has been completed or not. How you choose to
@@ -236,16 +252,6 @@ class TaskBaseClass(ABC, Generic[D]):
         `exit` is called right before most `cleanup` calls anyway.
         """
         pass
-
-    def getRequiredFields(self) -> Optional[list[str]]:
-        """
-        Provide a list of fields which need to be within each DataUnit for
-        this task. For example, this could include field called "T2w MRI" field
-        for a segmentation-like task; if the DataUnit does not have this in
-        its contents, the task will not load it, skipping over it with a prompt
-        instead.
-        """
-        return None
 
 
 class CARTTask(TaskBaseClass, ABC, Generic[D]):

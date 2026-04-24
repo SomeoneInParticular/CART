@@ -908,6 +908,13 @@ class SimpleResource(ResourceType, Protocol):
     def is_type(cls, csv_label: str) -> bool:
         return cls.id in csv_label
 
+    @classmethod
+    def get_short_name(cls, resource_id: str):
+        id_str = f"_{cls.id}"
+        if not resource_id.endswith(id_str):
+            return resource_id
+        return resource_id.replace(id_str, "")
+
 
 class VolumeResource(SimpleResource):
 
