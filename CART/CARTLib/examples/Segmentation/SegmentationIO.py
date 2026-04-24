@@ -8,6 +8,7 @@ import slicer.util
 
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.data import (
+    load_segmentation,
     save_segmentation_to_nifti,
     save_json_sidecar,
 )
@@ -58,7 +59,7 @@ class SegmentationIO:
         self.task_config: "SegmentationConfig" = task_config
 
         # Map of previous CSV log entries
-        self._log_data: Optional[dict[tuple[str, str], dict[str, str]]] = None
+        self._log_data: Optional[dict[str, dict[str, str]]] = None
 
     ## Log Management ##
     @property
@@ -114,14 +115,11 @@ class SegmentationIO:
         return log_data
 
     ## Save/Load Management ##
-    def is_case_done(self, case: dict[str, str]):
+    def is_case_done(self, uid: str):
         """
         Check whether the expected output files for the given case
-        exist or not.
+        UID exist or not.
         """
-        # Get the UID key
-        uid = case.get(self.UID_KEY)
-
         # If our log file doesn't have an entry, return None
         log_entry = self.log_data.get(uid)
         if log_entry is None:
@@ -138,17 +136,17 @@ class SegmentationIO:
         saved_keys = log_entry.get(self.SAVED_KEY)
         if saved_keys != "":
             for seg_id in saved_keys.split(", "):
-                nifti_path, json_path = self._generate_output_paths_for(uid, seg_id)
+                # Get the "final" name for this segmentation
+                seg_name = EditableSegmentationResource.get_short_name(seg_id)
+                nifti_path, json_path = self._generate_output_paths_for(uid, seg_name)
                 if not nifti_path.exists() or not json_path.exists():
                     return False
 
         # TODO: Also check the case contents for missing files as a fallback
         return True
 
-    def _generate_output_paths_for(self, uid: str, seg_id: str):
+    def _generate_output_paths_for(self, uid: str, seg_name: str):
         # TODO: Allow user-configurable file structure/format
-        # Get the "final" name for this segmentation
-        seg_name = EditableSegmentationResource.get_short_name(seg_id)
 
         # Determine the output file destinations
         stem_path = self.job_config.output_path / uid
@@ -171,8 +169,9 @@ class SegmentationIO:
 
             # Try to save this segmentation
             try:
-                result = self._save_segmentation(seg_node, unit, seg_id)
-                saved[seg_id] = str(result)
+                seg_name = EditableSegmentationResource.get_short_name(seg_id)
+                result = self._save_segmentation(seg_node, unit, seg_name)
+                saved[seg_name] = str(result)
             except Exception as e:
                 failed[seg_id] = str(e)
         # Create a new log entry detailing these changes
@@ -197,7 +196,7 @@ class SegmentationIO:
         self,
         seg_node: "slicer.vtkMRMLSegmentationNode",
         unit: SegmentationUnit,
-        seg_id: str,
+        seg_name: str,
     ) -> Path:
         """
         Save the specified segmentation node, referencing the given data
@@ -206,14 +205,14 @@ class SegmentationIO:
 
         :param seg_node: The segmentation node that should be saved
         :param unit: The data unit the segmentation node is part of
-        :param seg_id: The identifier used by the segmentation within the data unit
+        :param seg_name: The identifier used by the segmentation within the data unit
         :return: The output path of the MAIN (.nii.gz) saved file
         :raises ValueError: If the values provided would result in a corrupted save file.
         """
         # TODO: Allow users to "skip" blank segmentations
 
         # Determine the output file destinations
-        nifti_path, json_path = self._generate_output_paths_for(unit.uid, seg_id)
+        nifti_path, json_path = self._generate_output_paths_for(unit.uid, seg_name)
 
         # Build the corresponding sidecar
         # TODO: Only create this if outputting to BIDS-like format
@@ -236,3 +235,36 @@ class SegmentationIO:
 
         # Report the output path for upstream use
         return nifti_path.resolve()
+
+    def load_previous_outputs(self, unit: SegmentationUnit):
+        # Get the list of saved files to look for
+        unit_data = self.log_data.get(unit.uid)
+
+        # Do nothing if we (somehow) lack unit data for this
+        if unit_data is None:
+            return
+
+        saved_names = unit_data.get(self.SAVED_KEY)
+        # If there weren't any saved files, do nothing
+        if saved_names == '':
+            return
+
+        # Iteratively try and load each saved segmentation
+        for seg_name in saved_names.split(", "):
+            # Find where the file should be, skipping it if one does not exist
+            nifti_file, __ = self._generate_output_paths_for(unit.uid, seg_name)
+            if not nifti_file.is_file():
+                continue
+            # Load the corresponding segmentation into Slicer
+            new_node = load_segmentation(nifti_file)
+            pretty_name = EditableSegmentationResource.format_for_gui(seg_name)
+            new_node.SetName(f"{pretty_name} [{unit.uid}]")
+            new_node.SetReferenceImageGeometryParameterFromVolumeNode(
+                unit.primary_volume_node
+            )
+            # Delete the previous segmentation
+            node_key = EditableSegmentationResource.format_for_csv(seg_name)
+            old_node = unit.segmentation_nodes.pop(node_key)
+            unit.scene.RemoveNode(old_node)
+            # Insert our new node in its place
+            unit.segmentation_nodes[node_key] = new_node

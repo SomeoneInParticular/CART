@@ -116,7 +116,10 @@ class SegmentationTask(
     ## State Management ##
     def isTaskComplete(self, case_data: dict[str, str]) -> bool:
         # Delegate to our IO manager
-        return self.io.is_case_done(case_data)
+        uid = case_data.get("uid", None)
+        if uid is None:
+            return False
+        return self.io.is_case_done(uid)
 
     def save(self) -> Optional[str]:
         # Try to save the data unit
@@ -142,6 +145,14 @@ class SegmentationTask(
 
     def receive(self, data_unit: SegmentationUnit):
         self._data_unit = data_unit
+
+        # If this unit was pulled from cache, end here
+        # TODO: Check if this unit was pulled from cache
+
+        # If this data unit has previous results, load them
+        # TODO: Make this configurable
+        if self.io.is_case_done(data_unit.uid):
+            self.io.load_previous_outputs(data_unit)
 
         # Apply our configuration options to the data unit
         data_unit.apply_segmentation_configs(self.local_config)
