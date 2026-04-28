@@ -325,8 +325,6 @@ class CohortModel(CSVBackedTableModel):
     def csv_data(self) -> "Optional[npt.NDArray]":
         if self._csv_data is None:
             return None
-        # Suppressed because PyCharm went mad for some reason here
-        # noinspection PyTypeChecker
         return self._csv_data[1:, 1:]
 
     @property
