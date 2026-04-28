@@ -332,6 +332,9 @@ class CSVBackedTableModel(qt.QAbstractTableModel):
         try:
             with open(self.csv_path, 'r') as fp:
                 new_data = np.array([r for r in csv.reader(fp)], dtype="object")
+                # If the shape of the new data is not 2D, its probably corrupted; raise an error
+                if len(new_data.shape) != 2:
+                    raise ValueError(f"Contents of file '{str(self.csv_path)}' was invalid, refusing to load!")
                 self._csv_data = new_data
         except Exception as e:
             # Blank the CSV data outright if an error occurred

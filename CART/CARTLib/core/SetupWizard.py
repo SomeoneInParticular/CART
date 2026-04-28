@@ -720,6 +720,10 @@ class _DataSelectionPage(qt.QWizardPage):
             )
         )
         cohortFileSelector.filters = ctk.ctkPathLineEdit.Files
+        # Make sure only CSV files are visible (and valid)
+        cohortFileSelector.nameFilters = [
+            "CSV files (*.csv)",
+        ]
         self._cohortFileSelector = cohortFileSelector
         layout.addRow(cohortFileLabel, cohortFileSelector)
 
