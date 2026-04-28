@@ -30,6 +30,10 @@ if TYPE_CHECKING:
     import PyQt5.Qt as qt
 
 
+NIFTI_SIDECAR_LABELS_KEY = "Labels"
+GENERATED_BY_KEY = "GeneratedBy"
+
+
 ## LOADING ##
 def load_volume(path: Path):
     """
@@ -158,9 +162,6 @@ def load_slicer_markups(path: Path) -> list[slicer.vtkMRMLMarkupsFiducialNode]:
             displayNode.SetVisibility(False)
 
     return markups_nodes
-
-
-NIFTI_SIDECAR_LABELS_KEY = "Labels"
 
 
 def load_nifti_markups(path: Path) -> slicer.vtkMRMLMarkupsFiducialNode:
@@ -521,9 +522,6 @@ def save_json_sidecar(main_file_path: Path, sidecar_data: dict):
     # Otherwise, try to load the contents of the file and return it
     with open(sidecar_path, 'w') as fp:
         json.dump(sidecar_data, fp, indent=2)
-
-
-GENERATED_BY_KEY = "GeneratedBy"
 
 
 # noinspection PyUnusedLocal
