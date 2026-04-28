@@ -21,7 +21,7 @@ class SegmentationFileStructure(Enum):
 
 
 class SegmentationFileFormat(Enum):
-    NIFTI = "NiFTI"
+    NIFTI = "NIfTI"
     NRRD = "NRRD"
 
 

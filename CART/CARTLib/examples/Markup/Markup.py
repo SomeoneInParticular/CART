@@ -245,7 +245,7 @@ class MarkupOutput:
 
             # Save the node's contents to this file
             if ".nii" in output_file.suffixes:
-                # Save the node to a NiFTI file, w/ a sidecar containing label data!
+                # Save the node to a NIfTI file, w/ a sidecar containing label data!
                 save_markups_to_nifti(
                     markup_node=node,
                     reference_volume=data_unit.primary_volume_node,
@@ -310,7 +310,7 @@ class MarkupOutputStructure(Enum):
 
 
 class MarkupOutputFormat(Enum):
-    NIFTI = "NiFTI"
+    NIFTI = "NIfTI"
     NRRD = "NRRD"
     JSON = "JSON"
 

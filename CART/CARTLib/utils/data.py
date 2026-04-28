@@ -94,7 +94,7 @@ def load_segmentation(path: Path):
 
 
 def load_markups(path: Path) -> list[slicer.vtkMRMLMarkupsFiducialNode]:
-    # If the path points to a NiFTI file, load it using our custom loader
+    # If the path points to a NIfTI file, load it using our custom loader
     if ".nii" in path.suffixes:
         return [load_nifti_markups(path)]
     # Otherwise, assume it's a native Slicer format
@@ -106,11 +106,11 @@ def load_slicer_markups(path: Path) -> list[slicer.vtkMRMLMarkupsFiducialNode]:
     Loads a markup from a file which is in an official Slicer
     format (.json or .csv).
 
-    If you are loading a points list from a NiFTI file,
+    If you are loading a points list from a NIfTI file,
     you should use `load_nifti_markups` instead.
 
     Note that, due to a mismatch between Slicer's documentation and
-    its actual behaviour when loading markups from a file containing
+    its actual behavior when loading markups from a file containing
     multiple markup sets, we have implemented a workaround to make it
     "act" as documented instead. Hopefully this will be fixed in
     upcoming Slicer releases, though!
@@ -165,16 +165,16 @@ NIFTI_SIDECAR_LABELS_KEY = "Labels"
 
 def load_nifti_markups(path: Path) -> slicer.vtkMRMLMarkupsFiducialNode:
     """
-    Loads a set of markups from a NiFTI style binary label set.
+    Loads a set of markups from a NIfTI style binary label set.
 
-    Note that markups stored in NiFTI cannot support overlapping markup positions!
-    As well, NiFTI cannot natively save the label names for each value within it;
+    Note that markups stored in NIfTI cannot support overlapping markup positions!
+    As well, NIfTI cannot natively save the label names for each value within it;
     we work around this via a .json sidecar, but this is a non-standard format that
     WILL NOT WORK in a non-CART context!
 
     TODO: Implement the aforementioned side-car implementation
 
-    :param path: Path to the NiFTI file to load
+    :param path: Path to the NIfTI file to load
     :param reference_volume: Volume node to use as reference for IJK co-ordinates.
         If none, the markups will be placed using their native IJK values
     """
@@ -183,7 +183,7 @@ def load_nifti_markups(path: Path) -> slicer.vtkMRMLMarkupsFiducialNode:
     volume_rep_node = None
     markup_node = None
     try:
-        # Load the NiFTI file initially as a volume
+        # Load the NIfTI file initially as a volume
         volume_rep_node = load_volume(path)
 
         # Get the voxel array from the node
@@ -192,13 +192,13 @@ def load_nifti_markups(path: Path) -> slicer.vtkMRMLMarkupsFiducialNode:
         # Get the set of indices for non-zero values in the "volume"
         nonzero_map = np.nonzero(volume_array)
 
-        # It is exceedingly unlikely that a NiFTI-style markup has more than
+        # It is exceedingly unlikely that a NIfTI-style markup has more than
         # 100 markups in it; if this is the case, warn the user!
         if nonzero_map[0].shape[0] > 100:
             print(
-                f"WARNING: The number of markups in the NiFTI file '{path}' "
+                f"WARNING: The number of markups in the NIfTI file '{path}' "
                 "is abnormally large (more than 100), and will likely cause lag.\n"
-                "Are you sure this is a markup-style NiFTI file?"
+                "Are you sure this is a markup-style NIfTI file?"
             )
 
         # Generate an empty markup node
@@ -283,10 +283,10 @@ def save_volume_to_nifti(volume_node, path: Path):
     """
     Save a volume node to the specified path.
     """
-    # Confirm this is a NiFTI file
+    # Confirm this is a NIfTI file
     if ".nii" not in path.suffixes:
         raise ValueError(
-            f"Refusing to save file '{path.name}' into NiFTI format; "
+            f"Refusing to save file '{path.name}' into NIfFTI format; "
             "ensure the file is a '.nii' file!"
         )
 
@@ -301,10 +301,10 @@ def save_segmentation_to_nifti(segment_node, volume_node, path: Path):
     convert it back to a label-type node w/ reference to a volume node first,
     then save that.
     """
-    # Confirm this is a NiFTI file
+    # Confirm this is a NIfTI file
     if ".nii" not in path.suffixes:
         raise ValueError(
-            f"Refusing to save file '{path.name}' into NiFTI format; "
+            f"Refusing to save file '{path.name}' into NIfTI format; "
             "ensure the file is a '.nii' file!"
         )
 
@@ -338,12 +338,12 @@ def save_markups_to_nifti(
         path: Path,
         master_profile: Optional[MasterProfileConfig] = None):
     """
-    Saves a set of markup labels to a NiFTI file.
+    Saves a set of markup labels to a NIfTI file.
 
     This format is BIDS compliant, but has several caveats to its use:
-        * Markups stored in NiFTI cannot support overlapping markup positions!
-        * NiFTI cannot natively save the label names for each value within it
-        * NiFTI can only save co-ordinates at IJK integer precision,
+        * Markups stored in NIfTI cannot support overlapping markup positions!
+        * NIfTI cannot natively save the label names for each value within it
+        * NIfTI can only save co-ordinates at IJK integer precision,
             unlike Slicer's JSON format (which tracks floating point RAS positions)
         * Requires a reference volume to convert the markups RAS co-ordinates to
             IJK voxel positions
@@ -356,10 +356,10 @@ def save_markups_to_nifti(
     :param path: Path to a (presumably `.nii`) file where the data should be saved
     :param master_profile: Profile config; used to build the JSON sidecar
     """
-    # Confirm this is a NiFTI file
+    # Confirm this is a NIfTI file
     if ".nii" not in path.suffixes:
         raise ValueError(
-            f"Refusing to save file '{path.name}' into NiFTI format; "
+            f"Refusing to save file '{path.name}' into NIfTI format; "
             "ensure the file is a '.nii' file!"
         )
 
@@ -418,7 +418,7 @@ def save_markups_to_nifti(
         creation_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         # If we have a user profile, add its contents to the GeneratedBy entry
         if master_profile:
-            sidecar_data["GeneratedBy"] = [{
+            sidecar_data[GENERATED_BY_KEY] = [{
                 "Name": "CART",
                 "Author": master_profile.author,
                 "Position": master_profile.position,
@@ -426,7 +426,7 @@ def save_markups_to_nifti(
             }]
         # Otherwise, just note that this was created by CART
         else:
-            sidecar_data["GeneratedBy"] = [{
+            sidecar_data[GENERATED_BY_KEY] = [{
                 "Name": "CART",
                 "Date": creation_time
             }]
