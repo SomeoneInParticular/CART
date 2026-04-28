@@ -1180,6 +1180,8 @@ class CohortEditorDialog(ChangeTrackingDialogue):
             lambda: self.cohortWidget.tableView.editSelectedResource()
         )
         self._to_disconnect.append(editResourceButton.clicked)
+        # We never have elements selected initially
+        editResourceButton.setEnabled(False)
         resourceLayout.addWidget(editResourceButton)
 
         # Drop
@@ -1221,6 +1223,8 @@ class CohortEditorDialog(ChangeTrackingDialogue):
             lambda: self.cohortWidget.tableView.editSelectedCase()
         )
         self._to_disconnect.append(editCaseButton.clicked)
+        # We never have elements selected initially
+        editCaseButton.setEnabled(False)
         caseLayout.addWidget(editCaseButton)
 
         # Drop
@@ -1242,6 +1246,8 @@ class CohortEditorDialog(ChangeTrackingDialogue):
         @qt.Slot(qt.QItemSelection, qt.QItemSelection)
         def updateButtonsEnabled(selected: qt.QItemSelection, __: qt.QItemSelection):
             should_enable = len(selected.indexes()) > 0
+            editResourceButton.setEnabled(should_enable)
+            editCaseButton.setEnabled(should_enable)
             dropResourcesButton.setEnabled(should_enable)
             dropCasesButton.setEnabled(should_enable)
 

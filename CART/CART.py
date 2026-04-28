@@ -243,6 +243,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic.jobListChanged.connect(
             lambda: editButton.setEnabled(jobSelectorComboBox.isEnabled())
         )
+        editButton.setEnabled(jobSelectorComboBox.isEnabled())
 
         # "Delete" button
         deleteButton = qt.QPushButton(_("Delete"))
@@ -257,6 +258,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic.jobListChanged.connect(
             lambda: deleteButton.setEnabled(jobSelectorComboBox.isEnabled())
         )
+        deleteButton.setEnabled(jobSelectorComboBox.isEnabled())
 
         # Start button; initializes the job, or walks the user through job setup if there isn't one
         startButton = qt.QPushButton("Start")
