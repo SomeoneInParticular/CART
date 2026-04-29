@@ -593,7 +593,7 @@ class _TaskDefinitionPage(qt.QWizardPage):
     @property
     def job_name(self) -> str:
         # noinspection PyTypeChecker
-        return self.jobNameEntry.text
+        return self.jobNameEntry.text.strip()
 
     @job_name.setter
     def job_name(self, new_name: str):
@@ -831,6 +831,7 @@ class _DataSelectionPage(qt.QWizardPage):
         if not currentPath:
             return None
         else:
+            currentPath = currentPath.strip()
             return Path(currentPath)
 
     @data_path.setter
@@ -844,6 +845,7 @@ class _DataSelectionPage(qt.QWizardPage):
         if not currentPath:
             return None
         else:
+            currentPath = currentPath.strip()
             return Path(currentPath)
 
     @output_path.setter
@@ -857,6 +859,7 @@ class _DataSelectionPage(qt.QWizardPage):
         if not currentPath:
             return None
         else:
+            currentPath = currentPath.strip()
             return Path(currentPath)
 
     @cohort_path.setter
@@ -902,12 +905,16 @@ class _DataSelectionPage(qt.QWizardPage):
         self.editCohort()
 
     def editCohort(self):
+        # Ensure the selected task is valid
         task_name = self.wizard().selected_task
         selected_task = CART_TASK_REGISTRY.get(task_name)
         if selected_task is None:
             raise ValueError(f"Cannot load task {task_name}, has not been registered!")
-        # Re-use the same backing cohort model
+
+        # Re-use the same backing cohort model, updated w/ our current data path
         cohort_model: CohortModel = self._cohortPreviewWidget.model
+        cohort_model.data_path = self.data_path
+
         # Temporarily make the model editable (if it wasn't already)
         with cohort_model.temporarily_editable():
             # Update the cohort's reference data path to our current data path
