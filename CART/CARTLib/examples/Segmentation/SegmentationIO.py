@@ -11,6 +11,8 @@ from CARTLib.utils.data import (
     load_segmentation,
     save_segmentation_to_nifti,
     save_json_sidecar,
+    load_json_sidecar,
+    find_json_sidecar_path,
 )
 
 from SegmentationUnit import (
@@ -138,7 +140,8 @@ class SegmentationIO:
             for seg_id in saved_keys.split(", "):
                 # Get the "final" name for this segmentation
                 seg_name = EditableSegmentationResource.get_short_name(seg_id)
-                nifti_path, json_path = self._generate_output_paths_for(uid, seg_name)
+                nifti_path = self._generate_output_paths_for(uid, seg_name)
+                json_path = find_json_sidecar_path(nifti_path)
                 if not nifti_path.exists() or not json_path.exists():
                     return False
 
@@ -159,12 +162,12 @@ class SegmentationIO:
         segmentation_paths = {}
         for seg_name in saved_keys.split(", "):
             # Find where the file should be, skipping it if one does not exist
-            nifti_file, __ = self._generate_output_paths_for(uid, seg_name)
-            if not nifti_file.is_file():
+            nifti_path = self._generate_output_paths_for(uid, seg_name)
+            if not nifti_path.is_file():
                 continue
             # Track the file within the dictionary
             segment_key = EditableSegmentationResource.format_for_csv(seg_name)
-            segmentation_paths[segment_key] = nifti_file
+            segmentation_paths[segment_key] = nifti_path
 
         return segmentation_paths
 
@@ -175,11 +178,10 @@ class SegmentationIO:
         stem_path = self.job_config.output_path / uid
         file_name = f"{uid}_{seg_name}"
 
-        # Define the NIfTI + JSON file paths
+        # Define the NIfTI file paths
         nifti_path = stem_path / f"{file_name}.nii.gz"
-        json_path = stem_path / f"{file_name}.json"
 
-        return nifti_path, json_path
+        return nifti_path
 
     def save_unit(self, unit: SegmentationUnit):
         # Save each segmentation that was marked as "to-edit" during Job config
@@ -235,26 +237,26 @@ class SegmentationIO:
         # TODO: Allow users to "skip" blank segmentations
 
         # Determine the output file destinations
-        nifti_path, json_path = self._generate_output_paths_for(unit.uid, seg_name)
+        nifti_path = self._generate_output_paths_for(unit.uid, seg_name)
 
-        # Build the corresponding sidecar
-        # TODO: Only create this if outputting to BIDS-like format
-        sidecar_data = {
-            "SpatialReference": "orig",
-            "GeneratedBy": [
-                {
-                    "Name": f"CART Segmentation Task [{self.job_config.name}]",
-                    "Version": VERSION,
-                    "Author": self.master_config.author,
-                    "Position": self.master_config.position,
-                    "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                }
-            ],
-        }
+        # Load the previous sidecar's contents as a "basis"
+        prior_path = Path(seg_node.GetStorageNode().GetFileName())
+        sidecar_data = load_json_sidecar(prior_path)
+        # Update its relevant contents
+        generated_by = sidecar_data.get("GeneratedBy", [])
+        generated_by.append({
+            "Name": f"CART Segmentation Task [{self.job_config.name}]",
+            "Version": VERSION,
+            "Author": self.master_config.author,
+            "Position": self.master_config.position,
+            "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        })
+        sidecar_data["GeneratedBy"] = generated_by
 
         # Save everything
         save_segmentation_to_nifti(seg_node, unit.primary_volume_node, nifti_path)
-        save_json_sidecar(json_path, sidecar_data)
+        # TODO: Only create this if outputting to BIDS-like format
+        save_json_sidecar(nifti_path, sidecar_data)
 
         # Report the output path for upstream use
         return nifti_path.resolve()
