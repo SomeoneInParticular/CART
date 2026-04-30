@@ -103,7 +103,6 @@ class DataUnitBase(ABC):
         self.scene: slicer.vtkMRMLScene = scene
 
         # Resource tracking
-        self.resources = {}
         self.uid = case_data.get("uid", None)
 
         # Layout manager for this data unit;
@@ -136,18 +135,6 @@ class DataUnitBase(ABC):
         """
         raise NotImplementedError("This method must be implemented in subclasses.")
 
-    @abstractmethod
-    def _initialize_resources(self):
-        """
-        Initialize the resources for this DataIOBase instance.
-
-        This should take the contents of a (validated) data dictionary and create the
-        associated resources in the MRML scene.
-
-        This method should be implemented to set up the resources after validation.
-        """
-        raise NotImplementedError("This method must be implemented in subclasses.")
-
     @property
     @abstractmethod
     def layout_handler(self) -> LayoutHandler:
@@ -158,45 +145,6 @@ class DataUnitBase(ABC):
         raise NotImplementedError("This method must be implemented in subclasses.")
 
     ## Default Methods
-    def get_resource(self, key: str) -> Any:
-        """
-        Retrieve a specified resource associated with this DataUnitBase instance.
-
-        A resource can be any data that should be managed on a unit-by-unit basis,
-        as it is presented within Slicer/Python.
-        This is how your Task implementation should access data for display or processing.
-
-        By default, this uses a backing dictionary, but you can override this in a subclass
-
-        Generally, the return type should be a Slicer Node, but this is not enforced.
-
-        """
-        if key in self.resources:
-            return self.resources[key]
-        else:
-            raise KeyError(f"Resource '{key}' not found in VolumeOnlyDataUnit.")
-
-    def get_scene(self) -> slicer.vtkMRMLScene:
-        """
-        Retrieve the MRML scene associated with this DataIOBase instance.
-
-        This scene contains the data unit's contents in Slicer's 'Node' format;
-        it is cached to allow for quick access without needing to re-fetch it.
-
-        Returns:
-            slicer.vtkMRMLScene: The MRML scene.
-        """
-        return self.scene
-
-    def get_data_uid(self) -> str:
-        """
-        Retrieve the unique identifier (UID) for this DataUnit instance.
-
-        Returns:
-            str: The UID of the data.
-        """
-        return self.uid
-
     def focus_gained(self):
         """
         This is called when the DataUnit is made the "focus" of the task. You should

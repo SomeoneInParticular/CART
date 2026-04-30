@@ -230,7 +230,12 @@ class MarkupOutput:
         failed_files = []
         for key, node in data_unit.markup_nodes.items():
             # Determine how the file should be named
-            input_path = data_unit.markup_paths.get(key, None)
+            input_path = node.GetStorageNode().GetFileName()
+            if input_path is None or input_path == "":
+                input_path = None
+            else:
+                input_path = Path(input_path)
+
             # If this is a node w/o a previous file name, save it as such
             if input_path is None:
                 file_name = f"{key}_unknown_{unknown_idx}.mrk.json"
@@ -248,7 +253,7 @@ class MarkupOutput:
                 # Save the node to a NIfTI file, w/ a sidecar containing label data!
                 save_markups_to_nifti(
                     markup_node=node,
-                    reference_volume=data_unit.primary_volume_node,
+                    reference_volume=data_unit.reference_volume_node,
                     path=output_file
                 )
                 saved_files.append(output_file)

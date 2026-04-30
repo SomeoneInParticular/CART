@@ -13,6 +13,7 @@ from CARTLib.utils.data import (
     VolumeResource,
     create_empty_segmentation_node,
     load_segmentation,
+    ReferenceVolumeResource,
 )
 
 from SegmentationConfig import ExtendedSegmentationResourceConfig
@@ -20,7 +21,6 @@ from SegmentationConfig import ExtendedSegmentationResourceConfig
 ## Type Utils ##
 if TYPE_CHECKING:
     # Avoid potential cyclic imports
-    from CARTLib.core.DataUnitBase import ResourceType
     from SegmentationConfig import SegmentationConfig
 
     # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
@@ -95,12 +95,13 @@ class SegmentationUnit(CARTStandardUnit):
     """
 
     # Replace the default segmentation resource w/ our custom subtypes
-    RESOURCE_TYPES = {
-        VolumeResource.id: VolumeResource,
-        EditableSegmentationResource.id: EditableSegmentationResource,
-        ReferenceSegmentationResource.id: ReferenceSegmentationResource,
-        MarkupResource.id: MarkupResource
-    }
+    RESOURCE_TYPES = {v.id: v for v in [
+        ReferenceVolumeResource,
+        VolumeResource,
+        EditableSegmentationResource,
+        ReferenceSegmentationResource,
+        MarkupResource
+    ]}
 
     def __init__(
         self,
@@ -205,47 +206,52 @@ class SegmentationUnit(CARTStandardUnit):
                 segment.SetLabelValue(seg_val)
 
     def _create_new_segmentation(self, name: str):
+
         # Create the new node
         new_node = create_empty_segmentation_node(
             name,
-            reference_volume=self.primary_volume_node,
+            reference_volume=self.reference_volume_node,
             scene=self.scene,
         )
 
         # Track it for later reference
-        self.segmentation_keys.append(name)
         self.segmentation_nodes[name] = new_node
 
         # TODO Add it to this unit's subject as well
 
-    def _init_segmentation_nodes(self) -> None:
+    def _load_segmentation_nodes(self, segmentation_paths: dict[str, Path]) -> None:
         """
         Modified version of the super-class, which "fills in" missing
         segmentations with blanks ones instead
         """
         # If we don't have a primary volume yet, this method was called too early
-        if not self.primary_volume_node:
+        if not self.reference_volume_key:
             raise ValueError(
                 "Cannot initialize segmentation nodes prior to volume nodes!"
             )
 
-        # Prepare to set the color of each segment
+        # Slight optimization via aliased property
+        reference_volume = self.reference_volume_node
+
+        # Ensure each segment has a unique color by default, even if the user didn't specify it.
         color_table = slicer.util.getNode("GenericColors").GetLookupTable()
         c_idx = 2  # Start at 2, so newly created segments can have a unique color
-        for key in self.segmentation_keys:
-            seg_path = self.segmentation_paths.get(key, None)
+        for key, path in segmentation_paths.items():
+
             # Try to read from file
-            if seg_path is not None:
-                if seg_path.exists():
+            if path is not None:
+                if path.exists():
                     # Try to load the segmentation first
-                    node = load_segmentation(seg_path)
+                    node = load_segmentation(path)
+                # If there was a path specified, but it no longer exists, raise an error
                 else:
-                    continue
+                    raise ValueError(f"Tried to load segmentation from path {path} which doesn't exist!")
+
             # If no file exists, create a segmentation from scratch
             else:
                 node = create_empty_segmentation_node(
                     "",
-                    reference_volume=self.primary_volume_node,
+                    reference_volume=reference_volume,
                     scene=self.scene,
                 )
 
@@ -255,17 +261,14 @@ class SegmentationUnit(CARTStandardUnit):
 
             # Determine the name this segmentation should have
             if EditableSegmentationResource.is_type(key):
-                short_name = EditableSegmentationResource.get_short_name(key)
-                pretty_name = f"{short_name} (Editable) [{self.uid}]"
+                pretty_name = EditableSegmentationResource.format_for_gui(key)
             else:
-                short_name = ReferenceSegmentationResource.get_short_name(key)
-                pretty_name = f"{short_name} (Reference) [{self.uid}]"
+                pretty_name = ReferenceSegmentationResource.format_for_gui(key)
+            pretty_name = f"{pretty_name} [{self.uid}]"
             node.SetName(pretty_name)
 
             # Align it to our primary volume
-            node.SetReferenceImageGeometryParameterFromVolumeNode(
-                self.primary_volume_node
-            )
+            node.SetReferenceImageGeometryParameterFromVolumeNode(self.reference_volume_node)
 
             # Apply a unique color to all segments within the segmentation
             for segment_id in node.GetSegmentation().GetSegmentIDs():
@@ -278,10 +281,5 @@ class SegmentationUnit(CARTStandardUnit):
 
                 # Increment the color index
                 c_idx += 1
-            self.segmentation_nodes[key] = node
-            self.resources[key] = node
 
-    @classmethod
-    def resource_types(cls) -> "dict[str, ResourceType]":
-        # Use our custom resource types
-        return cls.RESOURCE_TYPES
+            self.segmentation_nodes[key] = node

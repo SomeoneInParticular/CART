@@ -254,7 +254,7 @@ class SegmentationIO:
         sidecar_data["GeneratedBy"] = generated_by
 
         # Save everything
-        save_segmentation_to_nifti(seg_node, unit.primary_volume_node, nifti_path)
+        save_segmentation_to_nifti(seg_node, unit.reference_volume_node, nifti_path)
         # TODO: Only create this if outputting to BIDS-like format
         save_json_sidecar(nifti_path, sidecar_data)
 
