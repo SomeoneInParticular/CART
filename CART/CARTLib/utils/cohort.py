@@ -3,6 +3,7 @@ import csv
 import json
 import logging
 import os
+from bdb import bar
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Protocol, TYPE_CHECKING
@@ -591,13 +592,15 @@ def _bids_cases(data_path: Path) -> CaseMap:
         ses_ps = list(p.glob("ses*/"))
         # If there were none, use the subject alone for this case
         if len(ses_ps) < 1:
-            name = p.parts[-1]
-            subject_map[name] = [p.relative_to(data_path)]
+            subject = p.parts[-1]
+            subject_map[subject] = [p.relative_to(data_path)]
         # Otherwise, prepare a case for each session
         else:
             for p2 in ses_ps:
-                name = "_".join(p2.parts[-2:])
-                session_map[name] = [p2.relative_to(data_path)]
+                subject = p2.parts[-2]
+                session = p2.parts[-1]
+                key = f"{subject}_{session}"
+                session_map[key] = [p2.relative_to(data_path)]
 
     # Add associated derivative paths, if such a directory exists
     derivative_path = data_path / "derivatives"
@@ -611,7 +614,8 @@ def _bids_cases(data_path: Path) -> CaseMap:
                 for p in derivative_path.glob(f"*/{subject}/")
             ])
         # Parse session-based cases
-        for (subject, session), val_list in session_map.items():
+        for key, val_list in session_map.items():
+            subject, session = key.split("_")
             val_list.extend([
                 p.relative_to(data_path)
                 for p in derivative_path.glob(f"*/{subject}/{session}/")
