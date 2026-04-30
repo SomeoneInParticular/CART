@@ -460,7 +460,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if not self.logic.has_run_before():
             if self._noProfileFoundPrompt() != qt.QMessageBox.Yes:
                 return
-            if not self.runInitialSetup():
+            if not self.runProfileEdit(show_walkthrough=True):
                 return
         # If no job was specified, ask if they want to create one.
         if job_name is None:
@@ -527,31 +527,28 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         )
 
     ## Setup Workflows ##
-    def runInitialSetup(self) -> bool:
+    @qt.Slot()
+    def runProfileEdit(self, show_walkthrough: bool = False) -> bool:
         """
-        Run initial CART setup, prompting the user for their name and role.
+        Run the cart profile editor, only applying its changes if the user confirms them.
+
+        :param show_walkthrough: Whether introductory and conclusion pages should be displayed.
+          Usually only needed when the user is "brand new", and just clicked 'start' without
+          knowing any better.
 
         :return: If the setup was successful or not.
         """
-        initSetupWizard = CARTSetupWizard(None)
-        result = initSetupWizard.exec()
-
-        # If we got an "accept" signal, update ourselves and begin job setup
-        if result == qt.QDialog.Accepted:
-            initSetupWizard.update_logic(self.logic)
-            self.profileChanged()
-            return True
-        return False
-
-    @qt.Slot()
-    def runProfileEdit(self) -> bool:
-        profileWizard = CARTSetupWizard(None, self.logic.master_profile_config)
+        profileWizard = CARTSetupWizard(None, self.logic.master_profile_config, show_walkthrough)
         result = profileWizard.exec()
         if result == qt.QDialog.Accepted:
-            profileWizard.update_logic(self.logic)
+            # Save the results and report the user made changes
+            self.logic.save_master_config()
             self.profileChanged()
             return True
-        return False
+        else:
+            # Otherwise, reset the config to what it was and report no changes made
+            self.logic.reload_master_config()
+            return False
 
     @qt.Slot()
     def runNewJobSetup(self) -> Optional[str]:
@@ -992,8 +989,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         ):
             return False
         # Tell the task to save its current unit
-        # TODO: Restore configuration option for this
-        self.save_case()
+        self._autosave_case()
         # Iterate to the next data unit and proceed
         old_idx = self._data_manager.current_case_index
         try:
@@ -1015,8 +1011,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         ):
             return
         # Tell the task to save its current unit
-        # TODO: Restore configuration option for this
-        self.save_case()
+        self._autosave_case()
         # Iterate to the next incomplete data unit and proceed
         old_idx = self._data_manager.current_case_index
         try:
@@ -1042,8 +1037,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         ):
             return False
         # Tell the task to save its current unit
-        # TODO: Restore configuration option for this
-        self.save_case()
+        self._autosave_case()
         # Iterate to the previous data unit and proceed
         old_idx = self._data_manager.current_case_index
         try:
@@ -1065,8 +1059,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         ):
             return False
         # Tell the task to save its current unit
-        # TODO: Restore configuration option for this
-        self.save_case()
+        self._autosave_case()
         # Iterate to the previous data unit and proceed
         old_idx = self._data_manager.current_case_index
         try:
@@ -1085,14 +1078,18 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
             raise ValueError("CART cannot change cases; we do not have a data manager yet!")
         if self._task_instance is None:
             raise ValueError("CART cannot change cases; there is no task to receive the new one!")
-        # Auto-save
-        # TODO: Restore configuration option for this
-        self.save_case()
+        # Auto-save the case, if the user has configured it
+        self._autosave_case()
         # Swap to the new unit
         prior_idx = self._data_manager.current_case_index
         new_unit = self._data_manager.select_unit_at(idx)
         self._task_instance.receive(new_unit)
         self.caseChanged(prior_idx, idx)
+
+    def _autosave_case(self):
+        # Just checks the profile's configuration option before proceeding
+        if self.master_profile_config.autosave_on_switch:
+            self.save_case()
 
     def save_case(self):
         try:
@@ -1105,6 +1102,7 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
                 )
             self._task_instance.save()
         finally:
+            # Always emit a signal so any GUIs can sync properly
             self.caseSaved(self.data_manager.current_case_index)
 
     def refresh_layout(self):

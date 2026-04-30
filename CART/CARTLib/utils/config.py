@@ -344,11 +344,6 @@ class MasterProfileConfig(DictBackedConfig):
         self.backing_dict[self.POSITION_KEY] = new_position
         self.has_changed = True
 
-    @position.setter
-    def position(self, new_position):
-        self.backing_dict[self.POSITION_KEY] = new_position
-        self.has_changed = True
-
     REGISTERED_JOB_KEY = "registered_jobs"
 
     @property
@@ -445,6 +440,20 @@ class MasterProfileConfig(DictBackedConfig):
         # Clear the task paths entirely!
         self.backing_dict[self.REGISTERED_TASK_PATHS_KEY] = {}
         self.has_changed = True
+
+    AUTOSAVE_ON_SWITCH_KEY = "autosave_on_switch"
+
+    @property
+    def autosave_on_switch(self) -> bool:
+        """
+        Determines whether CART will automatically save the active case
+        when switching to another one.
+        """
+        return self.get_or_default(self.AUTOSAVE_ON_SWITCH_KEY, True)
+
+    @autosave_on_switch.setter
+    def autosave_on_switch(self, new_val: bool):
+        self.backing_dict[self.AUTOSAVE_ON_SWITCH_KEY] = new_val
 
     ## Utilities ##
     def save_without_parent(self) -> None:

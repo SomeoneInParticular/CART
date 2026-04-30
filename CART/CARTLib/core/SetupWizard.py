@@ -45,23 +45,23 @@ class CARTSetupWizard(qt.QWizard):
     AUTHOR_KEY = "author"
     POSITION_KEY = "position"
 
-    def __init__(self, parent, prior_config: MasterProfileConfig = None):
+    def __init__(self, parent, prior_config: MasterProfileConfig, add_walkthrough_pages: bool = False):
         super().__init__(parent)
 
         # The to-be-tracked prior config (if any)
-        self.prior_config = prior_config
+        self.config = prior_config
 
         # Standard elements
         self.setWindowTitle(_("User Profile Setup"))
         self.setPixmap(qt.QWizard.LogoPixmap, CART_LOGO_PIXMAP)
 
         # Add pages
-        if prior_config is None:
+        if add_walkthrough_pages:
             self.addPage(self.createIntroPage())
         profilePage = _ProfileWizardPage(None, prior_config)
         self.addPage(profilePage)
         self.profilePage = profilePage
-        if prior_config is None:
+        if add_walkthrough_pages:
             self.addPage(self.createConclusionPage())
 
     ## Static Pages ##
@@ -87,7 +87,7 @@ class CARTSetupWizard(qt.QWizard):
     @staticmethod
     def createConclusionPage():
         # Basic Attributes
-        page = qt.QWizardPage()
+        page = qt.QWizardPage(None)
         page.setTitle(_("Next Steps"))
         layout = qt.QVBoxLayout()
         page.setLayout(layout)
@@ -112,14 +112,9 @@ class CARTSetupWizard(qt.QWizard):
     def position(self) -> str:
         return self.profilePage.position
 
-    ## Utils ##
-    def update_logic(self, logic: "CARTLogic"):
-        # Update the logic's attributes
-        logic.author = self.author
-        logic.position = self.position if self.position != "" else None
-
-        # Have the logic save its config immediately
-        logic.save_master_config()
+    @property
+    def autosave_on_switch(self) -> bool:
+        pass # TODO
 
 
 class JobSetupWizard(qt.QWizard):
@@ -379,10 +374,10 @@ class _ProfileWizardPage(qt.QWizardPage):
     AUTHOR_KEY = "author"
     POSITION_KEY = "position"
 
-    def __init__(self, parent=None, prior_config: MasterProfileConfig = None):
+    def __init__(self, parent=None, config: MasterProfileConfig = None):
         super().__init__(parent)
 
-        # Basic Attributes
+        ## WIDGETS ##
         self.setTitle(_("Profile Creation"))
         layout = qt.QFormLayout(self)
 
@@ -399,7 +394,6 @@ class _ProfileWizardPage(qt.QWizardPage):
         layout.addRow(authorLabel, authorLineEdit)
         # The asterisk marks this field as "mandatory"
         self.registerField(self.AUTHOR_KEY + "*", authorLineEdit)
-        authorLineEdit.textChanged.connect(lambda: self.completeChanged())
 
         # Position
         positionLabel = qt.QLabel(_("Position"))
@@ -411,12 +405,51 @@ class _ProfileWizardPage(qt.QWizardPage):
         layout.addRow(positionLabel, positionLineEdit)
         self.registerField(self.POSITION_KEY, positionLineEdit)
 
-        # Load the previous configuration values if they were provided
-        if prior_config is not None:
-            if (author := prior_config.author) is not None:
-                authorLineEdit.setText(author)
-            if (position := prior_config.position) is not None:
-                positionLineEdit.setText(position)
+        ### Toggled Options ###
+        toggleContainer = qt.QWidget(self)
+        toggleLayout = qt.QFormLayout(toggleContainer)
+        layout.addRow(toggleContainer)
+
+        # Auto-save on case changed
+        autoSaveCheckBox = qt.QCheckBox()
+        autoSaveLabel = qt.QLabel(_("Auto-Save when Changing Cases"))
+        autoSaveToolTip = _(
+            "When toggled, CART will automatically save the case's contents when you "
+            "switch from one case to another. Otherwise you will have to click the "
+            "'save' button manually to get CART to save the current case before moving "
+            "onto the next."
+        )
+        autoSaveCheckBox.setToolTip(autoSaveToolTip)
+        autoSaveLabel.setToolTip(autoSaveToolTip)
+        toggleLayout.addRow(autoSaveCheckBox, autoSaveLabel)
+
+        ## CONNECTIONS ##
+        @qt.Slot(str)
+        def authorNameChanged(new_author: str):
+            # Update the backing configuration
+            config.author = new_author.strip()
+
+            # Check if our "complete" state has changed
+            self.completeChanged()
+        authorLineEdit.textChanged.connect(authorNameChanged)
+
+        @qt.Slot(str)
+        def positionChanged(new_position: str):
+            # Update the backing configuration
+            config.position = new_position.strip()
+        positionLineEdit.textChanged.connect(positionChanged)
+
+        @qt.Slot()
+        def autosaveToggled():
+            config.autosave_on_switch = autoSaveCheckBox.isChecked()
+        autoSaveCheckBox.toggled.connect(autosaveToggled)
+
+        ## SYNC ##
+        if (author := config.author) is not None:
+            authorLineEdit.setText(author)
+        if (position := config.position) is not None:
+            positionLineEdit.setText(position)
+        autoSaveCheckBox.setChecked(config.autosave_on_switch)
 
     ## Fields/Properties ##
     @property
