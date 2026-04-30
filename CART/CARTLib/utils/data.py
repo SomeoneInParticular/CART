@@ -1036,7 +1036,11 @@ class CARTStandardUnit(DataUnitBase):
         for k, v in case_data.items():
             if not SegmentationResource.is_type(k):
                 continue
-            # Track the path to this segmentation
+            # If this entry is empty, denote so explicitly
+            if v == "":
+                segmentations[k] = None
+                continue
+            # Otherwise, resolve the full path and track that
             p = Path(v)
             if not p.is_absolute():
                 p = self.data_path / p
