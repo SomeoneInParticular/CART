@@ -103,19 +103,6 @@ class CARTSetupWizard(qt.QWizard):
 
         return page
 
-    ## Properties ##
-    @property
-    def author(self) -> str:
-        return self.profilePage.author
-
-    @property
-    def position(self) -> str:
-        return self.profilePage.position
-
-    @property
-    def autosave_on_switch(self) -> bool:
-        pass # TODO
-
 
 class JobSetupWizard(qt.QWizard):
 
