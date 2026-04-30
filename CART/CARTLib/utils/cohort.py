@@ -1594,6 +1594,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Use the config layout as our new GUI
         self.taskConfigBox.setLayout(config_layout)
 
+    @qt.Slot()
     def _rebuildTaskConfigGUI(self):
         # If the currently selected resource type is invalid, just hide the GUI
         if self.resource_type is None:
@@ -1627,11 +1628,13 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
 
     def apply_changes(self):
         # Only run the (relatively) expensive update if something has changed
-        if not self.task_config_copy.has_changed:
-            return True
-
         # TODO: Move the following checks to be run dynamically, disabling the "OK" button
         #  until they are resolved.
+        base_str = self.nameField.text.strip()
+        csv_str = self.resource_type.format_for_csv(base_str)
+        resource_name_changed = csv_str != self._prior_resource_name
+        if not (self.task_config_copy.has_changed or resource_name_changed):
+            return True
 
         # Confirm the user has selected a valid resource type
         if self.resource_type is None:
@@ -1660,7 +1663,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Make sure a resource of this name doesn't already exist
         csv_str = self.resource_type.format_for_csv(base_str)
         pretty_str = self.resource_type.format_for_gui(base_str)
-        if csv_str != self._prior_resource_name and csv_str in self._cohort.resource_map.keys():
+        if resource_name_changed and csv_str in self._cohort.resource_map.keys():
             # If it does, show an error and return "False" (no changes made)
             qt.QMessageBox.critical(
                 None,
