@@ -995,7 +995,7 @@ class CARTStandardUnit(DataUnitBase):
         reference_key = None
         for k, v in case_data.items():
             # Skip blanks; we can't view them!
-            if v is None:
+            if v is None or v == "":
                 continue
             # Skip over non-volume entries as well
             if not VolumeResource.is_type(k):
