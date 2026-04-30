@@ -447,8 +447,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         @qt.Slot(int, int)
         def onNewCase(__: int, ___: int):
-            new_unit = self.logic.data_manager.select_current_unit()
+            new_unit = self.logic.data_manager.current_data_unit()
             layoutPanel.changeLayoutHandler(new_unit.layout_handler, True)
+            new_unit.layout_handler.apply_layout()
 
         self.logic.caseChanged.connect(onNewCase)
 

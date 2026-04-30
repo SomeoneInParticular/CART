@@ -149,10 +149,9 @@ class DataUnitBase(ABC):
         """
         This is called when the DataUnit is made the "focus" of the task. You should
         "reveal" any resources you are managing here by adding them back to the MRML
-        scene.
+        scene. The layout handler will then ensure everything is displayed correctly.
         """
-        if self.layout_handler:
-            self.layout_handler.apply_layout()
+        pass
 
     def focus_lost(self):
         """
