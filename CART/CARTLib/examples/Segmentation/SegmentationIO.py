@@ -8,7 +8,6 @@ import slicer.util
 
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.data import (
-    load_segmentation,
     save_segmentation_to_nifti,
     save_json_sidecar,
     load_json_sidecar,
@@ -185,27 +184,29 @@ class SegmentationIO:
 
     def save_unit(self, unit: SegmentationUnit):
         # Save each segmentation that was marked as "to-edit" during Job config
-        saved = dict()  # Name: Destination Path
-        failed = dict()  # Name: Reason
+        saved_records = list()
+        failed_records = list()
+        exceptions = list()
         for seg_id, seg_node in unit.segmentation_nodes.items():
             # If this segmentation is "view-only", skip it
             if ReferenceSegmentationResource.is_type(seg_id):
                 continue
 
             # Try to save this segmentation
+            seg_name = EditableSegmentationResource.get_short_name(seg_id)
             try:
-                seg_name = EditableSegmentationResource.get_short_name(seg_id)
-                result = self._save_segmentation(seg_node, unit, seg_name)
-                saved[seg_name] = str(result)
+                self._save_segmentation(seg_node, unit, seg_name)
+                saved_records.append(seg_name)
             except Exception as e:
-                failed[seg_id] = str(e)
+                failed_records.append(seg_name)
+                exceptions.append(e)
         # Create a new log entry detailing these changes
         log_entry = {
             self.UID_KEY: unit.uid,
             self.AUTHOR_KEY: self.master_config.author,
             self.TIMESTAMP_KEY: datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            self.SAVED_KEY: ", ".join(saved.keys()),
-            self.FAILED_KEY: ", ".join(failed.keys()),
+            self.SAVED_KEY: ", ".join(saved_records),
+            self.FAILED_KEY: ", ".join(failed_records),
             self.VERSION_KEY: VERSION,
         }
         self.log_data[unit.uid] = log_entry
@@ -214,8 +215,16 @@ class SegmentationIO:
             writer = csv.DictWriter(fp, fieldnames=self.HEADERS, delimiter='\t')
             writer.writeheader()
             writer.writerows(self.log_data.values())
-        # Return the result for upstream use
-        return saved, failed
+
+        # If we had any errors, log a message and raise the first
+        no_exceptions = len(exceptions)
+        if no_exceptions > 0:
+            logging.error(
+                f"While saving a the segmentations for data unit '{unit.uid}', "
+                f"{no_exceptions} error(s) occurred! "
+                f"See the critical stack trace for details "
+                f"on the first of these.")
+            raise exceptions[0]
 
     def _save_segmentation(
         self,

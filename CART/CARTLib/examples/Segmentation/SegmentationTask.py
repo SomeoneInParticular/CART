@@ -125,10 +125,7 @@ class SegmentationTask(
         # Try to save the data unit
         if not self.data_unit:
             self.logger.error("Could not save, no data unit has been loaded!")
-        result_packet = self.io.save_unit(self.data_unit)
-        # If we have an active GUI, prompt the user with the details
-        if self.gui:
-            self.gui.onSavePrompt(*result_packet)
+        self.io.save_unit(self.data_unit)
 
     def generate_prior_data_for(self, uid: str) -> Optional[dict]:
         # Delegate to our IO instance
