@@ -410,6 +410,18 @@ class _ProfileWizardPage(qt.QWizardPage):
         autoSaveLabel.setToolTip(autoSaveToolTip)
         toggleLayout.addRow(autoSaveCheckBox, autoSaveLabel)
 
+        # Load previous outputs on case load
+        loadPreviousOutputsCheckBox = qt.QCheckBox()
+        loadPreviousOutputsLabel = qt.QLabel(_("Load Previous Outputs when Available"))
+        loadPreviousOutputsTip = _(
+            "When toggled, CART will try to load any previous outputs associated with "
+            "each case, if they exist. How this is done depends on the active task, and "
+            "may not be supported at all for some."
+        )
+        loadPreviousOutputsCheckBox.setToolTip(loadPreviousOutputsTip)
+        loadPreviousOutputsLabel.setToolTip(loadPreviousOutputsTip)
+        toggleLayout.addRow(loadPreviousOutputsCheckBox, loadPreviousOutputsLabel)
+
         ## CONNECTIONS ##
         @qt.Slot(str)
         def authorNameChanged(new_author: str):
@@ -431,12 +443,18 @@ class _ProfileWizardPage(qt.QWizardPage):
             config.autosave_on_switch = autoSaveCheckBox.isChecked()
         autoSaveCheckBox.toggled.connect(autosaveToggled)
 
+        @qt.Slot()
+        def loadPreviousOutputsToggled():
+            config.load_previous_outputs = loadPreviousOutputsCheckBox.isChecked()
+        loadPreviousOutputsCheckBox.toggled.connect(loadPreviousOutputsToggled)
+
         ## SYNC ##
         if (author := config.author) is not None:
             authorLineEdit.setText(author)
         if (position := config.position) is not None:
             positionLineEdit.setText(position)
         autoSaveCheckBox.setChecked(config.autosave_on_switch)
+        loadPreviousOutputsCheckBox.setChecked(config.load_previous_outputs)
 
     ## Fields/Properties ##
     @property

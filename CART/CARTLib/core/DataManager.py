@@ -322,7 +322,9 @@ class DataManager:
             raise ValueError("Tried to get a data unit for a case without a UID!")
 
         # Using the reference task, generate our prior data and build the corresponding data unit
-        prior_data = self.reference_task.generate_prior_data_for(uid)
+        prior_data = None
+        if self.reference_task is not None:
+            prior_data = self.reference_task.generate_prior_data_for(uid)
         return self.get_data_unit(idx, prior_data)
 
     def current_data_unit(self) -> DataUnitBase:

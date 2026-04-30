@@ -790,9 +790,10 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         # Unload the previous task
         # TODO
 
-        # Set the data manager's reference task as this new task
-        # TODO: Skip this if the user doesn't want to load previous outputs
-        data_manager.reference_task = new_task
+        if self.master_profile_config.load_previous_outputs:
+            # If the user has requested we load previous outputs, pass
+            # the task to the data manager so it can "seek" them.
+            data_manager.reference_task = new_task
 
         # Install the new task and give it its first data unit!
         self._data_manager = data_manager

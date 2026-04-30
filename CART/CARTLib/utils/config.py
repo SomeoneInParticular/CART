@@ -455,6 +455,21 @@ class MasterProfileConfig(DictBackedConfig):
     def autosave_on_switch(self, new_val: bool):
         self.backing_dict[self.AUTOSAVE_ON_SWITCH_KEY] = new_val
 
+    LOAD_PREVIOUS_OUTPUTS = "load_prior_outputs"
+
+    @property
+    def load_previous_outputs(self) -> bool:
+        """
+        Dictates whether CART should try to load previous outputs (when available
+        and supported by the task) for each case before referring to the cohort
+        file.
+        """
+        return self.get_or_default(self.LOAD_PREVIOUS_OUTPUTS, True)
+
+    @load_previous_outputs.setter
+    def load_previous_outputs(self, new_val: bool):
+        self.backing_dict[self.LOAD_PREVIOUS_OUTPUTS] = new_val
+
     ## Utilities ##
     def save_without_parent(self) -> None:
         """
