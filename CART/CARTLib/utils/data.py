@@ -936,6 +936,7 @@ class CARTStandardUnit(DataUnitBase):
         self,
         case_data: dict[str, str],
         data_path: Path,
+        prior_data: dict = None,  # TODO: Utilize this to "recall" prior markups
         scene: slicer.vtkMRMLScene = slicer.mrmlScene,
     ) -> None:
         super().__init__(case_data, data_path, scene)
@@ -1109,7 +1110,7 @@ class CARTStandardUnit(DataUnitBase):
         # Prepare to set the color of each segment
         color_table = slicer.util.getNode("GenericColors").GetLookupTable()
         c_idx = 1  # Start at 1, as 0 has special meaning in Slicer
-        for key, path in segmentation_paths:
+        for key, path in segmentation_paths.items():
             # By default we skip over blank segmentations
             if path is None or not path.exists():
                 continue
