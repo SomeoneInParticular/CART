@@ -248,9 +248,15 @@ class SegmentationIO:
         # Determine the output file destinations
         nifti_path = self._generate_output_paths_for(unit.uid, seg_name)
 
+        # Begin generating the sidecar's contents
+        sidecar_data = dict()
+
         # Load the previous sidecar's contents as a "basis"
-        prior_path = Path(seg_node.GetStorageNode().GetFileName())
-        sidecar_data = load_json_sidecar(prior_path)
+        storage_node = seg_node.GetStorageNode()
+        if storage_node is not None:
+            prior_path = Path(storage_node.GetFileName())
+            sidecar_data = load_json_sidecar(prior_path)
+
         # Update its relevant contents
         generated_by = sidecar_data.get("GeneratedBy", [])
         generated_by.append({
