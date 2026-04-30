@@ -1034,6 +1034,7 @@ class CARTStandardUnit(DataUnitBase):
         """
         segmentations = {}
         for k, v in case_data.items():
+            # Skip resources that aren't the correct type
             if not SegmentationResource.is_type(k):
                 continue
             # If this entry is empty, denote so explicitly
@@ -1054,7 +1055,12 @@ class CARTStandardUnit(DataUnitBase):
         """
         markups = {}
         for k, v in case_data.items():
+            # Skip resources that aren't the correct type
             if not MarkupResource.is_type(k):
+                continue
+            # If this entry is empty, denote so explicitly
+            if v == "":
+                markups[k] = None
                 continue
             # Track the path to this segmentation
             p = Path(v)
