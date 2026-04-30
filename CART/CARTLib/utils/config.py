@@ -371,6 +371,7 @@ class MasterProfileConfig(DictBackedConfig):
 
         # Move the new job to the front; this also marks ourselves as being changed
         self.set_last_job(k)
+        self.has_changed = True
 
     @property
     def last_job(self) -> Optional[tuple[str, str]]:
@@ -454,8 +455,9 @@ class MasterProfileConfig(DictBackedConfig):
     @autosave_on_switch.setter
     def autosave_on_switch(self, new_val: bool):
         self.backing_dict[self.AUTOSAVE_ON_SWITCH_KEY] = new_val
+        self.has_changed = True
 
-    LOAD_PREVIOUS_OUTPUTS = "load_prior_outputs"
+    LOAD_PREVIOUS_OUTPUTS_KEY = "load_prior_outputs"
 
     @property
     def load_previous_outputs(self) -> bool:
@@ -464,11 +466,28 @@ class MasterProfileConfig(DictBackedConfig):
         and supported by the task) for each case before referring to the cohort
         file.
         """
-        return self.get_or_default(self.LOAD_PREVIOUS_OUTPUTS, True)
+        return self.get_or_default(self.LOAD_PREVIOUS_OUTPUTS_KEY, True)
 
     @load_previous_outputs.setter
     def load_previous_outputs(self, new_val: bool):
-        self.backing_dict[self.LOAD_PREVIOUS_OUTPUTS] = new_val
+        self.backing_dict[self.LOAD_PREVIOUS_OUTPUTS_KEY] = new_val
+        self.has_changed = True
+
+    SKIP_TO_INCOMPLETE_KEY = "skip_to_first_incomplete"
+
+    @property
+    def skip_to_first_incomplete(self) -> bool:
+        """
+        Dictates whether CART should skip to the first "incomplete"
+        case when starting a task. Relies on the task being able to
+        test if a case has been completed or not to work.
+        """
+        return self.get_or_default(self.SKIP_TO_INCOMPLETE_KEY, True)
+
+    @skip_to_first_incomplete.setter
+    def skip_to_first_incomplete(self, new_val: bool):
+        self.backing_dict[self.SKIP_TO_INCOMPLETE_KEY] = new_val
+        self.has_changed = True
 
     ## Utilities ##
     def save_without_parent(self) -> None:

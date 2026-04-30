@@ -231,8 +231,8 @@ class DataManager:
         self.case_data = list()
         self.feature_labels = list()
 
-        # Current index being tracked
-        self.current_case_index: int = 0
+        # Current index being tracked; -1 indicates one hasn't been selected yet
+        self.current_case_index: int = -1
 
         # Convert the protected '_get_data_unit' into a public version,
         #  w/ the desired number of cached elements.
@@ -282,7 +282,7 @@ class DataManager:
             self.case_data = list(reader)
 
         # If we succeeded, reset our iteration step
-        self.current_case_index = 0
+        self.current_case_index = -1
 
     def _get_data_unit(self, idx: int, prior_data: dict = None) -> DataUnitBase:
         """
@@ -366,14 +366,12 @@ class DataManager:
         elif idx >= len(self.case_data):
             raise ValueError("Index cannot be greater than the number of loaded cases.")
 
-        # Keep tabs on the prior data unit for later
-        prior_unit = self.current_data_unit()
-
-        # Attempt to grab the next data unit
+        # Attempt to grab the next data unit and focus it
         new_unit = self._unit_at(idx)
 
-        # Try to transfer focus from one unit to the other
-        if prior_unit:
+        # Try to transfer focus from the previous unit (if any) to our new one
+        if self.current_case_index != -1:
+            prior_unit = self.current_data_unit()
             prior_unit.focus_lost()
         new_unit.focus_gained()
 

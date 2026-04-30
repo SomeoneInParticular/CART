@@ -798,7 +798,13 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         # Install the new task and give it its first data unit!
         self._data_manager = data_manager
         self._task_instance = new_task
-        self._task_instance.receive(self._data_manager.current_data_unit())
+
+        # Pass the appropriate case to the task, skipping to the first "incomplete" if requested
+        if self.master_profile_config.skip_to_first_incomplete:
+            unit = self.data_manager.first_incomplete(self._task_instance)
+        else:
+            unit = self.data_manager.first()
+        self._task_instance.receive(unit)
 
         # Initialize the new task
         self.active_job_config = job_profile
@@ -807,8 +813,9 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         self.master_profile_config.set_last_job(job_name)
         self.master_profile_config.save()
 
-        # Emit our job changed signal
+        # Emit our job changed + a syncing case changed signal
         self.jobChanged()
+        self.caseChanged(-1, self.data_manager.current_case_index)
 
     def register_job_config(self, job_config: JobProfileConfig):
         self.master_profile_config.register_new_job(job_config)
@@ -963,9 +970,6 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         # Initialize the task's GUI itself
         self._task_instance.setup(containerWidget)
 
-        # Sync the GUI by "swapping" to our current index
-        self.caseChanged.emit(-1, self._data_manager.current_case_index)
-
     ## Case Management ##
     def is_case_completed(self, idx: int) -> bool:
         # Confirm we're in a valid state first; if not, the case is not complete
@@ -1105,16 +1109,6 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         finally:
             # Always emit a signal so any GUIs can sync properly
             self.caseSaved(self.data_manager.current_case_index)
-
-    def refresh_layout(self):
-        if self._data_manager is None:
-            self.logger.warning(
-                f"No data manager current exists, cannot apply a data unit layout!"
-            )
-            return
-
-        # Apply the layout of the current data unit
-        self._data_manager.current_data_unit().layout_handler.apply_layout()
 
     ## Config Management ##
     def save_master_config(self):

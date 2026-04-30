@@ -422,6 +422,18 @@ class _ProfileWizardPage(qt.QWizardPage):
         loadPreviousOutputsLabel.setToolTip(loadPreviousOutputsTip)
         toggleLayout.addRow(loadPreviousOutputsCheckBox, loadPreviousOutputsLabel)
 
+        # Skip to first "incomplete" case
+        skipToIncompleteCheckBox = qt.QCheckBox()
+        skipToIncompleteLabel = qt.QLabel(_("Skip to First Incomplete Case"))
+        skipToIncompleteToolTip = _(
+            "When toggled, CART will skip to the first case which does not already have "
+            "and output from a previous run of the active selected job. How this is "
+            "determined depends on the active task, and may not be supported at all for some."
+        )
+        skipToIncompleteCheckBox.setToolTip(skipToIncompleteToolTip)
+        skipToIncompleteLabel.setToolTip(skipToIncompleteToolTip)
+        toggleLayout.addRow(skipToIncompleteCheckBox, skipToIncompleteLabel)
+
         ## CONNECTIONS ##
         @qt.Slot(str)
         def authorNameChanged(new_author: str):
@@ -448,6 +460,11 @@ class _ProfileWizardPage(qt.QWizardPage):
             config.load_previous_outputs = loadPreviousOutputsCheckBox.isChecked()
         loadPreviousOutputsCheckBox.toggled.connect(loadPreviousOutputsToggled)
 
+        @qt.Slot()
+        def skipIncompleteOutputToggled():
+            config.skip_to_first_incomplete = skipToIncompleteCheckBox.isChecked()
+        skipToIncompleteCheckBox.toggled.connect(skipIncompleteOutputToggled)
+
         ## SYNC ##
         if (author := config.author) is not None:
             authorLineEdit.setText(author)
@@ -455,6 +472,7 @@ class _ProfileWizardPage(qt.QWizardPage):
             positionLineEdit.setText(position)
         autoSaveCheckBox.setChecked(config.autosave_on_switch)
         loadPreviousOutputsCheckBox.setChecked(config.load_previous_outputs)
+        skipToIncompleteCheckBox.setChecked(config.skip_to_first_incomplete)
 
     ## Fields/Properties ##
     @property
