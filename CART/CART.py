@@ -355,12 +355,18 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if case_completed:
                 # True -> task saved correctly
                 caseSelector.setItemIcon(idx, COMPLETED_ICON)
+                self.saveButton.setText(self.SAVE_BUTTON_SUCCESS_TEXT)
+                self.saveStateTimer.start(3000)  # 3 seconds
             elif case_completed is None:
                 # None -> the task isn't sure (the default)
                 caseSelector.setItemIcon(idx, UNKNOWN_ICON)
+                self.saveButton.setText(self.SAVE_BUTTON_UNKNOWN_TEXT)
+                self.saveStateTimer.start(5000)  # 5 seconds
             else:
                 # False -> a failure to save when the case swapped over
                 caseSelector.setItemIcon(idx, FAILED_ICON)
+                self.saveButton.setText(self.SAVE_BUTTON_FAILURE_TEXT)
+                self.saveStateTimer.start(5000)  # 5 seconds
         self.logic.caseSaved.connect(updateCaseIcon)
 
         @qt.Slot()
@@ -373,7 +379,8 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     caseSelector.addItem(u)
                     # Update the previous case's state to match
                     updateCaseIcon(i)
-
+                # Immediately set our save button's text back to default
+                self.saveButton.setText(self.SAVE_BUTTON_DEFAULT_TEXT)
             # Re-enable signals no matter what
             finally:
                 caseSelector.blockSignals(False)
@@ -408,12 +415,26 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Return the result
         return buttonPanel
 
+    SAVE_BUTTON_DEFAULT_TEXT = _("Save")
+    SAVE_BUTTON_SUCCESS_TEXT = _("Saved!")
+    SAVE_BUTTON_FAILURE_TEXT = _("Failed to Save!")
+    SAVE_BUTTON_UNKNOWN_TEXT = _("Save Status Unknown")
+
     def _savePanel(self) -> qt.QWidget:
         buttonPanel = qt.QWidget(None)
         buttonPanelLayout = qt.QHBoxLayout(buttonPanel)
 
-        saveButton = qt.QPushButton(_("Save"))
+        saveButton = qt.QPushButton(self.SAVE_BUTTON_DEFAULT_TEXT)
         saveButton.clicked.connect(self.logic.save_case)
+        self.saveButton = saveButton
+
+        # Timer which will automatically "reset" the button's text when it expires
+        self.saveStateTimer = qt.QTimer(None)
+        self.saveStateTimer.setSingleShot(True)  # Stop after being triggered
+        @qt.Slot()
+        def resetSaveButtonText():
+            saveButton.setText(self.SAVE_BUTTON_DEFAULT_TEXT)
+        self.saveStateTimer.timeout.connect(resetSaveButtonText)
 
         buttonPanelLayout.addStretch(1)
         buttonPanelLayout.addWidget(saveButton, 10)
@@ -625,6 +646,7 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.logic.jobListChanged.disconnect()
         self.logic.caseSaved.disconnect()
         self.logic.caseChanged.disconnect()
+        self.saveStateTimer.timeout.disconnect()
 
     def enter(self):
         # Delegate to our logic to have tasks properly update
