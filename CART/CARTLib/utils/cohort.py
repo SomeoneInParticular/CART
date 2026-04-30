@@ -599,7 +599,7 @@ def _bids_cases(data_path: Path) -> CaseMap:
             for p2 in ses_ps:
                 subject = p2.parts[-2]
                 session = p2.parts[-1]
-                key = f"{subject}_{session}"
+                key = f"{subject}__{session}"
                 session_map[key] = [p2.relative_to(data_path)]
 
     # Add associated derivative paths, if such a directory exists
@@ -615,7 +615,7 @@ def _bids_cases(data_path: Path) -> CaseMap:
             ])
         # Parse session-based cases
         for key, val_list in session_map.items():
-            subject, session = key.split("_")
+            subject, session = key.split("__")
             val_list.extend([
                 p.relative_to(data_path)
                 for p in derivative_path.glob(f"*/{subject}/{session}/")
