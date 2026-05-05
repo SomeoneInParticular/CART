@@ -121,8 +121,10 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
     def buildSegmentTableGUI(self, layout: qt.QFormLayout):
         # Table widget to place the results within
         # TODO: Make QT model/view wrappers for this to ensure sync is maintained
-        table = qt.QTableWidget(0, 3, None)
-        table.setHorizontalHeaderLabels(list(self.HEADER_MAP.keys()))
+        table: qt.QTableWidget = qt.QTableWidget(0, 3, None)
+        # Update the headers to be clearer + translated
+        header_labels = [_(f"Segment {k}") for k in self.HEADER_MAP.keys()]
+        table.setHorizontalHeaderLabels(header_labels)
 
         # Make the table behave in a sensible manner
         table.setSizeAdjustPolicy(qt.QAbstractScrollArea.AdjustToContents)
@@ -132,6 +134,9 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
         table.setSizePolicy(
             qt.QSizePolicy.Expanding, qt.QSizePolicy.Expanding
         )
+
+        # Hide the vertical header, as it's not relevant to the users
+        table.verticalHeader().setVisible(False)
 
         # Make the columns stretch to fill available space
         table.horizontalHeader().setSectionResizeMode(0, qt.QHeaderView.Stretch)
@@ -183,8 +188,8 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
         layout.addRow(table)
 
         # Add buttons add, edit, and remove entries in the table
-        addButton = qt.QPushButton(_("New"))
-        deleteButton = qt.QPushButton(_("Delete"))
+        addButton = qt.QPushButton(_("New Tracked Segment"))
+        deleteButton = qt.QPushButton(_("Delete Selected Segment"))
         buttonPanel = qt.QWidget(None)
         buttonLayout = qt.QHBoxLayout(buttonPanel)
         buttonLayout.addWidget(addButton)
