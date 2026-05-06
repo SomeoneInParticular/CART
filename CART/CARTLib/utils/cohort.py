@@ -1364,6 +1364,9 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Backing cohort model
         self._cohort = cohort
 
+        # Track whether our own entries have changed or not
+        self._has_changed = False
+
         # Track the previous resource's details (if any)
         self._prior_resource_name = resource_name
         self._active_resource_name = resource_name
@@ -1641,10 +1644,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Only run the (relatively) expensive update if something has changed
         # TODO: Move the following checks to be run dynamically, disabling the "OK" button
         #  until they are resolved.
-        base_str = self.nameField.text.strip()
-        csv_str = self.resource_type.format_for_csv(base_str)
-        resource_name_changed = csv_str != self._prior_resource_name
-        if not (self.task_config_copy.has_changed or resource_name_changed):
+        if not self.has_changed:
             return True
 
         # Confirm the user has selected a valid resource type
@@ -1674,7 +1674,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Make sure a resource of this name doesn't already exist
         csv_str = self.resource_type.format_for_csv(base_str)
         pretty_str = self.resource_type.format_for_gui(base_str)
-        if resource_name_changed and csv_str in self._cohort.resource_map.keys():
+        if self._has_name_changed and csv_str in self._cohort.resource_map.keys():
             # If it does, show an error and return "False" (no changes made)
             qt.QMessageBox.critical(
                 None,
@@ -1732,6 +1732,18 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         self.task_config.backing_dict = self.task_config_copy.backing_dict
 
     ## Properties ##
+    @property
+    def _has_name_changed(self):
+        # Some pre-cursor calculations
+        base_str = self.nameField.text.strip()
+        csv_str = self.resource_type.format_for_csv(base_str)
+        return csv_str != self._prior_resource_name
+
+    @property
+    def has_changed(self):
+        # Check against our backing task config + name as well
+        return any([self._has_changed, self.task_config_copy.has_changed, self._has_name_changed])
+
     @property
     def resource_type(self) -> "Optional[ResourceType]":
         current_text = self.resourceTypeSelector.currentText.strip()
