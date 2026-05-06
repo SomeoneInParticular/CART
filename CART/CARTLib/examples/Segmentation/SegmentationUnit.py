@@ -138,6 +138,10 @@ class SegmentationUnit(CARTStandardUnit):
             segmentation_config = ExtendedSegmentationResourceConfig(resource_config_manager, k)
             segmentation_node = self.segmentation_nodes.get(k)
 
+            # If there is no matching segmentation (can happen w/ corrupted configs), end here
+            if segmentation_node is None:
+                continue
+
             # If there isn't already a segmentation node for a to-be-edited segmentation, create one
             should_edit = EditableSegmentationResource.is_type(k)
             if should_edit and segmentation_node is None:
