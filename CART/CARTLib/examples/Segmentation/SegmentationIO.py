@@ -263,8 +263,6 @@ class SegmentationIO:
         :return: The output path of the MAIN (.nii.gz) saved file
         :raises ValueError: If the values provided would result in a corrupted save file.
         """
-        # TODO: Allow users to "skip" blank segmentations
-
         # Determine the output file destinations
         nifti_path = self._generate_output_paths_for(unit.uid, seg_name)
 
