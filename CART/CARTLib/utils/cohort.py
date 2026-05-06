@@ -888,7 +888,7 @@ class CohortTableView(qt.QTableView):
         pretty_map = {m.csv_to_pretty(c): c for c in col_ids}
         dialog.setComboBoxItems(list(pretty_map.keys()))
 
-        # Only proceed to the editor if the
+        # Only proceed to the editor if the user selected one of the valid resources
         if dialog.exec() == qt.QDialog.Accepted:
             selected_col = dialog.textValue()
             col_id = pretty_map.get(selected_col)
