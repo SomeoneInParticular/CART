@@ -319,15 +319,16 @@ def save_segmentation_to_nifti(segment_node, volume_node, path: Path):
 
     # Convert the Segmentation back to a Label (for Nifti export)
     label_node = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
-    slicer.modules.segmentations.logic().ExportVisibleSegmentsToLabelmapNode(
-        segment_node, label_node, volume_node
-    )
+    try:
+        slicer.modules.segmentations.logic().ExportVisibleSegmentsToLabelmapNode(
+            segment_node, label_node, volume_node
+        )
 
-    # Save the active segmentation node to the desired directory
-    slicer.util.saveNode(label_node, str(path))
-
-    # Clean up the label node after so it doesn't pollute the scene
-    slicer.mrmlScene.RemoveNode(label_node)
+        # Save the active segmentation node to the desired directory
+        slicer.util.saveNode(label_node, str(path))
+    finally:
+        # Clean up the label node after so it doesn't pollute the scene
+        slicer.mrmlScene.RemoveNode(label_node)
 
 
 def save_markups_to_json(markups_node, path: Path):
