@@ -51,17 +51,6 @@ class SegmentationConfig(DictBackedConfig):
         self.backing_dict[self.SHOULD_INTERPOLATE_KEY] = new_val
         self.has_changed = True
 
-    HIDE_EDITABLE_ON_START_KEY = "hide_editable_on_start"
-
-    @property
-    def hide_editable_on_start(self) -> bool:
-        return self.get_or_default(self.HIDE_EDITABLE_ON_START_KEY, False)
-
-    @hide_editable_on_start.setter
-    def hide_editable_on_start(self, new_val: bool):
-        self.backing_dict[self.HIDE_EDITABLE_ON_START_KEY] = new_val
-        self.has_changed = True
-
     SAVE_BLANK_SEGMENTATIONS_KEY = "save_blanks"
 
     @property
@@ -333,24 +322,29 @@ class SegmentationConfigGUILayout(qt.QFormLayout):
         toggleLayout = qt.QFormLayout(None)
         self.addRow(toggleLayout)
 
-        ## Segmentation Overlap
-        segmentOverlapCheckBox = qt.QCheckBox()
-        segmentOverlapLabel = qt.QLabel(_("Disallow Overlapping Segments"))
-        toggleLayout.addRow(segmentOverlapCheckBox, segmentOverlapLabel)
-
-        ## Hide To-Edit Segments on Load
-        hideEditSegmentsInitiallyCheckBox = qt.QCheckBox()
-        hideEditSegmentsInitiallyCheckBox.setChecked(config.hide_editable_on_start)
-        hideEditSegmentsInitiallyLabel = qt.QLabel(_("Initially Hide To-Edit Segmentations"))
-        toggleLayout.addRow(hideEditSegmentsInitiallyCheckBox, hideEditSegmentsInitiallyLabel)
+        ## Whether to interpolate volumes on-load
+        interpolateVolumesCheckBox = qt.QCheckBox()
+        interpolateVolumesLabel = qt.QLabel(
+            _("Interpolate (smooth out) pixels in volumes.")
+        )
+        toggleLayout.addRow(interpolateVolumesCheckBox, interpolateVolumesLabel)
+        interpolateVolumesCheckBox.setChecked(config.should_interpolate)
 
         ## Whether to save blank segmentations
         saveEmptySegmentsCheckBox = qt.QCheckBox()
-        saveEmptySegmentsLabel = qt.QLabel(_("Save Empty Segmentations (will result in 'blank' files)"))
+        saveEmptySegmentsLabel = qt.QLabel(
+            _("Save Empty Segmentations (will create 'blank' output files).")
+        )
         toggleLayout.addRow(saveEmptySegmentsCheckBox, saveEmptySegmentsLabel)
+        saveEmptySegmentsCheckBox.setChecked(config.save_blank_segmentations)
 
         # Connections
-        @qt.Slot(None)
-        def onHideEditsToggled():
-            config.hide_to_edit = hideEditSegmentsInitiallyCheckBox.isChecked()
-        hideEditSegmentsInitiallyCheckBox.toggled.connect(onHideEditsToggled)
+        @qt.Slot()
+        def interpolationChanged():
+            config.should_interpolate = interpolateVolumesCheckBox.isChecked()
+        interpolateVolumesCheckBox.toggled.connect(interpolationChanged)
+
+        @qt.Slot()
+        def saveEmptySegmentsChanged():
+            config.save_blank_segmentations = saveEmptySegmentsCheckBox.isChecked()
+        saveEmptySegmentsCheckBox.toggled.connect(saveEmptySegmentsChanged)

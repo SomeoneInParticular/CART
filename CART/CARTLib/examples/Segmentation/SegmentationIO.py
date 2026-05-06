@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
+import numpy as np
 import slicer.util
 
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
@@ -187,18 +188,37 @@ class SegmentationIO:
         saved_records = list()
         failed_records = list()
         exceptions = list()
-        for seg_id, seg_node in unit.segmentation_nodes.items():
+        for segmentation_id, segmentation_node in unit.segmentation_nodes.items():
             # If this segmentation is "view-only", skip it
-            if ReferenceSegmentationResource.is_type(seg_id):
+            if ReferenceSegmentationResource.is_type(segmentation_id):
                 continue
 
+            # If we're not saving blanks, check if this segmentation is blank
+            if not self.task_config.save_blank_segmentations:
+                # Iterate through each segment in turn
+                segmentation = segmentation_node.GetSegmentation()
+                for segment_id in segmentation.GetSegmentIDs():
+                    try:
+                        # If any segment has a non-zero value, break to skip the "else" below.
+                        if np.count_nonzero(slicer.util.arrayFromSegmentInternalBinaryLabelma(segmentation, segment_id)) > 0:
+                            break
+                    except AttributeError:
+                        # When there is no label map in the segment, its either corrupt or lacks any segments.
+                        continue
+                else:
+                    # If no segments had a non-zero value, skip the segmentation
+                    logging.info(
+                        f"Skipped segmentation {segmentation_node.GetName()}, as it was blank."
+                    )
+                    continue
+
             # Try to save this segmentation
-            seg_name = EditableSegmentationResource.get_short_name(seg_id)
+            segmentation_name = EditableSegmentationResource.get_short_name(segmentation_id)
             try:
-                self._save_segmentation(seg_node, unit, seg_name)
-                saved_records.append(seg_name)
+                self._save_segmentation(segmentation_node, unit, segmentation_name)
+                saved_records.append(segmentation_name)
             except Exception as e:
-                failed_records.append(seg_name)
+                failed_records.append(segmentation_name)
                 exceptions.append(e)
         # Create a new log entry detailing these changes
         log_entry = {
