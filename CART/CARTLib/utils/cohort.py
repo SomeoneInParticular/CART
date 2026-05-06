@@ -280,16 +280,22 @@ class CohortModel(CSVBackedTableModel):
         # Mark ourselves as being changed
         self._mark_changed()
 
-    def rename_resource(self, old_name: str, new_name: str):
+    def rename_resource(self, old_name: str, new_name: str, task_config: Optional[DictBackedConfig] = None):
         # Check that there's actually a filter to rename
         if old_name not in self.resource_map.keys():
             raise ValueError(f"Cannot rename resource '{old_name}'; it doesn't exist!")
+
         # Update the backing model
         col_idx = np.argwhere(self.header == old_name).flatten()[0]
         self.setHeaderData(col_idx, qt.Qt.Horizontal, new_name, qt.Qt.EditRole)
+
         # Update the resource entry to reflect the change
         resource_entry = self.resource_map.pop(old_name)
         self.resource_map[new_name] = resource_entry
+
+        # If we have a reference task + config, have the task run renaming operations as well
+        if self.reference_task and task_config:
+            self.reference_task.rename_resource_config(old_name, new_name, task_config)
 
     def drop_resource(self, names: list[str]):
         # Check the names before proceeding
