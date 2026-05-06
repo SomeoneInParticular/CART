@@ -47,7 +47,8 @@ COHORT_VERSION = "0.2.0"
 # Named tuple to keep the resource-specific filters organized
 ResourceFilter = namedtuple(
     "FilterEntry",
-    ["original_name", "resource_type", "include", "exclude"]
+    ["original_name", "resource_type", "include", "exclude", "extension"],
+    defaults=[""]*5  # Just default to empty strings for each if not provided.
 )
 
 class CohortModel(CSVBackedTableModel):
@@ -410,16 +411,17 @@ class CohortModel(CSVBackedTableModel):
                     f = r / f
                     file_string = str(f)
                     # Check if all inclusion criterion were met
-                    all_includes = n_includes == 0 or all(
-                        [i in file_string for i in filters.include]
-                    )
+                    if n_includes != 0 and any([i not in file_string for i in filters.include]):
+                        continue
                     # Check that all exclusion criterion were met
-                    no_excludes = n_excludes == 0 or not any(
-                        [i in file_string for i in filters.exclude]
-                    )
-                    if all_includes and no_excludes:
-                        result = f
-                        break
+                    if n_excludes != 0 and any([i in file_string for i in filters.exclude]):
+                        continue
+                    # Check if our extension matches
+                    if not file_string.endswith(filters.extension):
+                        continue
+                    # If all prior checks passed, track the file and end
+                    result = f
+                    break
                 # Else-continue-break chain, allowing for the break to chain up the loops
                 else:
                     continue
@@ -1437,7 +1439,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         )
         includeLabel.setToolTip(includeTooltip)
         includeField.setToolTip(includeTooltip)
-        includeField.setPlaceholderText(_("e.g. T1w, nii, lesion_seg"))
+        includeField.setPlaceholderText(_("e.g. 'T1w, lesion_seg, axial'"))
         self.includeField = includeField
         layout.addRow(includeLabel, includeField)
 
@@ -1455,12 +1457,30 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         )
         excludeLabel.setToolTip(excludeTooltip)
         excludeField.setToolTip(excludeTooltip)
-        excludeField.setPlaceholderText(_("e.g. derivatives, masked, brain"))
+        excludeField.setPlaceholderText(_("e.g. 'derivatives, masked, brain'"))
         self.excludeField = excludeField
         layout.addRow(excludeLabel, excludeField)
 
+        extensionLabel = qt.QLabel(_("Extension:"))
+        extensionField = qt.QLineEdit()
+        if resource_name:
+            resource = self._cohort.resource_map.get(resource_name, None)
+            if resource is None or resource.exclude is None:
+                extensionField.setText("")
+            else:
+                extensionField.setText(resource.extension)
+        extensionTooltip = _(
+            "The file extension to filter for. Leave blank to accept any file type."
+        )
+        extensionLabel.setToolTip(extensionTooltip)
+        extensionField.setToolTip(extensionTooltip)
+        extensionField.setPlaceholderText(_("e.g. .nii.gz"))
+        self.extensionField = extensionField
+        layout.addRow(extensionLabel, extensionField)
+
         includeField.textChanged.connect(self.mark_changed)
         excludeField.textChanged.connect(self.mark_changed)
+        extensionField.textChanged.connect(self.mark_changed)
 
         # Container widget to hold the resource-specific task GUI
         self.taskConfigBox: qt.QWidget = qt.QWidget(self)
@@ -1706,13 +1726,15 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Parse the contents of our GUI elements, stripping leading/trailing whitespace
         include_entries = [s.strip() for s in self.includeField.text.split(",") if s.strip() != ""]
         exclude_entries = [s.strip() for s in self.excludeField.text.split(",") if s.strip() != ""]
+        extension_string = self.extensionField.text.strip()
 
         # Pack it into our named tuple
         filter_entry = ResourceFilter(
             original_name=base_str,
             resource_type=self.resource_type.id,
             include=include_entries,
-            exclude=exclude_entries
+            exclude=exclude_entries,
+            extension=extension_string
         )
 
         # If this an updated resource, rename the resource to this new name
