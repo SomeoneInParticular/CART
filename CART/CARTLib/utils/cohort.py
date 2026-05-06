@@ -3,7 +3,6 @@ import csv
 import json
 import logging
 import os
-from bdb import bar
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Protocol, TYPE_CHECKING
@@ -284,6 +283,9 @@ class CohortModel(CSVBackedTableModel):
         # Save the filter for later
         self.resource_map[resource_label] = filter_entry
 
+        # Mark ourselves as being changed
+        self._mark_changed()
+
     def rename_filter(self, old_name: str, new_name: str):
         # Check that there's actually a filter to rename
         if old_name not in self.resource_map.keys():
@@ -390,6 +392,11 @@ class CohortModel(CSVBackedTableModel):
         # Isolate the filters from one another
         include_values = filters[self.FILTER_INCLUDE_KEY]
         exclude_values = filters[self.FILTER_EXCLUDE_KEY]
+
+        # If both filters are blank, assume the user wants nothing rather than an effectively random file.
+        if len(include_values) < 1 and len(exclude_values) < 1:
+            logging.info("No filters were given, assuming user wanted a blank entry.")
+            return None
 
         # Search every path in turn
         result = None
