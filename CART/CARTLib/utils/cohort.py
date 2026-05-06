@@ -3,6 +3,7 @@ import csv
 import json
 import logging
 import os
+from collections import namedtuple
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional, Protocol, TYPE_CHECKING
@@ -43,6 +44,12 @@ COHORT_VERSION = "0.2.0"
 
 
 ## Core ##
+# Named tuple to keep the resource-specific filters organized
+ResourceFilter = namedtuple(
+    "FilterEntry",
+    ["original_name", "resource_type", "include", "exclude"]
+)
+
 class CohortModel(CSVBackedTableModel):
     """
     More specialized version of the CSV-backed model w/ additional checks
@@ -81,7 +88,7 @@ class CohortModel(CSVBackedTableModel):
 
         # Initialize blank placeholders
         self._case_map = dict()
-        self._resource_map = dict()
+        self._resource_map: dict[str, ResourceFilter] = dict()
 
         # Track whether to user a sidecar before initializing (which will attempt to load it)
         self.use_sidecar = use_sidecar
@@ -177,7 +184,7 @@ class CohortModel(CSVBackedTableModel):
         return self._case_map
 
     @property
-    def resource_map(self):
+    def resource_map(self) -> dict[str, ResourceFilter]:
         # Get only; use the set/remove functions instead
         return self._resource_map
 
@@ -239,12 +246,7 @@ class CohortModel(CSVBackedTableModel):
             # Update the case map
             self.case_map.pop(name)
 
-    ORIGINAL_NAME_KEY = "original_name"
-    RESOURCE_TYPE_KEY = "resource_type"
-    FILTER_INCLUDE_KEY = "include"
-    FILTER_EXCLUDE_KEY = "exclude"
-
-    def set_resource_data(self, resource_label: str, filter_entry: dict):
+    def set_resource_data(self, resource_label: str, filter_entry: ResourceFilter):
         """
         Set the filters for a given resource in the cohort.
 
@@ -252,14 +254,6 @@ class CohortModel(CSVBackedTableModel):
             If a filter already exists with this label, replaces it; otherwise, a new filter is created
         :param filter_entry: The filter entry to associate with the new/updated resource.
         """
-        # Validate the new filter entry
-        keyset = set(filter_entry.keys())
-        invalid_keys = keyset - {
-            self.ORIGINAL_NAME_KEY, self.RESOURCE_TYPE_KEY, self.FILTER_EXCLUDE_KEY, self.FILTER_INCLUDE_KEY
-        }
-        for v in invalid_keys:
-            logging.warning(f"Found key {v} which wasn't recognized; ignored!")
-
         # Find and process the list of paths associated with this filter
         new_paths = self.find_column_files(filter_entry)
         new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
@@ -286,18 +280,18 @@ class CohortModel(CSVBackedTableModel):
         # Mark ourselves as being changed
         self._mark_changed()
 
-    def rename_filter(self, old_name: str, new_name: str):
+    def rename_resource(self, old_name: str, new_name: str):
         # Check that there's actually a filter to rename
         if old_name not in self.resource_map.keys():
             raise ValueError(f"Cannot rename resource '{old_name}'; it doesn't exist!")
         # Update the backing model
         col_idx = np.argwhere(self.header == old_name).flatten()[0]
         self.setHeaderData(col_idx, qt.Qt.Horizontal, new_name, qt.Qt.EditRole)
-        # Update the filter map to reflect the change
-        filter_map = self.resource_map.pop(old_name)
-        self.resource_map[new_name] = filter_map
+        # Update the resource entry to reflect the change
+        resource_entry = self.resource_map.pop(old_name)
+        self.resource_map[new_name] = resource_entry
 
-    def drop_filters(self, names: list[str]):
+    def drop_resource(self, names: list[str]):
         # Check the names before proceeding
         for name in names:
             # Check if a case map with this name exists
@@ -383,18 +377,16 @@ class CohortModel(CSVBackedTableModel):
 
     ## File Searching/Filtering ##
     def find_first_valid_file(
-        self, search_paths: list[Path], filters: dict
+        self, search_paths: list[Path], filters: ResourceFilter
     ) -> Optional[Path]:
         # If we don't have a data path to search within, return nothing
         if self.data_path is None:
             return None
 
-        # Isolate the filters from one another
-        include_values = filters[self.FILTER_INCLUDE_KEY]
-        exclude_values = filters[self.FILTER_EXCLUDE_KEY]
-
         # If both filters are blank, assume the user wants nothing rather than an effectively random file.
-        if len(include_values) < 1 and len(exclude_values) < 1:
+        n_includes = len(filters.include)
+        n_excludes = len(filters.exclude)
+        if n_includes < 1 and n_excludes < 1:
             logging.info("No filters were given, assuming user wanted a blank entry.")
             return None
 
@@ -411,11 +403,13 @@ class CohortModel(CSVBackedTableModel):
                 for f in fs:
                     f = r / f
                     file_string = str(f)
-                    all_includes = len(include_values) == 0 or all(
-                        [i in file_string for i in include_values]
+                    # Check if all inclusion criterion were met
+                    all_includes = n_includes == 0 or all(
+                        [i in file_string for i in filters.include]
                     )
-                    no_excludes = len(exclude_values) == 0 or not any(
-                        [i in file_string for i in exclude_values]
+                    # Check that all exclusion criterion were met
+                    no_excludes = n_excludes == 0 or not any(
+                        [i in file_string for i in filters.exclude]
                     )
                     if all_includes and no_excludes:
                         result = f
@@ -433,6 +427,7 @@ class CohortModel(CSVBackedTableModel):
         # If the result is within the data dir, make it relative
         elif self.data_path in result.parents:
             return result.relative_to(self.data_path)
+        # Otherwise, return the result as-is
         else:
             return result
 
@@ -443,7 +438,7 @@ class CohortModel(CSVBackedTableModel):
         sorted_pathlist = [result_map.get(k, None) for k in self.header]
         return sorted_pathlist
 
-    def find_column_files(self, column_filters: dict) -> list[Optional[Path]]:
+    def find_column_files(self, column_filters: ResourceFilter) -> list[Optional[Path]]:
         result_map = {}
         for k, v in self.case_map.items():
             result_map[k] = self.find_first_valid_file(v, column_filters)
@@ -467,13 +462,18 @@ class CohortModel(CSVBackedTableModel):
             self.has_changed = False
 
     def _save_sidecar(self):
+        # Process the named tuples as dicts so the sidecars are human-readable
+        filters = {
+            k: v._asdict() for k, v in self.resource_map.items()
+        }
+
         # Save the sidecar data on its own.
         sidecar_data = {
             self.VERSION_KEY: COHORT_VERSION,
             self.CASE_PATH_KEY: {
                 k: [str(x) for x in v] for k, v in self.case_map.items()
             },
-            self.FILTERS_KEY: self.resource_map,
+            self.FILTERS_KEY: filters,
         }
 
         with open(self.sidecar_path, "w") as fp:
@@ -520,7 +520,8 @@ class CohortModel(CSVBackedTableModel):
             raise ValueError(
                 f"Cannot load sidecar, '{self.FILTERS_KEY}' was malformed!"
             )
-        self._resource_map = {k: v for k, v in filter_data.items()}
+        # Parse each entry as a dictionary to restore order in case the user modified the sidecar themselves
+        self._resource_map = {k: ResourceFilter(**v) for k, v in filter_data.items()}
 
     ## Utilities ##
     @contextmanager
@@ -537,7 +538,7 @@ class CohortModel(CSVBackedTableModel):
         resource = self.resource_map.get(csv_label)
         if resource is None:
             return None
-        return resource.get(self.ORIGINAL_NAME_KEY)
+        return resource.original_name
 
     def csv_to_resource_type(self, csv_label: str) -> "Optional[ResourceType]":
         # If we don't have a reference task, there are no resource types (yet)
@@ -550,10 +551,8 @@ class CohortModel(CSVBackedTableModel):
             return None
 
         # Get the type of resource for this instance
-        type_id = resource.get(self.RESOURCE_TYPE_KEY)
-        resource_type: "ResourceType" = (
-            self.reference_task.getDataUnitFactory().resource_types().get(type_id)
-        )
+        duf = self.reference_task.getDataUnitFactory()
+        resource_type: "ResourceType" = duf.resource_types().get(resource.resource_type)
 
         return resource_type
 
@@ -1416,14 +1415,16 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         # Place the warning label (if any) here.
         layout.addRow(self.warningLabel)
 
-        ## Include/Exclude Fields ##
+        ## Include/Exclude/Extension Fields ##
         includeLabel = qt.QLabel(_("Include:"))
         includeField = qt.QLineEdit()
         if resource_name:
-            include_vals = self._cohort.resource_map.get(resource_name, {}).get(
-                CohortModel.FILTER_INCLUDE_KEY, []
-            )
-            includeField.setText(", ".join(include_vals))
+            resource = self._cohort.resource_map.get(resource_name)
+            include_vals = resource.include
+            if include_vals is None:
+                includeField.setText("")
+            else:
+                includeField.setText(", ".join(include_vals))
         includeTooltip = _(
             "Comma-separated elements that a file MUST have to be used for this resource. "
             "This incudes the directory the file is contained within!"
@@ -1437,10 +1438,11 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         excludeLabel = qt.QLabel(_("Exclude:"))
         excludeField = qt.QLineEdit()
         if resource_name:
-            exclude_vals = self._cohort.resource_map.get(resource_name, {}).get(
-                CohortModel.FILTER_EXCLUDE_KEY, []
-            )
-            excludeField.setText(", ".join(exclude_vals))
+            resource = self._cohort.resource_map.get(resource_name, None)
+            if resource is None or resource.exclude is None:
+                excludeField.setText("")
+            else:
+                excludeField.setText(", ".join(resource.exclude))
         excludeTooltip = _(
             "Comma-separated elements that a file MUST NOT have to be used for this resource. "
             "This incudes the directory the file is contained within!"
@@ -1578,7 +1580,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
 
         # Match the selected resource type to the previous resource type (if possible)
         if self._prior_resource is not None:
-            prior_type_id = self._prior_resource.get(self._cohort.RESOURCE_TYPE_KEY)
+            prior_type_id = self._prior_resource.resource_type
             if prior_type_id is not None:
                 duf = self._cohort.reference_task.getDataUnitFactory()
                 prior_type = duf.resource_types().get(prior_type_id)
@@ -1696,30 +1698,22 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
 
     def _apply_cohort_changes(self, base_str: str, csv_str: str):
         # Parse the contents of our GUI elements, stripping leading/trailing whitespace
-        filter_entry: dict = {
-            CohortModel.ORIGINAL_NAME_KEY: base_str,
-            CohortModel.RESOURCE_TYPE_KEY: self.resource_type.id,
-            CohortModel.FILTER_INCLUDE_KEY: [
-                s.strip() for s in self.includeField.text.split(",")
-            ],
-            CohortModel.FILTER_EXCLUDE_KEY: [
-                s.strip() for s in self.excludeField.text.split(",")
-            ],
-        }
+        include_entries = [s.strip() for s in self.includeField.text.split(",") if s.strip() != ""]
+        exclude_entries = [s.strip() for s in self.excludeField.text.split(",") if s.strip() != ""]
 
-        # Clean up "blank" filters which may have slipped through
-        filter_entry[CohortModel.FILTER_INCLUDE_KEY] = [
-            x for x in filter_entry[CohortModel.FILTER_INCLUDE_KEY] if x != ""
-        ]
-        filter_entry[CohortModel.FILTER_EXCLUDE_KEY] = [
-            x for x in filter_entry[CohortModel.FILTER_EXCLUDE_KEY] if x != ""
-        ]
+        # Pack it into our named tuple
+        filter_entry = ResourceFilter(
+            original_name=base_str,
+            resource_type=self.resource_type.id,
+            include=include_entries,
+            exclude=exclude_entries
+        )
 
         # If this an updated resource, rename the resource to this new name
         if self._prior_resource is not None:
-            self._cohort.rename_filter(self._prior_resource_name, csv_str)
+            self._cohort.rename_resource(self._prior_resource_name, csv_str)
 
-        # Update cohort to use the new filter
+        # Update cohort to use the new resource filter
         self._cohort.set_resource_data(csv_str, filter_entry)
 
     def _apply_config_changes(self, csv_str: str):
