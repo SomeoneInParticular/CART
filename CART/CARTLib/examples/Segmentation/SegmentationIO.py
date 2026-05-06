@@ -15,6 +15,7 @@ from CARTLib.utils.data import (
     find_json_sidecar_path,
 )
 
+from SegmentationConfig import SegmentationConfig, SegmentationFileFormat
 from SegmentationUnit import (
     SegmentationUnit,
     ReferenceSegmentationResource,
@@ -23,7 +24,7 @@ from SegmentationUnit import (
 
 if TYPE_CHECKING:
     # Avoid a cyclic reference
-    from SegmentationConfig import SegmentationConfig
+    from SegmentationConfig import SegmentationConfig, SegmentationFileFormat
 
 VERSION = 0.04
 
@@ -141,11 +142,14 @@ class SegmentationIO:
                 # Get the "final" name for this segmentation
                 seg_name = EditableSegmentationResource.get_short_name(seg_id)
                 nifti_path = self._generate_output_paths_for(uid, seg_name)
-                json_path = find_json_sidecar_path(nifti_path)
-                if not nifti_path.exists() or not json_path.exists():
+                if not nifti_path.exists():
                     return False
+                # If it's a NIfTI file, check for the sidecar as well
+                if self.task_config.file_format == SegmentationFileFormat.NIFTI:
+                    json_path = find_json_sidecar_path(nifti_path)
+                    if not json_path.exists():
+                        return False
 
-        # TODO: Also check the case contents for missing files as a fallback
         return True
 
     def get_saved_segmentation_paths(self, uid: str):
@@ -172,16 +176,21 @@ class SegmentationIO:
         return segmentation_paths
 
     def _generate_output_paths_for(self, uid: str, seg_name: str):
-        # TODO: Allow user-configurable file structure/format
+        # TODO: Allow user-configurable file structure
 
         # Determine the output file destinations
         stem_path = self.job_config.output_path / uid
         file_name = f"{uid}_{seg_name}"
 
         # Define the NIfTI file paths
-        nifti_path = stem_path / f"{file_name}.nii.gz"
+        if self.task_config.file_format == SegmentationFileFormat.NIFTI:
+            output_path = stem_path / f"{file_name}.nii.gz"
+        elif self.task_config.file_format == SegmentationFileFormat.NRRD:
+            output_path = stem_path / f"{file_name}.nrrd"
+        else:
+            raise ValueError("Invalid output format detected for the Segmentation Task!")
 
-        return nifti_path
+        return output_path
 
     def save_unit(self, unit: SegmentationUnit):
         # Save each segmentation that was marked as "to-edit" during Job config
@@ -200,7 +209,8 @@ class SegmentationIO:
                 for segment_id in segmentation.GetSegmentIDs():
                     try:
                         # If any segment has a non-zero value, break to skip the "else" below.
-                        if np.count_nonzero(slicer.util.arrayFromSegmentInternalBinaryLabelma(segmentation, segment_id)) > 0:
+                        arr = slicer.util.arrayFromSegmentInternalBinaryLabelmap(segmentation_node, segment_id)
+                        if np.count_nonzero(arr) > 0:
                             break
                     except AttributeError:
                         # When there is no label map in the segment, its either corrupt or lacks any segments.
@@ -239,6 +249,8 @@ class SegmentationIO:
         # If we had any errors, log a message and raise the first
         no_exceptions = len(exceptions)
         if no_exceptions > 0:
+            print("-" * 100)
+            print(no_exceptions)
             logging.error(
                 f"While saving a the segmentations for data unit '{unit.uid}', "
                 f"{no_exceptions} error(s) occurred! "
@@ -264,32 +276,40 @@ class SegmentationIO:
         :raises ValueError: If the values provided would result in a corrupted save file.
         """
         # Determine the output file destinations
-        nifti_path = self._generate_output_paths_for(unit.uid, seg_name)
-
-        # Begin generating the sidecar's contents
-        sidecar_data = dict()
-
-        # Load the previous sidecar's contents as a "basis"
-        storage_node = seg_node.GetStorageNode()
-        if storage_node is not None:
-            prior_path = Path(storage_node.GetFileName())
-            sidecar_data = load_json_sidecar(prior_path)
-
-        # Update its relevant contents
-        generated_by = sidecar_data.get("GeneratedBy", [])
-        generated_by.append({
-            "Name": f"CART Segmentation Task [{self.job_config.name}]",
-            "Version": VERSION,
-            "Author": self.master_config.author,
-            "Position": self.master_config.position,
-            "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        })
-        sidecar_data["GeneratedBy"] = generated_by
+        output_path = self._generate_output_paths_for(unit.uid, seg_name)
 
         # Save everything
-        save_segmentation_to_nifti(seg_node, unit.reference_volume_node, nifti_path)
-        # TODO: Only create this if outputting to BIDS-like format
-        save_json_sidecar(nifti_path, sidecar_data)
+        if self.task_config.file_format == SegmentationFileFormat.NIFTI:
+            # Only generate + update the sidecar if the output is NIfTI
+            sidecar_data = dict()
+
+            # Load the previous sidecar's contents as a "basis"
+            storage_node = seg_node.GetStorageNode()
+            if storage_node is not None:
+                prior_path = Path(storage_node.GetFileName())
+                sidecar_data = load_json_sidecar(prior_path)
+
+            # Update its relevant contents
+            generated_by = sidecar_data.get("GeneratedBy", [])
+            generated_by.append(
+                {
+                    "Name": f"CART Segmentation Task [{self.job_config.name}]",
+                    "Version": VERSION,
+                    "Author": self.master_config.author,
+                    "Position": self.master_config.position,
+                    "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
+            sidecar_data["GeneratedBy"] = generated_by
+
+            # Save everything
+            save_segmentation_to_nifti(
+                seg_node, unit.reference_volume_node, output_path
+            )
+            save_json_sidecar(output_path, sidecar_data)
+        else:
+            # Delegate to Slicer for our other formats
+            slicer.util.saveNode(seg_node, str(output_path))
 
         # Report the output path for upstream use
-        return nifti_path.resolve()
+        return output_path.resolve()

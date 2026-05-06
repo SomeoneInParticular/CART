@@ -62,6 +62,19 @@ class SegmentationConfig(DictBackedConfig):
         self.backing_dict[self.SAVE_BLANK_SEGMENTATIONS_KEY] = new_val
         self.has_changed = True
 
+    FILE_FORMAT_KEY = "file_format"
+
+    @property
+    def file_format(self) -> SegmentationFileFormat:
+        val = self.get_or_default(self.FILE_FORMAT_KEY, SegmentationFileFormat.NIFTI.value)
+        return SegmentationFileFormat(val)
+
+    @file_format.setter
+    def file_format(self, new_format: SegmentationFileFormat):
+        self.backing_dict[self.FILE_FORMAT_KEY] = new_format.value
+        self.has_changed = True
+
+    ## OVERRIDES ##
     def generateGUILayout(self) -> tuple[str, Optional[qt.QLayout]]:
         return _("Segmentation Configuration"), SegmentationConfigGUILayout(self)
 
@@ -315,6 +328,7 @@ class SegmentationConfigGUILayout(qt.QFormLayout):
         # Output file structure selection
         fileFormatComboBox = qt.QComboBox(None)
         fileFormatComboBox.addItems([x.value for x in SegmentationFileFormat])
+        fileFormatComboBox.setCurrentText(config.file_format.value)
         fileFormatLabel = qt.QLabel(_("Output File Format:"))
         self.addRow(fileFormatLabel, fileFormatComboBox)
 
@@ -339,6 +353,11 @@ class SegmentationConfigGUILayout(qt.QFormLayout):
         saveEmptySegmentsCheckBox.setChecked(config.save_blank_segmentations)
 
         # Connections
+        @qt.Slot(str)
+        def fileFormatChanged(new_val: str):
+            config.file_format = SegmentationFileFormat(new_val)
+        fileFormatComboBox.currentTextChanged.connect(fileFormatChanged)
+
         @qt.Slot()
         def interpolationChanged():
             config.should_interpolate = interpolateVolumesCheckBox.isChecked()
