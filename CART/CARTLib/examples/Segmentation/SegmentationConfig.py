@@ -190,8 +190,17 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
         layout.addRow(table)
 
         # Add buttons add, edit, and remove entries in the table
-        addButton = qt.QPushButton(_("New Tracked Segment"))
-        deleteButton = qt.QPushButton(_("Delete Selected Segment"))
+        addButton = qt.QPushButton(_("New Class"))
+        addToolTip = _(
+            "Adds a new segmentation class for multi-class segmentations. "
+            "If none are defined, will use a single class of 1 instead."
+        )
+        addButton.setToolTip(addToolTip)
+        deleteButton = qt.QPushButton(_("Delete Class"))
+        deleteToolTip = _(
+            "Deletes the selected segmentation class from the table above."
+        )
+        deleteButton.setToolTip(deleteToolTip)
         buttonPanel = qt.QWidget(None)
         buttonLayout = qt.QHBoxLayout(buttonPanel)
         buttonLayout.addWidget(addButton)
