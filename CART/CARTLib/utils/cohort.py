@@ -1473,6 +1473,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         extensionLabel.setToolTip(extensionTooltip)
         extensionField.setToolTip(extensionTooltip)
         extensionField.setPlaceholderText(_("e.g. .nii.gz"))
+        extensionField.setText(".nii.gz")  # Default to NIfTI format
         self.extensionField = extensionField
         layout.addRow(extensionLabel, extensionField)
 
