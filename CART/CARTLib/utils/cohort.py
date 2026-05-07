@@ -1025,8 +1025,6 @@ class NewCohortDialog(ChangeTrackingDialogue):
         # Make it read-only
         cohortTypeDescription.setReadOnly(True)
         layout.addRow(cohortTypeDescription)
-        # Default to no selected index
-        cohortTypeComboBox.setCurrentIndex(-1)
 
         # Ok/Cancel Buttons
         buttonBox = qt.QDialogButtonBox()
