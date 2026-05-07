@@ -249,8 +249,6 @@ class SegmentationIO:
         # If we had any errors, log a message and raise the first
         no_exceptions = len(exceptions)
         if no_exceptions > 0:
-            print("-" * 100)
-            print(no_exceptions)
             logging.error(
                 f"While saving a the segmentations for data unit '{unit.uid}', "
                 f"{no_exceptions} error(s) occurred! "
