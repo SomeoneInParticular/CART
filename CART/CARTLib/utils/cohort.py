@@ -1754,7 +1754,10 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
     ## Properties ##
     @property
     def _has_name_changed(self):
-        # Some pre-cursor calculations
+        # If we don't have a resource type yet, assume this is False.
+        if self.resource_type is None:
+            return False
+        # Otherwise, check whether the name has been changed
         base_str = self.nameField.text.strip()
         csv_str = self.resource_type.format_for_csv(base_str)
         return csv_str != self._prior_resource_name
