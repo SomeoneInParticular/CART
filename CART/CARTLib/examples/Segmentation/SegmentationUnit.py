@@ -142,10 +142,17 @@ class SegmentationUnit(CARTStandardUnit):
             if segmentation_node is None:
                 continue
 
-            # If there isn't already a segmentation node for a to-be-edited segmentation, create one
+            # Make sure all "to-edit" segmentations have at least one segment in them
             should_edit = EditableSegmentationResource.is_type(k)
-            if should_edit and segmentation_node is None:
-                self._create_new_segmentation(k)
+            if should_edit:
+                # If there wasn't a node at all, create one:
+                if segmentation_node is None:
+                    self._create_new_segmentation(k)
+                # If there was a node, but no segments in it, add a binary one:
+                elif (segmentation := segmentation_node.GetSegmentation()).GetNumberOfSegments() < 1:
+                    segment_id = segmentation.AddEmptySegment("", "1")
+                    segment = segmentation.GetSegment(segment_id)
+                    segment.SetLabelValue(1)
 
             # Iterate through our segment config and apply them whenever we have a match
             segmentation = segmentation_node.GetSegmentation()
