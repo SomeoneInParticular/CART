@@ -450,7 +450,7 @@ class MasterProfileConfig(DictBackedConfig):
         Determines whether CART will automatically save the active case
         when switching to another one.
         """
-        return self.get_or_default(self.AUTOSAVE_ON_SWITCH_KEY, True)
+        return self.get_or_default(self.AUTOSAVE_ON_SWITCH_KEY, False)
 
     @autosave_on_switch.setter
     def autosave_on_switch(self, new_val: bool):
