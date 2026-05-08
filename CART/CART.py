@@ -421,12 +421,24 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     SAVE_BUTTON_UNKNOWN_TEXT = _("Save Status Unknown")
 
     def _savePanel(self) -> qt.QWidget:
+        # The main content panel
         buttonPanel = qt.QWidget(None)
         buttonPanelLayout = qt.QHBoxLayout(buttonPanel)
 
+        # The primary "save" button
         saveButton = qt.QPushButton(self.SAVE_BUTTON_DEFAULT_TEXT)
         saveButton.clicked.connect(self.logic.save_case)
         self.saveButton = saveButton
+
+        # A "Save an Iterate" button, as requested by collaborators
+        saveAndNextButton = qt.QPushButton(_(
+            "Save and Next Case"
+        ))
+        @qt.Slot()
+        def save_and_next():
+            self.logic.save_case()
+            self.logic.next_case()
+        saveAndNextButton.clicked.connect(save_and_next)
 
         # Timer which will automatically "reset" the button's text when it expires
         self.saveStateTimer = qt.QTimer(None)
@@ -436,8 +448,11 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             saveButton.setText(self.SAVE_BUTTON_DEFAULT_TEXT)
         self.saveStateTimer.timeout.connect(resetSaveButtonText)
 
+        # Lay them out side-by-side with some padding.
         buttonPanelLayout.addStretch(1)
         buttonPanelLayout.addWidget(saveButton, 10)
+        buttonPanelLayout.addStretch(1)
+        buttonPanelLayout.addWidget(saveAndNextButton, 10)
         buttonPanelLayout.addStretch(1)
 
         return buttonPanel
