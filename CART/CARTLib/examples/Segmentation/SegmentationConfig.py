@@ -317,6 +317,13 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
             color_dialog = ctk.ctkColorDialog()
             # If the user backed out, return without proceeding further
             qColor: qt.QColor = color_dialog.getColor(init_color, None)
+            if qColor.value() == 0:
+                # KO: Note that this also represents pure-black, which a user could
+                #  theoretically select. Slicer doesn't provide an easy way to
+                #  distinguish between these, however, and given how unlikely it
+                #  is that a user would do so, this code should suffice for now,
+                #  even if it isn't perfect.
+                return
 
             # Update our item to have this new value
             item.setText(qColor.name())
