@@ -236,7 +236,9 @@ class CARTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         def editButtonClicked():
             # Edit the job currently selected by the dropdown
             job_name: str = jobSelectorComboBox.currentText.strip()
-            self.editJob(job_name)
+            # If the user didn't back out of the edit, start the job once they're done
+            if self.editJob(job_name):
+                self.logic.set_active_job(job_name)
 
         editButton.clicked.connect(editButtonClicked)
         buttonPanelLayout.addWidget(editButton)

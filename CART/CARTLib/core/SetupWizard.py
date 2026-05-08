@@ -218,11 +218,13 @@ class JobSetupWizard(qt.QWizard):
         label = qt.QLabel(
             _(
                 "Click 'Finish' below to save the Job configuration; this will "
-                "register your job (with any changes you made) to CART."
+                "register your job (with any changes you made) to CART and begin "
+                "running the job."
                 "\n\n"
-                "If the job does not start automatically, you can select the "
-                "job's name from the drop-down and click 'Start' to start it "
-                "instead."
+                "If the job does not start automatically, check the error logs to "
+                "see if any of the job's configurations were invalid. If not, and "
+                "another error occured, please open an issue in our GitHub repo "
+                "describing it, and we will help you as soon as we are able."
                 "\n\n"
                 "Thank you for choosing CART as your imaging analysis tool!"
             )
