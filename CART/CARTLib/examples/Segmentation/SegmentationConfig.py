@@ -94,6 +94,11 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
             self.SEGMENTS_KEY, list()
         )
 
+    @qt.Slot()
+    def mark_changed(self):
+        # Written as a slot to make GUI connections easier.
+        self.has_changed = True
+
     NAME_KEY = "Name"
     VALUE_KEY = "Value"
     COLOR_KEY = "Color"
@@ -107,11 +112,13 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
             self.VALUE_KEY: value,
             self.COLOR_KEY: color
         })
+        self.mark_changed()
 
     def drop_segment(self, idx: int) -> dict:
         """
         Drop configuration options associated with the provided segment
         """
+        self.mark_changed()
         return self.segments.pop(idx)
 
     HEADER_MAP = {
@@ -288,7 +295,7 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
                 table.removeRow(r)
 
                 # If that worked correctly, remove it from our backing config too
-                self.segments.pop(r)
+                self.drop_segment(r)
 
         deleteButton.clicked.connect(deleteClicked)
 
@@ -322,6 +329,9 @@ class ExtendedSegmentationResourceConfig(SegmentationResourceConfig):
                 item.setForeground(qt.QBrush(qt.QColor("#FFFFFF")))
 
         table.cellDoubleClicked.connect(onCellDoubleClicked)
+
+        # Any contents changing should mark ourselves as being changed
+        table.cellChanged.connect(self.mark_changed)
 
 
 class SegmentationConfigGUILayout(qt.QFormLayout):
