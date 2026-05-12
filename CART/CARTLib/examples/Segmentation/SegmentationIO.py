@@ -7,6 +7,7 @@ from typing import Optional, TYPE_CHECKING
 import numpy as np
 import slicer.util
 
+from CARTLib.utils import get_cart_version
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.data import (
     save_segmentation_to_nifti,
@@ -292,7 +293,8 @@ class SegmentationIO:
             generated_by.append(
                 {
                     "Name": f"CART Segmentation Task [{self.job_config.name}]",
-                    "Version": VERSION,
+                    "CART Version": get_cart_version(),
+                    "Task Version": VERSION,
                     "Author": self.master_config.author,
                     "Position": self.master_config.position,
                     "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
