@@ -15,7 +15,7 @@ from CARTLib.core.DataManager import DataManager
 from CARTLib.core.LayoutManagement import OrientationButtonArrayWidget
 from CARTLib.core.TaskBaseClass import TaskBaseClass
 from CARTLib.core.SetupWizard import CARTSetupWizard, JobSetupWizard
-from CARTLib.utils import CART_PATH, CART_VERSION
+from CARTLib.utils import CART_PATH, get_cart_version
 from CARTLib.utils.config import JobProfileConfig, MasterProfileConfig
 from CARTLib.utils.task import CART_TASK_REGISTRY
 
@@ -1136,13 +1136,18 @@ class CARTLogic(ScriptedLoadableModuleLogic, qt.QObject):
         # Pull the data from the config file
         self.master_profile_config.reload()
         # If the config version doesn't match the current CART version, warn the user
-        if self.master_profile_config.version != CART_VERSION:
+        current_cart_version = get_cart_version()
+        config_cart_version = self.master_profile_config.version
+        if config_cart_version != current_cart_version:
+            # Warn the user the versions are being updated.
             # TODO: Prompt the user directly!
-            print(
-                "WARNING: Current CART version does not match that of the master profile! "
-                "CART may not work as expected!"
+            logging.warning(
+                f"Current CART version ({current_cart_version}) is not the same that was used to "
+                f"generate the user profile ({config_cart_version}). This may result in unexpected "
+                f"behaviour!"
             )
-            self.master_profile_config.version = CART_VERSION
+            # Update the config to use the new version
+            self.master_profile_config.version = current_cart_version
 
     ## GUI Management ##
     def enter(self):

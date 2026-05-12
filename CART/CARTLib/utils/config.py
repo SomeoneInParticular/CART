@@ -6,7 +6,7 @@ from typing import Generic, Optional, TypeVar, Callable, TYPE_CHECKING
 
 import qt
 
-from . import CART_PATH, CART_VERSION
+from . import CART_PATH, get_cart_version
 
 if TYPE_CHECKING:
     # NOTE: this isn't perfect (this only exposes Widgets, and Slicer's QT impl
@@ -405,13 +405,15 @@ class MasterProfileConfig(DictBackedConfig):
 
     @property
     def version(self):
-        return self.get_or_default(self.VERSION_KEY, CART_VERSION)
+        return self.get_or_default(self.VERSION_KEY, get_cart_version())
 
     @version.setter
     def version(self, new_version: str):
         """
-        WARNING: You really shouldn't change this yourself. The version
-        used
+        WARNING: You really shouldn't change this yourself. Setting the version
+        manually will override it, preventing the user from being warned that
+        there may be errors caused by using a different version of CART than the
+        one they originally set up this profile for.
         """
         self.backing_dict[self.VERSION_KEY] = new_version
 
