@@ -763,6 +763,15 @@ class _DataSelectionPage(qt.QWizardPage):
 
         ## Cohort File ##
         cohortFileLabel = qt.QLabel(_("Cohort File:"))
+
+        # Container widget
+        cohortFileWidget = qt.QWidget(None)
+        cohortFileLayout = qt.QHBoxLayout(cohortFileWidget)
+        # Make sure there's 0 padding around contents, making them flush with one another
+        cohortFileLayout.setContentsMargins(0, 0, 0, 0)
+        cohortFileLayout.setSpacing(0)
+
+        # The file selector itself
         cohortFileSelector: CARTPathLineEdit = CARTPathLineEdit()
         cohortFileToolTip = _(
             "This file dictates how CART will iterate through your dataset and load files. "
@@ -783,28 +792,37 @@ class _DataSelectionPage(qt.QWizardPage):
             "CSV files (*.csv)",
         ]
         self._cohortFileSelector = cohortFileSelector
-        layout.addRow(cohortFileLabel, cohortFileSelector)
 
         # Update ourselves to match the config
         cohort_file = config.cohort_path
         if cohort_file is not None:
             cohortFileSelector.currentPath = str(cohort_file)
 
+        # A "+" button, which aliases the "create new" button below
+        cohortPlusButton = qt.QToolButton(None)
+        cohortPlusButton.setText("+")
+        cohortCreationToolTip = _(
+            "Generate a new cohort file from scratch using the contents of your input path."
+        )
+        cohortPlusButton.setToolTip(cohortCreationToolTip)
+        cohortPlusButton.clicked.connect(self.createNewCohort)
+
+        # Put everything together
+        cohortFileLayout.addWidget(cohortFileSelector)
+        cohortFileLayout.addWidget(cohortPlusButton)
+        layout.addRow(cohortFileLabel, cohortFileWidget)
+
         ## Cohort Button Panel ##
         buttonLayout = qt.QHBoxLayout()
 
         # Button to create the selected cohort file
         createNewButton = qt.QPushButton(_("New Cohort File"))
-        createNewButton.setToolTip(
-            _(
-                "Generate a cohort file from scratch. "
-                "Will reference the contents of your input directory to do so, whenever possible."
-            )
-        )
+        createNewButton.setToolTip(cohortCreationToolTip)
 
         def shouldEnableCreate():
             return config.data_path is not None and config.data_path.is_dir()
 
+        cohortPlusButton.setEnabled(shouldEnableCreate())
         createNewButton.setEnabled(shouldEnableCreate())
 
         editCohortButton = qt.QPushButton(_("Edit Cohort File"))
@@ -855,7 +873,9 @@ class _DataSelectionPage(qt.QWizardPage):
             # Update the data path to match our new value
             config.data_path = Path(new_txt)
             # Enable the "create" button if our conditions are met now
-            createNewButton.setEnabled(shouldEnableCreate())
+            can_create = shouldEnableCreate()
+            cohortPlusButton.setEnabled(can_create)
+            createNewButton.setEnabled(can_create)
             # Denote that the completion state has likely changed
             self.completeChanged()
         dataPathEntry.textChanged.connect(onDataPathChanged)
@@ -934,6 +954,7 @@ class _DataSelectionPage(qt.QWizardPage):
         # Update the preview widget's reference task to use the new type
         self._cohortPreviewWidget.tableView.model().reference_task = new_type
 
+    @qt.Slot()
     def createNewCohort(self):
         """
         Walk the user through the creation of a new cohort file from scratch
@@ -962,6 +983,7 @@ class _DataSelectionPage(qt.QWizardPage):
         # Begin editing the selected cohort
         self.editCohort()
 
+    @qt.Slot()
     def editCohort(self):
         # Ensure the selected task is valid
         task_name = self.wizard().selected_task
