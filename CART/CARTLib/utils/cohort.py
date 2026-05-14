@@ -980,7 +980,7 @@ class NewCohortDialog(ChangeTrackingDialogue):
         self.resize(400, self.minimumHeight)
 
         # Name to give the cohort
-        cohortNameLabel = qt.QLabel(_("File: "))
+        cohortNameLabel = qt.QLabel(_("Destination File: "))
         cohortFileEdit = CARTPathLineEdit()
         cohortNameTooltip = _(
             "A CSV file with cases generated based on your input file will be created "
@@ -989,7 +989,7 @@ class NewCohortDialog(ChangeTrackingDialogue):
         cohortNameLabel.setToolTip(cohortNameTooltip)
         cohortFileEdit.setToolTip(cohortNameTooltip)
         cohortFileEdit.setPlaceholderText(_(
-            "Where the cohort file should be saved."
+            "i.e. home/user/output.csv"
         ))
         # Allow the user to create files as well
         cohortFileEdit.filters = cohortFileEdit.filters | ctk.ctkPathLineEdit.Writable
