@@ -6,6 +6,7 @@ import qt
 from CARTLib.core.TaskBaseClass import CARTTask
 from CARTLib.core.DataUnitBase import DataUnitFactory
 from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
+from CARTLib.utils.data import VolumeResource, ReferenceVolumeResource
 from CARTLib.utils.task import cart_task
 
 from SegmentationConfig import SegmentationConfig
@@ -115,11 +116,40 @@ class SegmentationTask(
 
     ## State Management ##
     def isTaskComplete(self, case_data: dict[str, str]) -> bool:
-        # Delegate to our IO manager
+        # Ensure there's a valid UI
         uid = case_data.get("uid", None)
         if uid is None:
             return False
-        return self.io.is_case_done(uid)
+
+        # Identify the reference volume path for this case
+        reference_path = None
+        for k, v in case_data.items():
+            # Skip blanks; they're not valid
+            if v is None or v == "":
+                continue
+            # Skip over non-volume entries as well
+            if not VolumeResource.is_type(k):
+                continue
+            # Skip over paths which don't exist
+            p = Path(v)
+            if not p.is_absolute():
+                p = self.job_profile.data_path / p
+            if not p.exists():
+                continue
+            # Track the first valid volume we found as a fallback
+            if reference_path is None:
+                reference_path = p
+            # If this is a valid reference volume, end here
+            if ReferenceVolumeResource.is_type(k):
+                reference_path = p
+                break
+
+        # If there isn't one, assume the case is not complete
+        if reference_path is None:
+            return False
+
+        # Delegate to our IO manager
+        return self.io.is_case_done(uid, reference_path)
 
     def save(self) -> Optional[str]:
         # Try to save the data unit
