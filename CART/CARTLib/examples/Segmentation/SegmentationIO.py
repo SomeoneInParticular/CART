@@ -2,7 +2,7 @@ import csv
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, TYPE_CHECKING
+from typing import Optional
 
 import numpy as np
 import slicer.util
@@ -16,16 +16,16 @@ from CARTLib.utils.data import (
     find_json_sidecar_path,
 )
 
-from SegmentationConfig import SegmentationConfig, SegmentationFileFormat
+from SegmentationConfig import (
+    SegmentationConfig,
+    SegmentationFileFormat,
+    SegmentationFileStructure,
+)
 from SegmentationUnit import (
     SegmentationUnit,
     ReferenceSegmentationResource,
     EditableSegmentationResource,
 )
-
-if TYPE_CHECKING:
-    # Avoid a cyclic reference
-    from SegmentationConfig import SegmentationConfig, SegmentationFileFormat
 
 VERSION = 0.04
 
@@ -191,8 +191,8 @@ class SegmentationIO:
     def _generate_output_paths_for(self, uid: str, seg_name: str, input_volume_path: Optional[Path] = None):
         # TODO: Allow user-configurable file structure
 
-        # If this is a NIfTI format, try to place the outputs in roughly BIDS-compliant format
-        if self.task_config.file_format == SegmentationFileFormat.NIFTI:
+        # If this is a BIDS structure, try to place the outputs in roughly BIDS-compliant format
+        if self.task_config.file_structure == SegmentationFileStructure.BIDS:
             # Split the "subject" and "session" parts of the UID, if they're present
             if "sub" in uid and "ses" in uid:
                 sub, ses = uid.split("__")  # TODO: Define this "magic" string somewhere explicitly
@@ -200,10 +200,14 @@ class SegmentationIO:
             # Otherwise, use the UID "raw"
             else:
                 stem_path = self.job_config.output_path / uid
-            # Add an "anat" dir to the end
+            # Add an "anat" dir to the end to meet BIDS requirements
             stem_path /= "anat"
-        else:
+        # Otherwise (file-per-case), just create a folder for each UID
+        elif self.task_config.file_structure == SegmentationFileStructure.FolderPerCase:
             stem_path = self.job_config.output_path / uid
+        # If we had an invalid option, raise a value error
+        else:
+            raise ValueError("Invalid output structure detected for the Segmentation Task!")
 
         # Derive the file stem from the input volume name when available, so
         # that BIDS entities such as acq-* and the modality suffix (e.g. _T2w)
@@ -221,10 +225,10 @@ class SegmentationIO:
                     break
             file_name = f"{volume_stem}_{seg_name}"
         else:
-            # Fallback: use only the uid (original behaviour)
+            # Fallback: use only the uid (original behavior)
             file_name = f"{uid}_{seg_name}"
 
-        # Define the NIfTI file paths
+        # Define the final file paths based on the format requested
         if self.task_config.file_format == SegmentationFileFormat.NIFTI:
             output_path = stem_path / f"{file_name}.nii.gz"
         elif self.task_config.file_format == SegmentationFileFormat.NRRD:

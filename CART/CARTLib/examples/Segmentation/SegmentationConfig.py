@@ -62,11 +62,27 @@ class SegmentationConfig(DictBackedConfig):
         self.backing_dict[self.SAVE_BLANK_SEGMENTATIONS_KEY] = new_val
         self.has_changed = True
 
+    FILE_STRUCTURE_KEY = "file_structure"
+
+    @property
+    def file_structure(self) -> SegmentationFileStructure:
+        val = self.get_or_default(
+            self.FILE_STRUCTURE_KEY, SegmentationFileStructure.BIDS.value
+        )
+        return SegmentationFileStructure(val)
+
+    @file_structure.setter
+    def file_structure(self, new_structure: SegmentationFileStructure):
+        self.backing_dict[self.FILE_STRUCTURE_KEY] = new_structure.value
+        self.has_changed = True
+
     FILE_FORMAT_KEY = "file_format"
 
     @property
     def file_format(self) -> SegmentationFileFormat:
-        val = self.get_or_default(self.FILE_FORMAT_KEY, SegmentationFileFormat.NIFTI.value)
+        val = self.get_or_default(
+            self.FILE_FORMAT_KEY, SegmentationFileFormat.NIFTI.value
+        )
         return SegmentationFileFormat(val)
 
     @file_format.setter
@@ -348,6 +364,7 @@ class SegmentationConfigGUILayout(qt.QFormLayout):
         # Output folder structure selection
         fileStructureComboBox = qt.QComboBox(None)
         fileStructureComboBox.addItems([x.value for x in SegmentationFileStructure])
+        fileStructureComboBox.setCurrentText(config.file_structure.value)
         fileStructureLabel = qt.QLabel(_("Output File Structure:"))
         self.addRow(fileStructureLabel, fileStructureComboBox)
 
@@ -379,6 +396,11 @@ class SegmentationConfigGUILayout(qt.QFormLayout):
         saveEmptySegmentsCheckBox.setChecked(config.save_blank_segmentations)
 
         # Connections
+        @qt.Slot(str)
+        def fileStructureChanged(new_val: str):
+            config.file_structure = SegmentationFileStructure(new_val)
+        fileStructureComboBox.currentTextChanged.connect(fileStructureChanged)
+
         @qt.Slot(str)
         def fileFormatChanged(new_val: str):
             config.file_format = SegmentationFileFormat(new_val)
