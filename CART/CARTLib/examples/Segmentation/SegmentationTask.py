@@ -115,12 +115,7 @@ class SegmentationTask(
         self.local_config.save()
 
     ## State Management ##
-    def isTaskComplete(self, case_data: dict[str, str]) -> bool:
-        # Ensure there's a valid UI
-        uid = case_data.get("uid", None)
-        if uid is None:
-            return False
-
+    def _find_reference_volume_path(self, case_data: dict):
         # Identify the reference volume path for this case
         reference_path = None
         for k, v in case_data.items():
@@ -144,6 +139,17 @@ class SegmentationTask(
                 reference_path = p
                 break
 
+        return reference_path
+
+    def isTaskComplete(self, case_data: dict[str, str]) -> bool:
+        # Ensure there's a valid UI
+        uid = case_data.get("uid", None)
+        if uid is None:
+            return False
+
+        # Identify the reference volume path for this case
+        reference_path = self._find_reference_volume_path(case_data)
+
         # If there isn't one, assume the case is not complete
         if reference_path is None:
             return False
@@ -157,9 +163,19 @@ class SegmentationTask(
             self.logger.error("Could not save, no data unit has been loaded!")
         self.io.save_unit(self.data_unit)
 
-    def generate_prior_data_for(self, uid: str) -> Optional[dict]:
+    def generate_prior_data_for(self, case_data: dict) -> Optional[dict]:
+        # Ensure there's a valid UI
+        uid = case_data.get("uid", None)
+        if uid is None:
+            return None
+
+        # Find the reference volume for this case
+        reference_path = self._find_reference_volume_path(case_data)
+        if reference_path is None:
+            return None
+
         # Delegate to our IO instance
-        return self.io.get_saved_segmentation_paths(uid)
+        return self.io.get_saved_segmentation_paths(uid, reference_path)
 
     def setup(self, container: qt.QWidget):
         """

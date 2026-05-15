@@ -177,7 +177,7 @@ class TaskBaseClass(ABC, Generic[D]):
         else:
             raise ValueError(f"An error occurred during saving: {save_result}")
 
-    def generate_prior_data_for(self, uid: str) -> Optional[dict]:
+    def generate_prior_data_for(self, case_data: dict) -> Optional[dict]:
         """
         Return a dictionary containing data required to re-load previous
         outputs for a case.
