@@ -191,8 +191,19 @@ class SegmentationIO:
     def _generate_output_paths_for(self, uid: str, seg_name: str, input_volume_path: Optional[Path] = None):
         # TODO: Allow user-configurable file structure
 
-        # Determine the output file destinations
-        stem_path = self.job_config.output_path / uid
+        # If this is a NIfTI format, try to place the outputs in roughly BIDS-compliant format
+        if self.task_config.file_format == SegmentationFileFormat.NIFTI:
+            # Split the "subject" and "session" parts of the UID, if they're present
+            if "sub" in uid and "ses" in uid:
+                sub, ses = uid.split("__")  # TODO: Define this "magic" string somewhere explicitly
+                stem_path = self.job_config.output_path / sub / ses
+            # Otherwise, use the UID "raw"
+            else:
+                stem_path = self.job_config.output_path / uid
+            # Add an "anat" dir to the end
+            stem_path /= "anat"
+        else:
+            stem_path = self.job_config.output_path / uid
 
         # Derive the file stem from the input volume name when available, so
         # that BIDS entities such as acq-* and the modality suffix (e.g. _T2w)
