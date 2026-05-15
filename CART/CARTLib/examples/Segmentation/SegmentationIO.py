@@ -119,10 +119,16 @@ class SegmentationIO:
         return log_data
 
     ## Save/Load Management ##
-    def is_case_done(self, uid: str):
+    def is_case_done(self, uid: str, input_volume_path: Optional[Path] = None):
         """
         Check whether the expected output files for the given case
         UID exist or not.
+
+        :param uid: The case UID to check.
+        :param input_volume_path: Path to the source volume file. When provided,
+            BIDS entities beyond the uid (e.g. acq-*, modality suffix) are
+            included in the expected output filename, matching what
+            _generate_output_paths_for would produce at save time.
         """
         # If our log file doesn't have an entry, return None
         log_entry = self.log_data.get(uid)
@@ -142,7 +148,7 @@ class SegmentationIO:
             for seg_id in saved_keys.split(", "):
                 # Get the "final" name for this segmentation
                 seg_name = EditableSegmentationResource.get_short_name(seg_id)
-                nifti_path = self._generate_output_paths_for(uid, seg_name)
+                nifti_path = self._generate_output_paths_for(uid, seg_name, input_volume_path)
                 if not nifti_path.exists():
                     return False
                 # If it's a NIfTI file, check for the sidecar as well
@@ -153,9 +159,15 @@ class SegmentationIO:
 
         return True
 
-    def get_saved_segmentation_paths(self, uid: str):
+    def get_saved_segmentation_paths(self, uid: str, input_volume_path: Optional[Path] = None):
         """
-        Get the case name -> output path map for this case
+        Get the case name -> output path map for this case.
+
+        :param uid: The case UID to look up.
+        :param input_volume_path: Path to the source volume file. When provided,
+            BIDS entities beyond the uid (e.g. acq-*, modality suffix) are
+            included in the expected output filename, matching what
+            _generate_output_paths_for would produce at save time.
         """
         unit_data = self.log_data.get(uid, {})
         saved_keys = unit_data.get(self.SAVED_KEY, '')
@@ -167,7 +179,7 @@ class SegmentationIO:
         segmentation_paths = {}
         for seg_name in saved_keys.split(", "):
             # Find where the file should be, skipping it if one does not exist
-            nifti_path = self._generate_output_paths_for(uid, seg_name)
+            nifti_path = self._generate_output_paths_for(uid, seg_name, input_volume_path)
             if not nifti_path.is_file():
                 continue
             # Track the file within the dictionary
@@ -176,12 +188,30 @@ class SegmentationIO:
 
         return segmentation_paths
 
-    def _generate_output_paths_for(self, uid: str, seg_name: str):
+    def _generate_output_paths_for(self, uid: str, seg_name: str, input_volume_path: Optional[Path] = None):
         # TODO: Allow user-configurable file structure
 
         # Determine the output file destinations
         stem_path = self.job_config.output_path / uid
-        file_name = f"{uid}_{seg_name}"
+
+        # Derive the file stem from the input volume name when available, so
+        # that BIDS entities such as acq-* and the modality suffix (e.g. _T2w)
+        # are preserved in the output filename.
+        #
+        # Example:
+        #   input : sub-001_ses-20111118_acq-axCerv_T2w.nii.gz
+        #   output: sub-001_ses-20111118_acq-axCerv_T2w_label-lesion_seg.nii.gz
+        if input_volume_path is not None:
+            # Strip one or two extensions to handle both .nii.gz and .nii
+            volume_stem = input_volume_path.name
+            for ext in (".nii.gz", ".nii", ".nrrd"):
+                if volume_stem.endswith(ext):
+                    volume_stem = volume_stem[: -len(ext)]
+                    break
+            file_name = f"{volume_stem}_{seg_name}"
+        else:
+            # Fallback: use only the uid (original behaviour)
+            file_name = f"{uid}_{seg_name}"
 
         # Define the NIfTI file paths
         if self.task_config.file_format == SegmentationFileFormat.NIFTI:
@@ -274,8 +304,19 @@ class SegmentationIO:
         :return: The output path of the MAIN (.nii.gz) saved file
         :raises ValueError: If the values provided would result in a corrupted save file.
         """
+        # Resolve the input volume path so _generate_output_paths_for can
+        # include all BIDS entities (acq-*, modality suffix, etc.) in the
+        # output filename.
+        input_volume_path: Optional[Path] = None
+        if unit.reference_volume_node is not None:
+            storage_node = unit.reference_volume_node.GetStorageNode()
+            if storage_node is not None:
+                file_name = storage_node.GetFileName()
+                if file_name:
+                    input_volume_path = Path(file_name)
+
         # Determine the output file destinations
-        output_path = self._generate_output_paths_for(unit.uid, seg_name)
+        output_path = self._generate_output_paths_for(unit.uid, seg_name, input_volume_path)
 
         # Save everything
         if self.task_config.file_format == SegmentationFileFormat.NIFTI:
