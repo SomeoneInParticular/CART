@@ -199,9 +199,16 @@ class CohortModel(CSVBackedTableModel):
             If a case already exists with this label, replaces it; otherwise, a new case is created.
         :param search_paths: The paths that should be searched when finding files for this case.
         """
+        # Find the row position which matches our case label
+        row_idx = np.argwhere(self.indices == case_label).flatten()[0]
         # Get the list of paths for this case
-        new_paths = self.find_row_files(search_paths)
-        new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
+        new_paths = self.find_row_files(search_paths, row_idx)
+        # If none was returned, do nothing and end here
+        if new_paths is None:
+            return
+        else:
+            # Otherwise, make sure things are formatted nicely for QT
+            new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
 
         # If this is a new case, create a new column to match
         if case_label not in self.case_map.keys():
@@ -209,13 +216,9 @@ class CohortModel(CSVBackedTableModel):
             row_idx = self.rowCount()
             self.addRow(row_idx, new_paths)
             # Set the header to this new label
-            self.setHeaderData(
-                row_idx, qt.Qt.Vertical, case_label, qt.Qt.EditRole
-            )
+            self.setHeaderData(row_idx, qt.Qt.Vertical, case_label, qt.Qt.EditRole)
         # Otherwise, replace the row's values with the newly found paths
         else:
-            # Find the column position which matches our resource label
-            row_idx = np.argwhere(self.indices == case_label).flatten()[0]
             # Change the column's contents to our new list of paths
             self.setRow(row_idx, new_paths)
 
@@ -257,7 +260,8 @@ class CohortModel(CSVBackedTableModel):
         :param filter_entry: The filter entry to associate with the new/updated resource.
         """
         # Find and process the list of paths associated with this filter
-        new_paths = self.find_column_files(filter_entry)
+        col_idx = np.argwhere(self.header == resource_label).flatten()[0]
+        new_paths = self.find_column_files(filter_entry, col_idx)
         new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
 
         # If this is a new resource, create a new column to match
@@ -271,8 +275,6 @@ class CohortModel(CSVBackedTableModel):
             )
         # Otherwise, replace the column's values with the newly found paths
         else:
-            # Find the column position which matches our resource label
-            col_idx = np.argwhere(self.header == resource_label).flatten()[0]
             # Change the model's contents to our new list of paths
             self.setColumn(col_idx, new_paths)
 
@@ -385,6 +387,22 @@ class CohortModel(CSVBackedTableModel):
             self.headerDataChanged(orientation, section, section)
 
     ## File Searching/Filtering ##
+    @staticmethod
+    def passes_filters(file_str: str, filters: ResourceFilter) -> bool:
+        """
+        Check if the provided file path passes the filters we've been given
+        """
+        # Check if this passes all inclusion filters
+        if len(filters.include) > 0 and any([i not in file_str for i in filters.include]):
+            return False
+        # Check if this passes all exclusion filters
+        elif len(filters.exclude) > 0 and any([i in file_str for i in filters.exclude]):
+            return False
+        # Check that the extension matches
+        elif filters.extension and not file_str.endswith(filters.extension):
+            return False
+        return True
+
     def find_first_valid_file(
         self, search_paths: list[Path], filters: ResourceFilter
     ) -> Optional[Path]:
@@ -395,7 +413,7 @@ class CohortModel(CSVBackedTableModel):
         # If both filters are blank, assume the user wants nothing rather than an effectively random file.
         n_includes = len(filters.include)
         n_excludes = len(filters.exclude)
-        if n_includes < 1 and n_excludes < 1:
+        if n_includes < 1 and n_excludes < 1 and filters.extension == "":
             logging.info("No filters were given, assuming user wanted a blank entry.")
             return None
 
@@ -411,19 +429,8 @@ class CohortModel(CSVBackedTableModel):
                 r = Path(r)
                 for f in fs:
                     f = r / f
-                    file_string = str(f)
-                    # Check if all inclusion criterion were met
-                    if n_includes != 0 and any([i not in file_string for i in filters.include]):
-                        continue
-                    # Check that all exclusion criterion were met
-                    if n_excludes != 0 and any([i in file_string for i in filters.exclude]):
-                        continue
-                    # Check if our extension matches
-                    if not file_string.endswith(filters.extension):
-                        continue
-                    # If all prior checks passed, track the file and end
-                    result = f
-                    break
+                    if self.passes_filters(f, filters):
+                        break
                 # Else-continue-break chain, allowing for the break to chain up the loops
                 else:
                     continue
@@ -441,19 +448,38 @@ class CohortModel(CSVBackedTableModel):
         else:
             return result
 
-    def find_row_files(self, search_paths: list[Path]) -> list[Optional[Path]]:
-        result_map = {}
-        for k, v in self.resource_map.items():
-            result_map[k] = self.find_first_valid_file(search_paths, v)
-        sorted_pathlist = [result_map.get(k, None) for k in self.header]
-        return sorted_pathlist
+    def find_row_files(
+        self, search_paths: list[Path], fallback_row_idx: int
+    ) -> list[Optional[Path]]:
+        # If we don't have any search paths, leave everything as is
+        if len(search_paths) < 1:
+            return None
 
-    def find_column_files(self, column_filters: ResourceFilter) -> list[Optional[Path]]:
         result_map = {}
-        for k, v in self.case_map.items():
-            result_map[k] = self.find_first_valid_file(v, column_filters)
-        sorted_pathlist = [result_map.get(k, None) for k in self.indices]
-        return sorted_pathlist
+        for col_id in self.header:
+            filters: ResourceFilter = self.resource_map.get(col_id, None)
+            result_map[col_id] = self.find_first_valid_file(search_paths, filters)
+        return result_map
+
+    def find_column_files(
+        self, column_filters: ResourceFilter, fallback_col_idx: int = None
+    ) -> list[Optional[Path]]:
+        result_map = {}
+        for row_idx, row_id in enumerate(self.indices):
+            search_paths: list[Path] = self.case_map.get(row_id, None)
+            # If there is a set of search paths, do a regular search
+            if search_paths is not None and len(search_paths) > 0:
+                result_map[row_id] = self.find_first_valid_file(
+                    search_paths, column_filters
+                )
+            # Otherwise, see if the current value passes the filter instead
+            else:
+                prior_val = str(self.csv_data[row_idx, fallback_col_idx])
+                if self.passes_filters(prior_val, column_filters):
+                    result_map[row_id] = prior_val
+                else:
+                    result_map[row_id] = None
+        return result_map
 
     ## I/O ##
     VERSION_KEY = "cohort_version"
