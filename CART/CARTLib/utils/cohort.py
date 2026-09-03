@@ -284,7 +284,7 @@ class CohortModel(CSVBackedTableModel):
 
     def rename_resource(self, old_name: str, new_name: str, task_config: Optional[DictBackedConfig] = None):
         # Check that there's actually a filter to rename
-        if old_name not in self.resource_map.keys():
+        if old_name not in self.header:
             raise ValueError(f"Cannot rename resource '{old_name}'; it doesn't exist!")
 
         # Update the backing model
@@ -292,8 +292,9 @@ class CohortModel(CSVBackedTableModel):
         self.setHeaderData(col_idx, qt.Qt.Horizontal, new_name, qt.Qt.EditRole)
 
         # Update the resource entry to reflect the change
-        resource_entry = self.resource_map.pop(old_name)
-        self.resource_map[new_name] = resource_entry
+        if old_name in self.resource_map.keys():
+            resource_entry = self.resource_map.pop(old_name)
+            self.resource_map[new_name] = resource_entry
 
         # If we have a reference task + config, have the task run renaming operations as well
         if self.reference_task and task_config:
@@ -545,8 +546,9 @@ class CohortModel(CSVBackedTableModel):
     def csv_to_original(self, csv_label: str) -> Optional[str]:
         # Return the "original" name (provided by the user) for this resource
         resource = self.resource_map.get(csv_label)
+        # If there's no configured resource yet, just use the original label
         if resource is None:
-            return None
+            return csv_label
         return resource.original_name
 
     def csv_to_resource_type(self, csv_label: str) -> "Optional[ResourceType]":
@@ -568,13 +570,14 @@ class CohortModel(CSVBackedTableModel):
     def csv_to_pretty(self, csv_label: str) -> Optional[str]:
         # Get the resource for this label
         resource = self.resource_map.get(csv_label)
+        # If there's no resource yet (this column is unconfigured), just use the raw label w/ a marker
         if resource is None:
-            return None
+            return f"{csv_label} (UNCONFIGURED)"
 
         # Get the type of resource for this instance
         resource_type = self.csv_to_resource_type(csv_label)
         if resource_type is None:
-            return csv_label
+            return f"{csv_label} (UNCONFIGURED)"
 
         # If the resource doesn't have an original name, use the CSV name instead
         original_label = self.csv_to_original(csv_label)
@@ -1398,11 +1401,16 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         self._resource_type_map = {v.pretty_name: v for v in duf.resource_types().values()}
 
         # Initial setup
-        if resource_name:
+        if not resource_name:
+            # If this is a brand-new resource
+            self.setWindowTitle(_("Add New Resource"))
+        elif not self._prior_resource:
+            # If this a yet-to-be configured resource (a CSV w/o a sidecar)
+            self.setWindowTitle(_(f"Configuring '{resource_name}'"))
+        else:
+            # If this is an existing resource we're editing
             pretty_name = cohort.csv_to_pretty(resource_name)
             self.setWindowTitle(_(f"Editing Resource '{pretty_name}'"))
-        else:
-            self.setWindowTitle(_("Add New Resource"))
 
         # Initially widen to show more of the contents
         self.resize(500, self.minimumHeight)
@@ -1418,8 +1426,6 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         ## Field Name GUI ##
         nameLabel = qt.QLabel(_("Resource Name:"))
         nameField = qt.QLineEdit()
-        if resource_name:
-            nameField.setText(cohort.csv_to_original(resource_name))
         nameField.setPlaceholderText(_("e.g. disk_labels, spinal_T2w, liver_segmentation"))
         nameTooltip = _(
             "The name you'd like this resource to have. "
@@ -1428,22 +1434,14 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         nameLabel.setToolTip(nameTooltip)
         nameField.setToolTip(nameTooltip)
         layout.addRow(nameLabel, nameField)
-        nameField.textChanged.connect(self.mark_changed)
         self.nameField = nameField
 
         # Place the warning label (if any) here.
         layout.addRow(self.warningLabel)
 
-        ## Include/Exclude/Extension Fields ##
+        ### Include/Exclude/Extension Fields ###
         includeLabel = qt.QLabel(_("Include:"))
         includeField = qt.QLineEdit()
-        if resource_name:
-            resource = self._cohort.resource_map.get(resource_name)
-            include_vals = resource.include
-            if include_vals is None:
-                includeField.setText("")
-            else:
-                includeField.setText(", ".join(include_vals))
         includeTooltip = _(
             "Comma-separated elements that a file MUST have to be used for this resource. "
             "This incudes the directory the file is contained within!"
@@ -1456,12 +1454,6 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
 
         excludeLabel = qt.QLabel(_("Exclude:"))
         excludeField = qt.QLineEdit()
-        if resource_name:
-            resource = self._cohort.resource_map.get(resource_name, None)
-            if resource is None or resource.exclude is None:
-                excludeField.setText("")
-            else:
-                excludeField.setText(", ".join(resource.exclude))
         excludeTooltip = _(
             "Comma-separated elements that a file MUST NOT have to be used for this resource. "
             "This incudes the directory the file is contained within!"
@@ -1474,32 +1466,49 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
 
         extensionLabel = qt.QLabel(_("Extension:"))
         extensionField = qt.QLineEdit()
-        if resource_name:
-            resource = self._cohort.resource_map.get(resource_name, None)
-            if resource is None or resource.exclude is None:
-                extensionField.setText("")
-            else:
-                extensionField.setText(resource.extension)
         extensionTooltip = _(
             "The file extension to filter for. Leave blank to accept any file type."
         )
         extensionLabel.setToolTip(extensionTooltip)
         extensionField.setToolTip(extensionTooltip)
         extensionField.setPlaceholderText(_("e.g. .nii.gz"))
-        defaultExtension = ".nii.gz" # Default to NIfTI format
-        if resource_name:
-            resource = self._cohort.resource_map.get(resource_name)
-            prior_extension = resource.extension
-            if prior_extension is None:
-                extensionField.setText(defaultExtension)
-            else:
-                extensionField.setText(prior_extension)
-        else:
-            extensionField.setText(defaultExtension)
         self.extensionField = extensionField
         layout.addRow(extensionLabel, extensionField)
 
+        ## Data Fill-In ##
+        resource = self._cohort.resource_map.get(resource_name)
+        # Name field is unique, and should use the raw header is one is available
+        if resource_name:
+            original_name = cohort.csv_to_original(resource_name)
+            nameField.setText(original_name)
+        # Skip most data fill if this is a new/yet-to-be-configured resource
+        if resource is not None:
+            # Include
+            include_vals = resource.include
+            if include_vals is None:
+                includeField.setText("")
+            else:
+                includeField.setText(", ".join(include_vals))
+            # Exclude
+            exclude_vals = resource.exclude
+            if exclude_vals is None:
+                excludeField.setText("")
+            else:
+                excludeField.setText(", ".join(exclude_vals))
+            # Extension
+            defaultExtension = ".nii.gz"  # Default to NIfTI format
+            if resource_name:
+                resource = self._cohort.resource_map.get(resource_name)
+                prior_extension = resource.extension
+                if prior_extension is None:
+                    extensionField.setText(defaultExtension)
+                else:
+                    extensionField.setText(prior_extension)
+            else:
+                extensionField.setText(defaultExtension)
+
         # Mark the cohort as being changed if any of the fields change
+        nameField.textChanged.connect(self.mark_changed)
         includeField.textChanged.connect(self.mark_changed)
         excludeField.textChanged.connect(self.mark_changed)
         extensionField.textChanged.connect(self.mark_changed)
@@ -1764,7 +1773,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         )
 
         # If this an updated resource, rename the resource to this new name
-        if self._prior_resource is not None:
+        if self._prior_resource_name is not None:
             self._cohort.rename_resource(self._prior_resource_name, csv_str)
 
         # Update cohort to use the new resource filter
