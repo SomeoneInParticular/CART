@@ -1,6 +1,6 @@
 # Case Annotation and Review Tool (CART)
 
-![](./CART/Resources/Icons/CART.png)
+<img src="./CART/Resources/Icons/CART.png" width="150">
 
 ## Table of Contents
 
