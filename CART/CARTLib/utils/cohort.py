@@ -200,7 +200,7 @@ class CohortModel(CSVBackedTableModel):
         :param search_paths: The paths that should be searched when finding files for this case.
         """
         # Find the row position which matches our case label
-        row_idx = np.argwhere(self.indices == case_label).flatten()[0]
+        row_idx = self.find_case_idx(case_label)
         # Get the list of paths for this case
         new_paths = self.find_row_files(search_paths, row_idx)
         # If none was returned, do nothing and end here
@@ -228,7 +228,11 @@ class CohortModel(CSVBackedTableModel):
     def rename_case(self, old_name: str, new_name: str):
         # Check if a case map with this name already exists
         if old_name not in self.case_map.keys():
-            raise ValueError(f"Cannot rename case '{old_name}'; it doesn't exist!")
+            raise ValueError(f"Cannot rename case '{old_name}'; it does not exist!")
+        # Check that there is a valid index in the table
+        row_idx = self.find_case_idx(old_name)
+        if row_idx < 0:
+            raise ValueError(f"Cannot rename case '{old_name}'; it does not exist!")
         # Update the backing model
         row_idx = np.argwhere(self.indices == old_name).flatten()[0]
         self.setHeaderData(row_idx, qt.Qt.Vertical, new_name, qt.Qt.EditRole)
@@ -246,7 +250,7 @@ class CohortModel(CSVBackedTableModel):
         # Do everything in one go to avoid partial corruption
         for name in names:
             # Update the backing model
-            row_idx = np.argwhere(self.indices == name).flatten()[0]
+            row_idx = self.find_case_idx(name)
             self.dropRow(row_idx)
             # Update the case map
             self.case_map.pop(name)
@@ -260,7 +264,7 @@ class CohortModel(CSVBackedTableModel):
         :param filter_entry: The filter entry to associate with the new/updated resource.
         """
         # Find and process the list of paths associated with this filter
-        col_idx = np.argwhere(self.header == resource_label).flatten()[0]
+        col_idx = self.find_resource_idx(resource_label)
         new_paths = self.find_column_files(filter_entry, col_idx)
         new_paths = np.array([str(k) if k is not None else "" for k in new_paths])
 
@@ -287,10 +291,12 @@ class CohortModel(CSVBackedTableModel):
     def rename_resource(self, old_name: str, new_name: str, task_config: Optional[DictBackedConfig] = None):
         # Check that there's actually a filter to rename
         if old_name not in self.header:
-            raise ValueError(f"Cannot rename resource '{old_name}'; it doesn't exist!")
+            raise ValueError(f"Cannot rename resource '{old_name}'; it does not exist!")
 
         # Update the backing model
-        col_idx = np.argwhere(self.header == old_name).flatten()[0]
+        col_idx = self.find_resource_idx(old_name)
+        if col_idx < 0:
+            raise ValueError(f"Cannot rename resource '{old_name}'; it does not exist!")
         self.setHeaderData(col_idx, qt.Qt.Horizontal, new_name, qt.Qt.EditRole)
 
         # Update the resource entry to reflect the change
@@ -312,7 +318,7 @@ class CohortModel(CSVBackedTableModel):
         # Do everything in one go to avoid partial corruption
         for name in names:
             # Update the backing model
-            col_idx = np.argwhere(self.header == name).flatten()[0]
+            col_idx = self.find_resource_idx(name)
             self.dropColumn(col_idx)
             # Update the case map
             self.resource_map.pop(name)
@@ -402,6 +408,44 @@ class CohortModel(CSVBackedTableModel):
         elif filters.extension and not file_str.endswith(filters.extension):
             return False
         return True
+
+    def find_case_idx(self, case_label: str) -> int:
+        """
+        Tries to find the positional index within this model for
+        a case (row) with the passed label.
+
+        :param case_label: The label to search for.
+        :returns: The positional row index for the given label.
+            -1 if the label is not present in the model.
+        """
+        # Find the row position which matches this case label
+        if len(self.indices) > 0:
+            query_results = np.argwhere(self.indices == case_label).flatten()
+            if len(query_results) < 1:
+                return -1
+            return query_results[0]
+        else:
+            # Default to a placeholder value to allow initial insertions
+            return -1
+
+    def find_resource_idx(self, resource_label: str) -> int:
+        """
+        Tries to find the positional index within this model for
+        a resource (column) with the passed label.
+
+        :param resource_label: The label to search for.
+        :returns: The positional column index for the given label.
+            -1 if the label is not present in the model.
+        """
+        # Find the row position which matches this case label
+        if len(self.header) > 0:
+            query_results = np.argwhere(self.header == resource_label).flatten()
+            if len(query_results) < 1:
+                return -1
+            return query_results[0]
+        else:
+            # Default to a placeholder value to allow initial insertions
+            return -1
 
     def find_first_valid_file(
         self, search_paths: list[Path], filters: ResourceFilter
