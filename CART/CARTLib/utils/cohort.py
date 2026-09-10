@@ -473,7 +473,8 @@ class CohortModel(CSVBackedTableModel):
                 r = Path(r)
                 for f in fs:
                     f = r / f
-                    if self.passes_filters(f, filters):
+                    if self.passes_filters(str(f), filters):
+                        result = f
                         break
                 # Else-continue-break chain, allowing for the break to chain up the loops
                 else:
@@ -499,31 +500,34 @@ class CohortModel(CSVBackedTableModel):
         if len(search_paths) < 1:
             return None
 
-        result_map = {}
+        # Get the list of results, in the same order of the original map
+        result_list = []
         for col_id in self.header:
             filters: ResourceFilter = self.resource_map.get(col_id, None)
-            result_map[col_id] = self.find_first_valid_file(search_paths, filters)
-        return result_map
+            result_list.append(self.find_first_valid_file(search_paths, filters))
+        return result_list
 
     def find_column_files(
         self, column_filters: ResourceFilter, fallback_col_idx: int = None
     ) -> list[Optional[Path]]:
-        result_map = {}
+
+        result_list = []
+        # Get the list of results, in the same order of the original map
         for row_idx, row_id in enumerate(self.indices):
             search_paths: list[Path] = self.case_map.get(row_id, None)
             # If there is a set of search paths, do a regular search
             if search_paths is not None and len(search_paths) > 0:
-                result_map[row_id] = self.find_first_valid_file(
+                result_list.append(self.find_first_valid_file(
                     search_paths, column_filters
-                )
+                ))
             # Otherwise, see if the current value passes the filter instead
             else:
                 prior_val = str(self.csv_data[row_idx, fallback_col_idx])
                 if self.passes_filters(prior_val, column_filters):
-                    result_map[row_id] = prior_val
+                    result_list.append(prior_val)
                 else:
-                    result_map[row_id] = None
-        return result_map
+                    result_list.append(None)
+        return result_list
 
     ## I/O ##
     VERSION_KEY = "cohort_version"
