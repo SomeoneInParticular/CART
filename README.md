@@ -1,6 +1,6 @@
 # Case Annotation and Review Tool (CART)
 
-![](./CART/Resources/Icons/CART.png)
+<img src="./CART/Resources/Icons/CART.png" width="150">
 
 ## Table of Contents
 
@@ -214,3 +214,16 @@ For this project, the first four subjects were selected and the images were conv
 
 1. Example `sample_data` is adapted from this original data and is located under `sample_data.zip`.
 2. Unzip the file to a folder of your choice.
+
+# Contributors
+
+Original idea and first version of code from Dr. Laurent Létourneau-Guillon and his team in ICH_SEGMENTER_V2, SlicerCART, and Brain_Extraction. This is an effort to create a unified code for a configurable 3D Slicer extension.
+
+Contributors include:
+- Kalum Ost
+- Laurent Létourneau-Guillon
+- Emmanuel Montagnon
+- An Ni Wu
+- Maxime Bouthillier
+- Delphine Pilon
+- Julien Cohen-Adad
