@@ -3,11 +3,10 @@ from typing import Optional, TYPE_CHECKING
 
 import qt
 
-from CARTLib.core.TaskBaseClass import CARTTask
 from CARTLib.core.DataUnitBase import DataUnitFactory
 from CARTLib.utils.config import MasterProfileConfig, JobProfileConfig
 from CARTLib.utils.data import VolumeResource, ReferenceVolumeResource
-from CARTLib.utils.task import cart_task
+from CARTLib.utils.task import cart_task, CARTTask
 
 from SegmentationConfig import SegmentationConfig
 from SegmentationGUI import SegmentationGUI
