@@ -1430,6 +1430,13 @@ class CohortEditorDialog(ChangeTrackingDialogue):
 
 class ResourceEditorDialogue(ChangeTrackingDialogue):
 
+    # Default to compressed NIfTI format in filters
+    # (to avoid random JSONs if the user isn't paying attention)
+    DEFAULT_EXTENSION = ".nii.gz"
+
+    # Value to put into fields missing a value
+    MISSING_FIELD_VALUE = ""
+
     def __init__(
         self,
         cohort: CohortModel,
@@ -1550,7 +1557,7 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
         layout.addRow(extensionLabel, extensionField)
 
         ## Data Fill-In ##
-        resource = self._cohort.resource_map.get(resource_name)
+        resource: ResourceFilter = self._cohort.resource_map.get(resource_name)
         # Name field is unique, and should use the raw header is one is available
         if resource_name:
             original_name = cohort.csv_to_original(resource_name)
@@ -1560,26 +1567,26 @@ class ResourceEditorDialogue(ChangeTrackingDialogue):
             # Include
             include_vals = resource.include
             if include_vals is None:
-                includeField.setText("")
+                includeField.setText(self.MISSING_FIELD_VALUE)
             else:
                 includeField.setText(", ".join(include_vals))
             # Exclude
             exclude_vals = resource.exclude
             if exclude_vals is None:
-                excludeField.setText("")
+                excludeField.setText(self.MISSING_FIELD_VALUE)
             else:
                 excludeField.setText(", ".join(exclude_vals))
             # Extension
-            defaultExtension = ".nii.gz"  # Default to NIfTI format
-            if resource_name:
-                resource = self._cohort.resource_map.get(resource_name)
-                prior_extension = resource.extension
-                if prior_extension is None:
-                    extensionField.setText(defaultExtension)
-                else:
-                    extensionField.setText(prior_extension)
+            extension_val = resource.extension
+            if extension_val is None:
+                # If there's (somehow) a null value, put a blank line instead
+                extensionField.setText(self.MISSING_FIELD_VALUE)
             else:
-                extensionField.setText(defaultExtension)
+                # Otherwise, use the provided value
+                extensionField.setText(extension_val)
+        # The extension field has a default to use as a fallback
+        else:
+            extensionField.setText(self.DEFAULT_EXTENSION)
 
         # Mark the cohort as being changed if any of the fields change
         nameField.textChanged.connect(self.mark_changed)
