@@ -209,10 +209,6 @@ class SegmentationTask(
         if self.gui:
             self.gui.refresh()
 
-    def enter(self):
-        if self.gui:
-            self.gui.enter()
-
     def exit(self):
         if self.gui:
             self.gui.exit()
